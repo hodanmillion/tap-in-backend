@@ -84,10 +84,55 @@ app.get('/rooms/nearby', async (c) => {
     return distance <= (room.radius || radius);
   });
 
-  return c.json(filteredRooms);
-});
-
-// Manage friend requests
+    return c.json(filteredRooms);
+  });
+  
+  // Get nearby users
+  app.get('/profiles/nearby', async (c) => {
+    const lat = parseFloat(c.req.query('lat') || '0');
+    const lng = parseFloat(c.req.query('lng') || '0');
+    const radius = parseFloat(c.req.query('radius') || '5000'); // 5km for users discovery
+    const currentUserId = c.req.query('userId');
+  
+    const latDelta = radius / 111000;
+    const lngDelta = radius / (111000 * Math.cos(lat * (Math.PI / 180)));
+  
+    let query = supabase
+      .from('profiles')
+      .select('*')
+      .gte('latitude', lat - latDelta)
+      .lte('latitude', lat + latDelta)
+      .gte('longitude', lng - lngDelta)
+      .lte('longitude', lng + lngDelta);
+  
+    if (currentUserId) {
+      query = query.neq('id', currentUserId);
+    }
+  
+    const { data, error } = await query;
+  
+    if (error) return c.json({ error: error.message }, 400);
+  
+    // Filter by actual distance
+    const filteredProfiles = data.filter((profile) => {
+      if (!profile.latitude || !profile.longitude) return false;
+      const dLat = (profile.latitude - lat) * (Math.PI / 180);
+      const dLng = (profile.longitude - lng) * (Math.PI / 180);
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat * (Math.PI / 180)) *
+          Math.cos(profile.latitude * (Math.PI / 180)) *
+          Math.sin(dLng / 2) *
+          Math.sin(dLng / 2);
+      const cVal = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      const distance = 6371000 * cVal;
+      return distance <= radius;
+    });
+  
+    return c.json(filteredProfiles);
+  });
+  
+  // Manage friend requests
 app.post('/friends/request', async (c) => {
   const { sender_id, receiver_id } = await c.req.json();
   const { data, error } = await supabase
@@ -97,10 +142,22 @@ app.post('/friends/request', async (c) => {
     .single();
 
   if (error) return c.json({ error: error.message }, 400);
-  return c.json(data);
-});
-
-app.post('/friends/accept', async (c) => {
+    return c.json(data);
+  });
+  
+  app.get('/friends/requests/:userId', async (c) => {
+    const userId = c.req.param('userId');
+    const { data, error } = await supabase
+      .from('friend_requests')
+      .select('*, sender:profiles!friend_requests_sender_id_fkey(*)')
+      .eq('receiver_id', userId)
+      .eq('status', 'pending');
+  
+    if (error) return c.json({ error: error.message }, 400);
+    return c.json(data);
+  });
+  
+  app.post('/friends/accept', async (c) => {
   const { request_id } = await c.req.json();
   
   const { data: request, error: fetchError } = await supabase
@@ -125,10 +182,77 @@ app.post('/friends/accept', async (c) => {
     .single();
 
   if (error) return c.json({ error: error.message }, 400);
-  return c.json(data);
-});
-
-export default {
+    return c.json(data);
+  });
+  
+  app.get('/friends/:userId', async (c) => {
+    const userId = c.req.param('userId');
+    const { data, error } = await supabase
+      .from('friends')
+      .select(`
+        id,
+        user_1:profiles!friends_user_id_1_fkey(*),
+        user_2:profiles!friends_user_id_2_fkey(*)
+      `)
+      .or(`user_id_1.eq.${userId},user_id_2.eq.${userId}`);
+  
+    if (error) return c.json({ error: error.message }, 400);
+  
+    // Map to just the friend's profile
+    const friends = data.map((f: any) => {
+      return f.user_1.id === userId ? f.user_2 : f.user_1;
+    });
+  
+    return c.json(friends);
+  });
+  
+  app.post('/rooms/private', async (c) => {
+    const { user1_id, user2_id } = await c.req.json();
+  
+    // Check if private room already exists between these two users
+    const { data: rooms, error: fetchError } = await supabase
+      .from('chat_rooms')
+      .select('id, room_participants!inner(user_id)')
+      .eq('type', 'private')
+      .eq('room_participants.user_id', user1_id);
+  
+    if (fetchError) return c.json({ error: fetchError.message }, 400);
+  
+    // Further filter for rooms where user2_id is also a participant
+    // (This is a bit tricky with Supabase's simple JS client, but doable)
+    for (const room of rooms || []) {
+      const { data: participants } = await supabase
+        .from('room_participants')
+        .select('user_id')
+        .eq('room_id', room.id);
+      
+      const userIds = participants?.map(p => p.user_id);
+      if (userIds?.includes(user2_id)) {
+        return c.json({ room_id: room.id });
+      }
+    }
+  
+    // Create new private room
+    const { data: newRoom, error: createError } = await supabase
+      .from('chat_rooms')
+      .insert({ name: 'Private Chat', type: 'private' })
+      .select()
+      .single();
+  
+    if (createError) return c.json({ error: createError.message }, 400);
+  
+    // Add participants
+    await supabase
+      .from('room_participants')
+      .insert([
+        { room_id: newRoom.id, user_id: user1_id },
+        { room_id: newRoom.id, user_id: user2_id }
+      ]);
+  
+    return c.json({ room_id: newRoom.id });
+  });
+  
+  export default {
   fetch: app.fetch,
   port: 3002,
 };

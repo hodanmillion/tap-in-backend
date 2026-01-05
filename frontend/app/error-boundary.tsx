@@ -15,16 +15,9 @@ const webTargetOrigins = ['http://localhost:3000', 'https://orchids.app'];
 
 function sendErrorToIframeParent(error: any, errorInfo?: any) {
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
-    // Only send errors that have a stack property
     if (!error?.stack) {
       return;
     }
-
-    console.debug('Sending error to parent:', {
-      error,
-      errorInfo,
-      referrer: document.referrer,
-    });
 
     const errorMessage = {
       type: 'ERROR_CAPTURED',
@@ -100,7 +93,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
   render() {
     if (this.state.hasError) {
       return (
-        <View id="orchids-error-boundary" className="flex-1 bg-white">
+        <View className="flex-1 bg-white">
           <View className="flex-1 items-center justify-center p-5">
             <Text className="mb-2 text-center text-4xl font-bold">Something went wrong</Text>
             <Text className="mb-3 text-center text-sm text-gray-600">
