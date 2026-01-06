@@ -21,7 +21,8 @@
       "bundleIdentifier": "com.orchids.mobileapp",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Allow Tap In to access your location to find nearby users and chat rooms.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "Allow Tap In to access your location even when the app is in the background."
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Allow Tap In to access your location even when the app is in the background.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -59,7 +60,11 @@
       "typedRoutes": true
     },
     "extra": {
-      "router": {}
-    }
+      "router": {},
+      "eas": {
+        "projectId": "9c015992-1e8d-412c-b95f-51f1b73aa0a2"
+      }
+    },
+    "owner": "hodanmo15"
   }
 }
