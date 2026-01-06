@@ -5,40 +5,35 @@ import { useLocation } from '@/hooks/useLocation';
 import { useEffect, useState } from 'react';
 import { UserPlus, Check, Clock } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAuth } from '@/context/AuthContext';
 
 export default function UsersScreen() {
-  const [userId, setUserId] = useState<string | undefined>();
-  const { location } = useLocation(userId);
+  const { user } = useAuth();
+  const { location } = useLocation(user?.id);
   const [sentRequests, setSentRequests] = useState<Set<string>>(new Set());
-
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      setUserId(user?.id);
-    });
-  }, []);
 
   const { data: nearbyUsers, isLoading, refetch } = useQuery({
     queryKey: ['nearbyUsers', location?.coords.latitude, location?.coords.longitude],
     queryFn: async () => {
-      if (!location || !userId) return [];
+      if (!location || !user?.id) return [];
       
       const { latitude, longitude } = location.coords;
       const response = await fetch(
-        `${process.env.EXPO_PUBLIC_BACKEND_URL}/profiles/nearby?lat=${latitude}&lng=${longitude}&radius=5000&userId=${userId}`
+        `${process.env.EXPO_PUBLIC_BACKEND_URL}/profiles/nearby?lat=${latitude}&lng=${longitude}&radius=5000&userId=${user.id}`
       );
       return response.json();
     },
-    enabled: !!location && !!userId,
+    enabled: !!location && !!user?.id,
   });
 
   async function sendFriendRequest(receiverId: string) {
-    if (!userId) return;
+    if (!user?.id) return;
 
     try {
       const response = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/friends/request`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sender_id: userId, receiver_id: receiverId }),
+        body: JSON.stringify({ sender_id: user.id, receiver_id: receiverId }),
       });
 
       if (response.ok) {

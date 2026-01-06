@@ -1,34 +1,20 @@
 import '@/global.css';
-import { useEffect, useState } from 'react';
-import { Stack, useRouter, useSegments } from 'expo-router';
+import { Stack } from 'expo-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase';
-import { Session } from '@supabase/supabase-js';
+import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { useEffect } from 'react';
+import { useRouter, useSegments } from 'expo-router';
 import { View, ActivityIndicator } from 'react-native';
 
 const queryClient = new QueryClient();
 
-export default function RootLayout() {
-  const [session, setSession] = useState<Session | null>(null);
-  const [initialized, setInitialized] = useState(false);
+function RootLayoutContent() {
+  const { session, loading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setInitialized(true);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    if (!initialized) return;
+    if (loading) return;
 
     const inAuthGroup = segments[0] === '(auth)';
 
@@ -37,9 +23,9 @@ export default function RootLayout() {
     } else if (session && inAuthGroup) {
       router.replace('/(tabs)/home');
     }
-  }, [session, initialized, segments]);
+  }, [session, loading, segments]);
 
-  if (!initialized) {
+  if (loading) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' }}>
         <ActivityIndicator size="large" color="#000" />
@@ -48,14 +34,22 @@ export default function RootLayout() {
   }
 
   return (
+    <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
+      <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="chat/[id]" options={{ headerShown: true, presentation: 'card', animation: 'slide_from_right' }} />
+      <Stack.Screen name="friends" options={{ headerShown: false, presentation: 'card' }} />
+      <Stack.Screen name="index" options={{ headerShown: false }} />
+    </Stack>
+  );
+}
+
+export default function RootLayout() {
+  return (
     <QueryClientProvider client={queryClient}>
-      <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
-        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="chat/[id]" options={{ headerShown: true, presentation: 'card', animation: 'slide_from_right' }} />
-        <Stack.Screen name="friends" options={{ headerShown: false, presentation: 'card' }} />
-        <Stack.Screen name="index" options={{ headerShown: false }} />
-      </Stack>
+      <AuthProvider>
+        <RootLayoutContent />
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

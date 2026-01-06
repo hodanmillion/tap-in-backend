@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { useLocation } from '@/hooks/useLocation';
 import * as Location from 'expo-location';
+import { useAuth } from '@/context/AuthContext';
 
 const CHAT_RADIUS_METERS = 20;
 const GIPHY_API_KEY = process.env.EXPO_PUBLIC_GIPHY_API_KEY || 'l1WfAFgqA5WupWoMaCaWKB12G54J6LtZ';
@@ -14,11 +15,11 @@ const GIPHY_API_KEY = process.env.EXPO_PUBLIC_GIPHY_API_KEY || 'l1WfAFgqA5WupWoM
 export default function ChatScreen() {
   const { id: initialId } = useLocalSearchParams();
   const router = useRouter();
+  const { user } = useAuth();
   const [id, setId] = useState<string | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [room, setRoom] = useState<any>(null);
-  const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [initialLoading, setInitialLoading] = useState(true);
   const [roomNotFound, setRoomNotFound] = useState(false);
@@ -42,8 +43,7 @@ export default function ChatScreen() {
   ), [router]);
 
   const resolveRoomId = useCallback(async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    setUser(user);
+    if (!user) return;
 
     if (typeof initialId === 'string' && initialId.startsWith('private_')) {
       const friendId = initialId.replace('private_', '');
@@ -51,7 +51,7 @@ export default function ChatScreen() {
         const response = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/rooms/private`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ user1_id: user?.id, user2_id: friendId }),
+          body: JSON.stringify({ user1_id: user.id, user2_id: friendId }),
         });
         const data = await response.json();
         if (data.room_id) {
@@ -63,13 +63,15 @@ export default function ChatScreen() {
     } else {
       setId(initialId as string);
     }
-  }, [initialId]);
+  }, [initialId, user]);
 
   useEffect(() => {
-    resolveRoomId();
+    if (user) {
+      resolveRoomId();
+    }
     const timer = setTimeout(() => setInitialLoading(false), 50);
     return () => clearTimeout(timer);
-  }, [resolveRoomId]);
+  }, [resolveRoomId, user]);
 
   const fetchRoomAndUser = useCallback(async () => {
     if (!id) return;

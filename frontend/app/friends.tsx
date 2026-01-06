@@ -5,25 +5,20 @@ import { MessageSquare } from 'lucide-react-native';
 import { useRouter, Stack } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAuth } from '@/context/AuthContext';
 
 export default function FriendsScreen() {
-  const [userId, setUserId] = useState<string | undefined>();
+  const { user } = useAuth();
   const router = useRouter();
 
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      setUserId(user?.id);
-    });
-  }, []);
-
   const { data: friends, isLoading, refetch } = useQuery({
-    queryKey: ['friends', userId],
+    queryKey: ['friends', user?.id],
     queryFn: async () => {
-      if (!userId) return [];
-      const response = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/friends/${userId}`);
+      if (!user?.id) return [];
+      const response = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/friends/${user.id}`);
       return response.json();
     },
-    enabled: !!userId,
+    enabled: !!user?.id,
   });
 
   return (

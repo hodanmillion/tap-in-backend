@@ -4,31 +4,25 @@ import { supabase } from '@/lib/supabase';
 import { User, LogOut, Settings, Bell, Shield, CircleHelp, Users } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useState, useEffect } from 'react';
+import { useAuth } from '@/context/AuthContext';
 
 export default function ProfileScreen() {
-  const [userId, setUserId] = useState<string | null>(null);
+  const { user, loading: authLoading } = useAuth();
   const router = useRouter();
 
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      setUserId(user?.id || null);
-    });
-  }, []);
-
-  const { data: profile, isLoading } = useQuery({
-    queryKey: ['profile', userId],
+  const { data: profile, isLoading: profileLoading } = useQuery({
+    queryKey: ['profile', user?.id],
     queryFn: async () => {
-      if (!userId) return null;
+      if (!user?.id) return null;
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
-        .eq('id', userId)
+        .eq('id', user.id)
         .single();
       if (error) throw error;
       return data;
     },
-    enabled: !!userId,
+    enabled: !!user?.id,
   });
 
   async function handleSignOut() {
@@ -45,7 +39,7 @@ export default function ProfileScreen() {
     { icon: <Settings size={20} color="#6b7280" />, label: 'Settings' },
   ];
 
-  if (isLoading) {
+  if (authLoading || (user?.id && profileLoading)) {
     return (
       <View className="flex-1 items-center justify-center bg-background">
         <ActivityIndicator size="large" color="#3b82f6" />

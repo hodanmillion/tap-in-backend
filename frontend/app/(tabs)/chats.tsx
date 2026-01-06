@@ -4,27 +4,21 @@ import { supabase } from '@/lib/supabase';
 import { MessageSquare, Clock } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useState, useEffect } from 'react';
+import { useAuth } from '@/context/AuthContext';
 
 export default function ChatsScreen() {
-  const [userId, setUserId] = useState<string | null>(null);
+  const { user } = useAuth();
   const router = useRouter();
 
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      setUserId(user?.id || null);
-    });
-  }, []);
-
   const { data: rooms, isLoading, refetch } = useQuery({
-    queryKey: ['myChatRooms', userId],
+    queryKey: ['myChatRooms', user?.id],
     queryFn: async () => {
-      if (!userId) return [];
+      if (!user?.id) return [];
 
       const { data: participants, error } = await supabase
         .from('room_participants')
         .select('room_id, chat_rooms(*)')
-        .eq('user_id', userId);
+        .eq('user_id', user.id);
 
       if (error) throw error;
 

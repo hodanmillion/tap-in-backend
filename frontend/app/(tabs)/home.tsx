@@ -8,6 +8,7 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiRequest } from '@/lib/api';
 import * as Location from 'expo-location';
+import { useAuth } from '@/context/AuthContext';
 
 const geocodeCache = new Map<string, string>();
 
@@ -62,15 +63,9 @@ const RoomName = memo(({ room }: { room: any }) => {
 });
 
 export default function HomeScreen() {
-  const [userId, setUserId] = useState<string | undefined>();
-  const { location, errorMsg } = useLocation(userId);
+  const { user } = useAuth();
+  const { location, errorMsg } = useLocation(user?.id);
   const router = useRouter();
-
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      setUserId(user?.id);
-    });
-  }, []);
 
   const { data: nearbyRooms, isLoading, refetch } = useQuery({
     queryKey: ['nearbyRooms', location?.coords.latitude, location?.coords.longitude],
