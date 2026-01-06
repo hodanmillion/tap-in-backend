@@ -51,22 +51,10 @@ app.post('/profiles', zValidator('json', profileSchema), async (c) => {
 const CHAT_RADIUS_METERS = 20;
 const CHAT_EXPIRY_HOURS = 48;
 
-function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const dLat = (lat2 - lat1) * (Math.PI / 180);
-  const dLng = (lng2 - lng1) * (Math.PI / 180);
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1 * (Math.PI / 180)) *
-      Math.cos(lat2 * (Math.PI / 180)) *
-      Math.sin(dLng / 2) *
-      Math.sin(dLng / 2);
-  const cVal = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return 6371000 * cVal;
-}
-
 app.post('/rooms/sync', async (c) => {
   const { userId, latitude, longitude, address } = await c.req.json();
 
+  // Update profile location (trigger handles geography column)
   await supabase
     .from('profiles')
     .update({ 
@@ -76,44 +64,28 @@ app.post('/rooms/sync', async (c) => {
     })
     .eq('id', userId);
 
-  const now = new Date();
-  const { data: publicRooms, error: roomsError } = await supabase
-    .from('chat_rooms')
-    .select('*')
-    .in('type', ['public', 'auto_generated'])
-    .or(`expires_at.is.null,expires_at.gt.${now.toISOString()}`);
+  // Get nearby rooms using PostGIS (highly optimized)
+  const { data: nearbyRooms, error: roomsError } = await supabase.rpc('get_nearby_rooms', {
+    user_lat: latitude,
+    user_lng: longitude,
+    radius_meters: CHAT_RADIUS_METERS
+  });
 
   if (roomsError) return c.json({ error: roomsError.message }, 400);
 
-  const nearbyRooms = (publicRooms || []).filter(room => {
-    if (room.latitude === null || room.longitude === null) return false;
-    const distance = calculateDistance(latitude, longitude, room.latitude, room.longitude);
-    return distance <= CHAT_RADIUS_METERS;
-  });
+  let nearbyRoomIds = (nearbyRooms || []).map((r: any) => r.id);
 
-  let nearbyRoomIds = nearbyRooms.map(r => r.id);
+  // If no rooms nearby, create one automatically
+  if (nearbyRoomIds.length === 0) {
+    const CREATION_CHECK_RADIUS = CHAT_RADIUS_METERS + 10;
+    const { data: checkNearby } = await supabase.rpc('get_nearby_rooms', {
+      user_lat: latitude,
+      user_lng: longitude,
+      radius_meters: CREATION_CHECK_RADIUS
+    });
 
-    if (nearbyRoomIds.length === 0) {
-      // Use a slightly larger radius for creation check to avoid close duplicates
-      const CREATION_CHECK_RADIUS = CHAT_RADIUS_METERS + 5;
-      const latDelta = CREATION_CHECK_RADIUS / 111000;
-      const { data: anyNearbyRooms } = await supabase
-        .from('chat_rooms')
-        .select('id, latitude, longitude')
-        .in('type', ['public', 'auto_generated'])
-        .or(`expires_at.is.null,expires_at.gt.${now.toISOString()}`)
-        .gte('latitude', latitude - latDelta)
-        .lte('latitude', latitude + latDelta)
-        .gte('longitude', longitude - latDelta)
-        .lte('longitude', longitude + latDelta);
-  
-      const actuallyNearby = (anyNearbyRooms || []).filter(room => {
-        const distance = calculateDistance(latitude, longitude, room.latitude, room.longitude);
-        return distance <= CREATION_CHECK_RADIUS;
-      });
-
-    if (actuallyNearby.length === 0) {
-      const expiresAt = new Date(now.getTime() + CHAT_EXPIRY_HOURS * 60 * 60 * 1000);
+    if (!checkNearby || checkNearby.length === 0) {
+      const expiresAt = new Date(Date.now() + CHAT_EXPIRY_HOURS * 60 * 60 * 1000);
       const roomName = (address && address.split(',')[0]) || `Chat @ ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
       
       const { data: newRoom } = await supabase
@@ -133,9 +105,12 @@ app.post('/rooms/sync', async (c) => {
         nearbyRoomIds.push(newRoom.id);
         await supabase.from('room_participants').insert({ room_id: newRoom.id, user_id: userId });
       }
+    } else {
+      nearbyRoomIds = checkNearby.map((r: any) => r.id);
     }
   }
 
+  // Handle joining/leaving rooms
   const { data: currentParticipations } = await supabase
     .from('room_participants')
     .select('room_id, chat_rooms!inner(type)')
@@ -143,27 +118,29 @@ app.post('/rooms/sync', async (c) => {
     .in('chat_rooms.type', ['public', 'auto_generated']);
 
   const currentRoomIds = currentParticipations?.map(p => p.room_id) || [];
+  const roomsToJoin = nearbyRoomIds.filter(id => !currentRoomIds.includes(id));
+  
+  if (roomsToJoin.length > 0) {
+    await supabase
+      .from('room_participants')
+      .insert(roomsToJoin.map(roomId => ({ room_id: roomId, user_id: userId })));
 
-    const roomsToJoin = nearbyRoomIds.filter(id => !currentRoomIds.includes(id));
-    if (roomsToJoin.length > 0) {
-      await supabase
-        .from('room_participants')
-        .insert(roomsToJoin.map(roomId => ({ room_id: roomId, user_id: userId })));
-
-      // Notify user about new nearby rooms
-      for (const roomId of roomsToJoin) {
-        const room = nearbyRooms.find(r => r.id === roomId);
-        if (room && room.type === 'auto_generated') {
-          await createNotification(
-            userId,
-            'new_room',
-            'New Chat Nearby',
-            `You've joined "${room.name}" automatically because you're nearby.`,
-            { room_id: roomId }
-          );
-        }
+    // Notifications
+    for (const roomId of roomsToJoin) {
+      const room = nearbyRooms?.find((r: any) => r.id === roomId) || 
+                   (await supabase.from('chat_rooms').select('name, type').eq('id', roomId).single()).data;
+      
+      if (room && room.type === 'auto_generated') {
+        await createNotification(
+          userId,
+          'new_room',
+          'New Chat Nearby',
+          `You've joined "${room.name}" automatically because you're nearby.`,
+          { room_id: roomId }
+        );
       }
     }
+  }
 
   const roomsToLeave = currentRoomIds.filter(id => !nearbyRoomIds.includes(id));
   if (roomsToLeave.length > 0) {
@@ -185,75 +162,34 @@ app.get('/rooms/nearby', async (c) => {
   const lat = parseFloat(c.req.query('lat') || '0');
   const lng = parseFloat(c.req.query('lng') || '0');
 
-  const now = new Date();
-  const latDelta = CHAT_RADIUS_METERS / 111000;
-  const lngDelta = CHAT_RADIUS_METERS / (111000 * Math.cos(lat * (Math.PI / 180)));
-
-  const { data, error } = await supabase
-    .from('chat_rooms')
-    .select('*')
-    .or(`expires_at.is.null,expires_at.gt.${now.toISOString()}`)
-    .gte('latitude', lat - latDelta)
-    .lte('latitude', lat + latDelta)
-    .gte('longitude', lng - lngDelta)
-    .lte('longitude', lng + lngDelta);
+  const { data, error } = await supabase.rpc('get_nearby_rooms', {
+    user_lat: lat,
+    user_lng: lng,
+    radius_meters: CHAT_RADIUS_METERS
+  });
 
   if (error) return c.json({ error: error.message }, 400);
-
-  const filteredRooms = data.filter((room) => {
-    const distance = calculateDistance(lat, lng, room.latitude, room.longitude);
-    return distance <= CHAT_RADIUS_METERS;
-  });
-
-  return c.json(filteredRooms);
+  return c.json(data);
 });
   
-  // Get nearby users
-  app.get('/profiles/nearby', async (c) => {
-    const lat = parseFloat(c.req.query('lat') || '0');
-    const lng = parseFloat(c.req.query('lng') || '0');
-    const radius = parseFloat(c.req.query('radius') || '5000'); // 5km for users discovery
-    const currentUserId = c.req.query('userId');
-  
-    const latDelta = radius / 111000;
-    const lngDelta = radius / (111000 * Math.cos(lat * (Math.PI / 180)));
-  
-    let query = supabase
-      .from('profiles')
-      .select('*')
-      .gte('latitude', lat - latDelta)
-      .lte('latitude', lat + latDelta)
-      .gte('longitude', lng - lngDelta)
-      .lte('longitude', lng + lngDelta);
-  
-    if (currentUserId) {
-      query = query.neq('id', currentUserId);
-    }
-  
-    const { data, error } = await query;
-  
-    if (error) return c.json({ error: error.message }, 400);
-  
-    // Filter by actual distance
-    const filteredProfiles = data.filter((profile) => {
-      if (!profile.latitude || !profile.longitude) return false;
-      const dLat = (profile.latitude - lat) * (Math.PI / 180);
-      const dLng = (profile.longitude - lng) * (Math.PI / 180);
-      const a =
-        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos(lat * (Math.PI / 180)) *
-          Math.cos(profile.latitude * (Math.PI / 180)) *
-          Math.sin(dLng / 2) *
-          Math.sin(dLng / 2);
-      const cVal = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      const distance = 6371000 * cVal;
-      return distance <= radius;
-    });
-  
-    return c.json(filteredProfiles);
+app.get('/profiles/nearby', async (c) => {
+  const lat = parseFloat(c.req.query('lat') || '0');
+  const lng = parseFloat(c.req.query('lng') || '0');
+  const radius = parseFloat(c.req.query('radius') || '5000');
+  const currentUserId = c.req.query('userId');
+
+  const { data, error } = await supabase.rpc('get_nearby_profiles', {
+    user_lat: lat,
+    user_lng: lng,
+    radius_meters: radius,
+    current_user_id: currentUserId
   });
+
+  if (error) return c.json({ error: error.message }, 400);
+  return c.json(data);
+});
   
-  // Helper to create notifications
+// Helper to create notifications
 async function createNotification(userId: string, type: string, title: string, content: string, data: any = {}) {
   await supabase
     .from('notifications')
@@ -270,7 +206,6 @@ async function createNotification(userId: string, type: string, title: string, c
 app.post('/friends/request', async (c) => {
   const { sender_id, receiver_id } = await c.req.json();
   
-  // Get sender name for notification
   const { data: sender } = await supabase
     .from('profiles')
     .select('username, full_name')
@@ -285,7 +220,6 @@ app.post('/friends/request', async (c) => {
 
   if (error) return c.json({ error: error.message }, 400);
 
-  // Notify receiver
   await createNotification(
     receiver_id,
     'friend_request',
@@ -320,13 +254,11 @@ app.post('/friends/accept', async (c) => {
 
   if (fetchError || !request) return c.json({ error: 'Request not found' }, 404);
 
-  // Update request status
   await supabase
     .from('friend_requests')
     .update({ status: 'accepted' })
     .eq('id', request_id);
 
-  // Add to friends table
   const { data, error } = await supabase
     .from('friends')
     .insert({ user_id_1: request.sender_id, user_id_2: request.receiver_id })
@@ -335,7 +267,6 @@ app.post('/friends/accept', async (c) => {
 
   if (error) return c.json({ error: error.message }, 400);
 
-  // Notify sender that request was accepted
   await createNotification(
     request.sender_id,
     'friend_accept',
@@ -360,7 +291,6 @@ app.get('/friends/:userId', async (c) => {
 
   if (error) return c.json({ error: error.message }, 400);
 
-  // Map to just the friend's profile
   const friends = data.map((f: any) => {
     return f.user_1.id === userId ? f.user_2 : f.user_1;
   });
@@ -371,14 +301,12 @@ app.get('/friends/:userId', async (c) => {
 app.post('/rooms/private', async (c) => {
   const { user1_id, user2_id } = await c.req.json();
 
-  // Get user1 info for notification
   const { data: user1 } = await supabase
     .from('profiles')
     .select('username, full_name')
     .eq('id', user1_id)
     .single();
 
-  // Check if private room already exists
   const { data: rooms, error: fetchError } = await supabase
     .from('chat_rooms')
     .select('id, room_participants!inner(user_id)')
@@ -399,7 +327,6 @@ app.post('/rooms/private', async (c) => {
     }
   }
 
-  // Create new private room
   const { data: newRoom, error: createError } = await supabase
     .from('chat_rooms')
     .insert({ name: 'Private Chat', type: 'private' })
@@ -408,7 +335,6 @@ app.post('/rooms/private', async (c) => {
 
   if (createError) return c.json({ error: createError.message }, 400);
 
-  // Add participants
   await supabase
     .from('room_participants')
     .insert([
@@ -416,7 +342,6 @@ app.post('/rooms/private', async (c) => {
       { room_id: newRoom.id, user_id: user2_id }
     ]);
 
-  // Notify user2 about the new private chat
   await createNotification(
     user2_id,
     'new_message',
@@ -453,7 +378,7 @@ app.post('/notifications/read', async (c) => {
   return c.json({ success: true });
 });
   
-  export default {
+export default {
   fetch: app.fetch,
   port: 3002,
 };

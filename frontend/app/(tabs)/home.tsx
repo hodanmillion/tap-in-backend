@@ -1,16 +1,12 @@
 import { View, Text, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase';
 import { useLocation } from '@/hooks/useLocation';
-import { useEffect, useState, memo } from 'react';
+import { memo } from 'react';
 import { MapPin, Users, ArrowRight, Clock, Bell } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiRequest } from '@/lib/api';
-import * as Location from 'expo-location';
 import { useAuth } from '@/context/AuthContext';
-
-const geocodeCache = new Map<string, string>();
 
 function getTimeRemaining(expiresAt: string | null): string {
   if (!expiresAt) return 'Permanent';
@@ -24,43 +20,39 @@ function getTimeRemaining(expiresAt: string | null): string {
   return `${minutes}m left`;
 }
 
-const RoomName = memo(({ room }: { room: any }) => {
-  const [name, setName] = useState(room.name);
-  const cacheKey = `${room.latitude?.toFixed(4)},${room.longitude?.toFixed(4)}`;
+const RoomItemSkeleton = () => (
+  <View className="mb-4 flex-row items-center rounded-2xl bg-card p-4 shadow-sm opacity-50">
+    <View className="h-12 w-12 rounded-full bg-secondary animate-pulse" />
+    <View className="ml-4 flex-1 gap-2">
+      <View className="h-4 w-32 rounded bg-secondary animate-pulse" />
+      <View className="h-3 w-20 rounded bg-secondary animate-pulse" />
+    </View>
+    <View className="h-5 w-5 rounded bg-secondary animate-pulse" />
+  </View>
+);
 
-  useEffect(() => {
-    async function resolveName() {
-      if (room.type !== 'auto_generated' && room.name !== 'Ottawa Tech Hub') return;
-      
-      if (geocodeCache.has(cacheKey)) {
-        setName(geocodeCache.get(cacheKey));
-        return;
-      }
-
-      try {
-        const reverseGeocode = await Location.reverseGeocodeAsync({
-          latitude: room.latitude,
-          longitude: room.longitude
-        });
-        if (reverseGeocode && reverseGeocode.length > 0) {
-          const loc = reverseGeocode[0];
-          const address = loc.street || loc.name || loc.city || 'Nearby Chat';
-          geocodeCache.set(cacheKey, address);
-          setName(address);
-        }
-      } catch (e) {
-        console.log('Geocode failed', e);
-      }
-    }
-    resolveName();
-  }, [room.latitude, room.longitude, room.type, room.name, cacheKey]);
-
-  return (
-    <Text className="text-lg font-semibold text-foreground" numberOfLines={1}>
-      {name}
-    </Text>
-  );
-});
+const RoomItem = memo(({ item, onPress }: { item: any; onPress: () => void }) => (
+  <TouchableOpacity
+    onPress={onPress}
+    className="mb-4 flex-row items-center rounded-2xl bg-card p-4 shadow-sm active:opacity-70"
+  >
+    <View className="h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+      <Users size={24} color="#3b82f6" />
+    </View>
+    <View className="ml-4 flex-1">
+      <Text className="text-lg font-semibold text-foreground" numberOfLines={1}>
+        {item.name}
+      </Text>
+      <View className="flex-row items-center gap-1">
+        <Clock size={12} color="#6b7280" />
+        <Text className="text-sm text-muted-foreground">
+          {getTimeRemaining(item.expires_at)}
+        </Text>
+      </View>
+    </View>
+    <ArrowRight size={20} color="#6b7280" />
+  </TouchableOpacity>
+));
 
 export default function HomeScreen() {
   const { user } = useAuth();
@@ -74,44 +66,26 @@ export default function HomeScreen() {
       return response.json();
     },
     enabled: !!user?.id,
-    refetchInterval: 30000,
+    refetchInterval: 60000, // Reduced frequency
+    staleTime: 30000,
   });
 
   const unreadCount = notifications?.filter((n: any) => !n.is_read).length || 0;
 
-  const { data: nearbyRooms, isLoading, refetch } = useQuery({
-    queryKey: ['nearbyRooms', location?.coords.latitude, location?.coords.longitude],
+  const { data: nearbyRooms, isLoading, isFetching, refetch } = useQuery({
+    queryKey: ['nearbyRooms', location?.coords.latitude.toFixed(4), location?.coords.longitude.toFixed(4)],
     queryFn: async () => {
       if (!location) return [];
       const { latitude, longitude } = location.coords;
-      const rooms = await apiRequest(`/rooms/nearby?lat=${latitude}&lng=${longitude}`);
-      
-      // Deduplicate by name and proximity (approx 10m)
-      const uniqueRooms: any[] = [];
-      for (const room of rooms) {
-        const isDuplicate = uniqueRooms.some(r => {
-          if (r.name === room.name) return true;
-          if (room.latitude && room.longitude && r.latitude && r.longitude) {
-            const dist = Math.sqrt(
-              Math.pow(room.latitude - r.latitude, 2) + 
-              Math.pow(room.longitude - r.longitude, 2)
-            );
-            // ~10m in degrees (very rough estimate, but okay for deduplication)
-            return dist < 0.0001;
-          }
-          return false;
-        });
-        
-        if (!isDuplicate) {
-          uniqueRooms.push(room);
-        }
-      }
-      
-      return uniqueRooms.filter((r: any) => r.name !== 'Ottawa Tech Hub');
+      return apiRequest(`/rooms/nearby?lat=${latitude}&lng=${longitude}`);
     },
     enabled: !!location,
-    refetchInterval: 10000,
+    staleTime: 15000, // Cache for 15 seconds
+    gcTime: 1000 * 60 * 5, // Keep in garbage collector for 5 mins
+    placeholderData: (previousData) => previousData, // Seamless transitions
   });
+
+  const rooms = nearbyRooms || [];
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top']}>
@@ -122,7 +96,7 @@ export default function HomeScreen() {
             <View className="mt-2 flex-row items-center gap-1">
               <MapPin size={16} color="#6b7280" />
               <Text className="text-sm text-muted-foreground">
-                {location ? '20m radius active' : errorMsg || 'Locating...'}
+                {location ? 'Nearby chats active' : errorMsg || 'Locating...'}
               </Text>
             </View>
           </View>
@@ -139,46 +113,35 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
 
-        {isLoading ? (
-          <View className="flex-1 items-center justify-center">
-            <ActivityIndicator size="large" color="#3b82f6" />
+        {isLoading && rooms.length === 0 ? (
+          <View className="flex-1">
+            {[1, 2, 3, 4].map((i) => <RoomItemSkeleton key={i} />)}
           </View>
         ) : (
           <FlatList
-            data={nearbyRooms}
+            data={rooms}
             keyExtractor={(item) => item.id}
             renderItem={({ item }) => (
-              <TouchableOpacity
-                onPress={() => router.push(`/chat/${item.id}`)}
-                className="mb-4 flex-row items-center rounded-2xl bg-card p-4 shadow-sm"
-              >
-                <View className="h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-                  <Users size={24} color="#3b82f6" />
-                </View>
-                <View className="ml-4 flex-1">
-                  <RoomName room={item} />
-                  <View className="flex-row items-center gap-1">
-                    <Clock size={12} color="#6b7280" />
-                    <Text className="text-sm text-muted-foreground">
-                      {getTimeRemaining(item.expires_at)}
-                    </Text>
-                  </View>
-                </View>
-                <ArrowRight size={20} color="#6b7280" />
-              </TouchableOpacity>
+              <RoomItem 
+                item={item} 
+                onPress={() => router.push(`/chat/${item.id}`)} 
+              />
             )}
             ListEmptyComponent={
-              <View className="mt-10 items-center justify-center p-10">
-                <Text className="text-center text-lg text-muted-foreground">
-                  No active chats nearby.
-                </Text>
-                <Text className="mt-2 text-center text-sm text-muted-foreground">
-                  Move around - a new chat will appear when you enter a new area!
-                </Text>
-              </View>
+              !isFetching ? (
+                <View className="mt-10 items-center justify-center p-10">
+                  <Text className="text-center text-lg text-muted-foreground">
+                    No active chats nearby.
+                  </Text>
+                  <Text className="mt-2 text-center text-sm text-muted-foreground">
+                    Move around - a new chat will appear when you enter a new area!
+                  </Text>
+                </View>
+              ) : null
             }
             onRefresh={refetch}
-            refreshing={isLoading}
+            refreshing={isFetching && rooms.length > 0}
+            showsVerticalScrollIndicator={false}
           />
         )}
       </View>

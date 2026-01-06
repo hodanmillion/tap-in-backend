@@ -1,12 +1,15 @@
 import * as Location from 'expo-location';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { apiRequest } from '@/lib/api';
 
 export function useLocation(userId: string | undefined) {
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const lastSyncRef = useRef<number>(0);
 
   useEffect(() => {
+    let subscription: Location.LocationSubscription | null = null;
+
     (async () => {
       try {
         let { status } = await Location.requestForegroundPermissionsAsync();
@@ -15,51 +18,64 @@ export function useLocation(userId: string | undefined) {
           return;
         }
 
-        let location = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.High,
+        // Get initial position quickly
+        let initialLocation = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced, // Balanced is faster for initial load
         });
-        setLocation(location);
+        setLocation(initialLocation);
 
         if (userId) {
-          await syncLocationAndRooms(userId, location.coords.latitude, location.coords.longitude);
+          syncLocationAndRooms(userId, initialLocation.coords.latitude, initialLocation.coords.longitude);
         }
 
-        const subscription = await Location.watchPositionAsync(
+        subscription = await Location.watchPositionAsync(
           {
             accuracy: Location.Accuracy.High,
-            timeInterval: 10000,
-            distanceInterval: 5,
+            timeInterval: 30000, // Sync every 30s
+            distanceInterval: 10, // or 10 meters
           },
           (newLocation) => {
             setLocation(newLocation);
-            if (userId) {
+            const now = Date.now();
+            // Throttle sync to once per 10 seconds to save battery and data
+            if (userId && now - lastSyncRef.current > 10000) {
+              lastSyncRef.current = now;
               syncLocationAndRooms(userId, newLocation.coords.latitude, newLocation.coords.longitude);
             }
           }
         );
-
-        return () => {
-          subscription.remove();
-        };
       } catch (err) {
         console.error('Error getting location:', err);
         setErrorMsg('Error getting location');
       }
     })();
+
+    return () => {
+      if (subscription) subscription.remove();
+    };
   }, [userId]);
 
   async function syncLocationAndRooms(userId: string, latitude: number, longitude: number) {
     try {
+      // Fire and forget geocoding, don't let it block the sync
       let address: string | undefined;
+      
+      // We only attempt geocoding if we haven't done it recently or for room creation
+      // In low reception, this might time out or fail, but we catch it.
       try {
-        const reverseGeocode = await Location.reverseGeocodeAsync({ latitude, longitude });
+        const reverseGeocode = await Promise.race([
+          Location.reverseGeocodeAsync({ latitude, longitude }),
+          new Promise((_, reject) => setTimeout(() => reject('Geocode timeout'), 3000))
+        ]) as Location.LocationGeocodedAddress[];
+
         if (reverseGeocode && reverseGeocode.length > 0) {
           const loc = reverseGeocode[0];
           const parts = [loc.street, loc.name, loc.city].filter(Boolean);
           address = parts.length > 0 ? parts.join(', ') : undefined;
         }
       } catch (geoErr) {
-        console.log('Reverse geocode failed:', geoErr);
+        // Silently fail geocoding, backend will use coordinates as name
+        console.log('Reverse geocode failed or timed out:', geoErr);
       }
 
       await apiRequest('/rooms/sync', {
