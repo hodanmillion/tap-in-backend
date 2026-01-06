@@ -205,13 +205,15 @@ export default function ChatScreen() {
     }
   }
 
-  if (loading) {
-    return (
-      <View className="flex-1 items-center justify-center bg-background">
-        <ActivityIndicator size="large" color="#3b82f6" />
-      </View>
-    );
-  }
+    if (loading) {
+      return (
+        <View className="flex-1 items-center justify-center bg-zinc-950">
+          <Stack.Screen options={{ title: 'Chat', headerShown: true }} />
+          <ActivityIndicator size="large" color="#3b82f6" />
+        </View>
+      );
+    }
+
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['bottom']}>
@@ -227,88 +229,100 @@ export default function ChatScreen() {
           inverted
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ padding: 16 }}
-          renderItem={({ item }) => {
-            const isMine = item.sender_id === user?.id;
-            return (
-              <View
-                className={`mb-4 max-w-[80%] rounded-2xl p-3 ${
-                  isMine
-                    ? 'self-end bg-primary rounded-tr-none'
-                    : 'self-start bg-muted rounded-tl-none'
-                }`}
-              >
-                {!isMine && (
-                  <Text className="mb-1 text-xs font-bold text-muted-foreground">
-                    {item.profiles?.full_name || 'User'}
-                  </Text>
-                )}
-                
-                {item.type === 'image' ? (
-                  <Image
-                    source={{ uri: item.content }}
-                    className="h-48 w-64 rounded-xl"
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <Text
-                    className={`text-base ${
-                      isMine ? 'text-primary-foreground' : 'text-foreground'
-                    }`}
-                  >
-                    {item.content}
-                  </Text>
-                )}
-                
-                <Text
-                  className={`mt-1 text-[10px] opacity-70 ${
-                    isMine ? 'text-primary-foreground text-right' : 'text-muted-foreground'
+            renderItem={({ item }) => {
+              const isMine = item.sender_id === user?.id;
+              return (
+                <View
+                  className={`mb-4 flex-row ${
+                    isMine ? 'justify-end' : 'justify-start'
                   }`}
                 >
-                  {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </Text>
-              </View>
-            );
-          }}
+                  <View
+                    className={`max-w-[80%] rounded-2xl px-4 py-2 ${
+                      isMine
+                        ? 'bg-blue-600 rounded-br-none'
+                        : 'bg-zinc-800 rounded-bl-none'
+                    }`}
+                  >
+                    {!isMine && (
+                      <Text className="mb-1 text-xs font-bold text-zinc-400">
+                        {item.profiles?.full_name || 'User'}
+                      </Text>
+                    )}
+                    
+                    {item.type === 'image' ? (
+                      <View className="overflow-hidden rounded-lg">
+                        <Image
+                          source={{ uri: item.content }}
+                          className="h-48 w-64"
+                          resizeMode="cover"
+                        />
+                      </View>
+                    ) : (
+                      <Text
+                        className={`text-[16px] leading-5 ${
+                          isMine ? 'text-white' : 'text-zinc-100'
+                        }`}
+                      >
+                        {item.content}
+                      </Text>
+                    )}
+                    
+                    <View className="mt-1 flex-row items-center justify-end">
+                      <Text
+                        className={`text-[10px] opacity-60 ${
+                          isMine ? 'text-blue-100' : 'text-zinc-400'
+                        }`}
+                      >
+                        {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              );
+            }}
+
         />
 
         {(isOutOfRange || isExpired) && room?.type !== 'private' ? (
-          <View className="flex-row items-center border-t border-border bg-destructive/10 p-4 pb-8">
+          <View className="flex-row items-center border-t border-zinc-800 bg-red-950/20 p-4 pb-8">
             <Lock size={20} color="#ef4444" className="mr-3" />
-            <Text className="flex-1 text-sm font-semibold text-destructive">
+            <Text className="flex-1 text-sm font-semibold text-red-400">
               {isExpired 
                 ? 'This chat has expired after 48 hours.'
                 : "You've left the 20m area. Move back to chat."}
             </Text>
           </View>
         ) : (
-          <View className="flex-row items-center border-t border-border bg-card p-4 pb-8">
-            <TouchableOpacity className="mr-3">
-              <Mic size={24} color="#6b7280" />
+          <View className="flex-row items-center border-t border-zinc-900 bg-zinc-950 px-4 py-3 pb-10">
+            <TouchableOpacity className="mr-3 p-1">
+              <Mic size={24} color="#a1a1aa" />
             </TouchableOpacity>
-            <TouchableOpacity onPress={pickImage} className="mr-3" disabled={uploading}>
+            <TouchableOpacity onPress={pickImage} className="mr-3 p-1" disabled={uploading}>
               {uploading ? (
                 <ActivityIndicator size="small" color="#3b82f6" />
               ) : (
-                <ImageIcon size={24} color="#6b7280" />
+                <ImageIcon size={24} color="#a1a1aa" />
               )}
             </TouchableOpacity>
-            <View className="mr-3 flex-1 rounded-full bg-muted px-4 py-2">
+            <View className="mr-3 flex-1 rounded-2xl bg-zinc-900 px-4 py-2">
               <TextInput
                 placeholder="Type a message..."
+                placeholderTextColor="#71717a"
                 value={newMessage}
                 onChangeText={setNewMessage}
-                className="text-base text-foreground"
+                className="max-h-24 text-[16px] text-zinc-100"
                 multiline
               />
             </View>
             <TouchableOpacity
               onPress={() => sendMessage()}
-              className={`h-10 w-10 items-center justify-center rounded-full bg-primary ${
-                !newMessage.trim() && 'opacity-50'
+              className={`h-10 w-10 items-center justify-center rounded-full ${
+                newMessage.trim() ? 'bg-blue-600' : 'bg-zinc-800'
               }`}
               disabled={!newMessage.trim()}
             >
-              <Send size={20} color="white" />
+              <Send size={20} color={newMessage.trim() ? "white" : "#71717a"} />
             </TouchableOpacity>
           </View>
         )}

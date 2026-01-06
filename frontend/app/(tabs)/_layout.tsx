@@ -43,13 +43,20 @@ export default function TabsLayout() {
           tabBarIcon: ({ color, size }) => <MessageCircle color={color} size={size} />,
         }}
       />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: 'Profile',
-          tabBarIcon: ({ color, size }) => <User color={color} size={size} />,
-        }}
-      />
-    </Tabs>
+        <Tabs.Screen
+          name="profile"
+          options={{
+            title: 'Profile',
+            tabBarIcon: ({ color, size }) => <User color={color} size={size} />,
+          }}
+        />
+        <Tabs.Screen
+          name="chat/[id]"
+          options={{
+            href: null,
+          }}
+        />
+      </Tabs>
+
   );
 }
