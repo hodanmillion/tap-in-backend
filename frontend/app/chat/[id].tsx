@@ -30,6 +30,7 @@ export default function ChatScreen() {
   const [gifSearch, setGifSearch] = useState('');
   const [gifs, setGifs] = useState<any[]>([]);
   const [gifLoading, setGifLoading] = useState(false);
+  const [gifError, setGifError] = useState<string | null>(null);
   const flatListRef = useRef<FlatList>(null);
 
   const { location } = useLocation(user?.id);
@@ -172,11 +173,22 @@ export default function ChatScreen() {
 
   const fetchTrendingGifs = useCallback(async () => {
     setGifLoading(true);
+    setGifError(null);
     try {
       const response = await fetch(`https://api.giphy.com/v1/gifs/trending?api_key=${GIPHY_API_KEY}&limit=20`);
       const data = await response.json();
-      if (data.data) setGifs(data.data);
-    } catch (error) { console.error('Trending GIFs fetch failed:', error); } finally { setGifLoading(false); }
+      if (data.meta?.status === 403) {
+        setGifError('GIPHY API key is invalid or banned.');
+        setGifs([]);
+      } else if (data.data) {
+        setGifs(data.data);
+      }
+    } catch (error) { 
+      console.error('Trending GIFs fetch failed:', error);
+      setGifError('Failed to fetch GIFs.');
+    } finally { 
+      setGifLoading(false); 
+    }
   }, []);
 
   const searchGifs = useCallback(async () => {
@@ -185,11 +197,22 @@ export default function ChatScreen() {
       return;
     }
     setGifLoading(true);
+    setGifError(null);
     try {
       const response = await fetch(`https://api.giphy.com/v1/gifs/search?api_key=${GIPHY_API_KEY}&q=${gifSearch}&limit=20`);
       const data = await response.json();
-      if (data.data) setGifs(data.data);
-    } catch (error) { console.error('GIF search failed:', error); } finally { setGifLoading(false); }
+      if (data.meta?.status === 403) {
+        setGifError('GIPHY API key is invalid or banned.');
+        setGifs([]);
+      } else if (data.data) {
+        setGifs(data.data);
+      }
+    } catch (error) { 
+      console.error('GIF search failed:', error);
+      setGifError('Failed to search GIFs.');
+    } finally { 
+      setGifLoading(false); 
+    }
   }, [gifSearch, fetchTrendingGifs]);
 
   useEffect(() => {
@@ -336,7 +359,13 @@ export default function ChatScreen() {
                   paddingBottom: 20
                 }}
               >
-                {gifs.length > 0 ? gifs.map((gif) => (
+                  {gifError ? (
+                    <View className="flex-1 items-center justify-center pt-20 px-10">
+                      <Text className="text-center text-red-400 font-medium mb-2">{gifError}</Text>
+                      <Text className="text-center text-zinc-500 text-sm">Please make sure EXPO_PUBLIC_GIPHY_API_KEY is set correctly in your .env file.</Text>
+                    </View>
+                  ) : gifs.length > 0 ? gifs.map((gif) => (
+
                   <TouchableOpacity 
                     key={gif.id} 
                     onPress={() => { 
