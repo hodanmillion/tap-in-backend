@@ -1,6 +1,6 @@
 import { View, Text, FlatList, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ActivityIndicator, Image, Modal, ScrollView, Pressable } from 'react-native';
 import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
-import { useEffect, useState, useRef, useMemo } from 'react';
+import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Send, Image as ImageIcon, Lock, Smile, X, Search, ChevronLeft, Camera } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -9,7 +9,7 @@ import { useLocation } from '@/hooks/useLocation';
 import * as Location from 'expo-location';
 
 const CHAT_RADIUS_METERS = 20;
-const GIPHY_API_KEY = 'dc6zaTOxFJmzC';
+const GIPHY_API_KEY = process.env.EXPO_PUBLIC_GIPHY_API_KEY || 'dc6zaTOxFJmzC';
 
 export default function ChatScreen() {
   const { id: initialId } = useLocalSearchParams();
@@ -40,12 +40,7 @@ export default function ChatScreen() {
     </TouchableOpacity>
   ), [router]);
 
-  useEffect(() => {
-    resolveRoomId();
-    setTimeout(() => setInitialLoading(false), 50);
-  }, [initialId]);
-
-  async function resolveRoomId() {
+  const resolveRoomId = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
     setUser(user);
 
@@ -67,40 +62,15 @@ export default function ChatScreen() {
     } else {
       setId(initialId as string);
     }
-  }
+  }, [initialId]);
 
   useEffect(() => {
-    if (!id) return;
-    fetchRoomAndUser();
-    fetchMessages();
-    const channel = supabase.channel(`room:${id}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${id}` }, (payload) => {
-        setMessages((current) => [payload.new, ...current]);
-      }).subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [id]);
+    resolveRoomId();
+    const timer = setTimeout(() => setInitialLoading(false), 50);
+    return () => clearTimeout(timer);
+  }, [resolveRoomId]);
 
-  useEffect(() => {
-    if (room && location && room.type !== 'private') {
-      const distance = calculateDistance(location.coords.latitude, location.coords.longitude, room.latitude, room.longitude);
-      setIsOutOfRange(distance > (room.radius || CHAT_RADIUS_METERS));
-      if (room.expires_at) {
-        const now = new Date();
-        const expires = new Date(room.expires_at);
-        setIsExpired(now > expires);
-      }
-    }
-  }, [room, location]);
-
-  function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
-    const R = 6371000;
-    const dLat = (lat2 - lat1) * (Math.PI / 180);
-    const dLon = (lon2 - lon1) * (Math.PI / 180);
-    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
-  }
-
-  async function fetchRoomAndUser() {
+  const fetchRoomAndUser = useCallback(async () => {
     if (!id) return;
     const { data } = await supabase.from('chat_rooms').select('*').eq('id', id).single();
     if (!data) { setRoomNotFound(true); setLoading(false); return; }
@@ -123,15 +93,46 @@ export default function ChatScreen() {
       setRoom(updatedRoom);
     }
     setLoading(false);
-  }
+  }, [id, user?.id]);
 
-  async function fetchMessages() {
+  const fetchMessages = useCallback(async () => {
     if (!id) return;
     const { data } = await supabase.from('messages').select('*, profiles(full_name, avatar_url)').eq('room_id', id).order('created_at', { ascending: false }).limit(50);
     if (data) setMessages(data);
+  }, [id]);
+
+  useEffect(() => {
+    if (!id) return;
+    fetchRoomAndUser();
+    fetchMessages();
+    const channel = supabase.channel(`room:${id}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${id}` }, (payload) => {
+        setMessages((current) => [payload.new, ...current]);
+      }).subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [id, fetchRoomAndUser, fetchMessages]);
+
+  function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
+    const R = 6371000;
+    const dLat = (lat2 - lat1) * (Math.PI / 180);
+    const dLon = (lon2 - lon1) * (Math.PI / 180);
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
   }
 
-  async function sendMessage(content?: string, type: 'text' | 'image' | 'gif' = 'text') {
+  useEffect(() => {
+    if (room && location && room.type !== 'private') {
+      const distance = calculateDistance(location.coords.latitude, location.coords.longitude, room.latitude, room.longitude);
+      setIsOutOfRange(distance > (room.radius || CHAT_RADIUS_METERS));
+      if (room.expires_at) {
+        const now = new Date();
+        const expires = new Date(room.expires_at);
+        setIsExpired(now > expires);
+      }
+    }
+  }, [room, location]);
+
+  const sendMessage = useCallback(async (content?: string, type: 'text' | 'image' | 'gif' = 'text') => {
     if (roomNotFound || isExpired) return;
     if (isOutOfRange && room?.type !== 'private') return;
     const finalContent = content || newMessage;
@@ -140,23 +141,23 @@ export default function ChatScreen() {
     if (type === 'text') setNewMessage('');
     const { error } = await supabase.from('messages').insert(message);
     if (error && error.code === '23503') setRoomNotFound(true);
-  }
+  }, [id, user?.id, newMessage, roomNotFound, isExpired, isOutOfRange, room?.type]);
 
-  async function pickImage() {
+  const pickImage = useCallback(async () => {
     if (isOutOfRange && room?.type !== 'private') return;
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, quality: 0.5 });
     if (!result.canceled) uploadImage(result.assets[0].uri);
-  }
+  }, [isOutOfRange, room?.type]);
 
-  async function takePicture() {
+  const takePicture = useCallback(async () => {
     if (isOutOfRange && room?.type !== 'private') return;
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') return;
     const result = await ImagePicker.launchCameraAsync({ allowsEditing: true, quality: 0.5 });
     if (!result.canceled) uploadImage(result.assets[0].uri);
-  }
+  }, [isOutOfRange, room?.type]);
 
-  async function uploadImage(uri: string) {
+  const uploadImage = useCallback(async (uri: string) => {
     setUploading(true);
     try {
       const fileName = `${id}/${Date.now()}.jpg`;
@@ -167,22 +168,46 @@ export default function ChatScreen() {
       const { data: { publicUrl } } = supabase.storage.from('chat-images').getPublicUrl(fileName);
       await sendMessage(publicUrl, 'image');
     } catch (error) { console.error('Upload failed:', error); } finally { setUploading(false); }
-  }
+  }, [id, sendMessage]);
 
-  async function searchGifs() {
-    if (!gifSearch.trim()) return;
+  const fetchTrendingGifs = useCallback(async () => {
+    setGifLoading(true);
+    try {
+      const response = await fetch(`https://api.giphy.com/v1/gifs/trending?api_key=${GIPHY_API_KEY}&limit=20`);
+      const data = await response.json();
+      if (data.data) setGifs(data.data);
+    } catch (error) { console.error('Trending GIFs fetch failed:', error); } finally { setGifLoading(false); }
+  }, []);
+
+  const searchGifs = useCallback(async () => {
+    if (!gifSearch.trim()) {
+      fetchTrendingGifs();
+      return;
+    }
     setGifLoading(true);
     try {
       const response = await fetch(`https://api.giphy.com/v1/gifs/search?api_key=${GIPHY_API_KEY}&q=${gifSearch}&limit=20`);
       const data = await response.json();
-      setGifs(data.data);
+      if (data.data) setGifs(data.data);
     } catch (error) { console.error('GIF search failed:', error); } finally { setGifLoading(false); }
-  }
+  }, [gifSearch, fetchTrendingGifs]);
 
   useEffect(() => {
-    const timer = setTimeout(() => { if (gifSearch) searchGifs(); }, 500);
+    if (gifModalVisible && !gifSearch) {
+      fetchTrendingGifs();
+    }
+  }, [gifModalVisible, gifSearch, fetchTrendingGifs]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (gifSearch) {
+        searchGifs();
+      } else if (gifModalVisible) {
+        fetchTrendingGifs();
+      }
+    }, 500);
     return () => clearTimeout(timer);
-  }, [gifSearch]);
+  }, [gifSearch, gifModalVisible, searchGifs, fetchTrendingGifs]);
 
   const defaultHeaderOptions = useMemo(() => ({
     title: 'Loading...',
@@ -281,12 +306,37 @@ export default function ChatScreen() {
             <Text className="text-xl font-bold text-white">Search GIFs</Text>
             <TouchableOpacity onPress={() => setGifModalVisible(false)}><X size={24} color="white" /></TouchableOpacity>
           </View>
-          <View className="mb-4 flex-row items-center rounded-xl bg-zinc-900 px-4 py-2">
-            <Search size={20} color="#71717a" /><TextInput placeholder="Search Giphy..." placeholderTextColor="#71717a" value={gifSearch} onChangeText={setGifSearch} className="ml-2 flex-1 text-white" autoFocus />
-          </View>
-          {gifLoading ? <ActivityIndicator size="large" color="#3b82f6" className="mt-10" /> : (
-            <ScrollView className="flex-1" contentContainerStyle={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
-                {gifs.map((gif) => (
+            <View className="mb-4 flex-row items-center rounded-xl bg-zinc-900 px-4 py-2">
+              <Search size={20} color="#71717a" />
+              <TextInput 
+                placeholder="Search Giphy..." 
+                placeholderTextColor="#71717a" 
+                value={gifSearch} 
+                onChangeText={setGifSearch} 
+                className="ml-2 flex-1 text-white" 
+                autoFocus 
+              />
+              {gifSearch.length > 0 && (
+                <TouchableOpacity onPress={() => setGifSearch('')}>
+                  <X size={18} color="#71717a" />
+                </TouchableOpacity>
+              )}
+            </View>
+            {gifLoading ? (
+              <View className="flex-1 items-center justify-center">
+                <ActivityIndicator size="large" color="#3b82f6" />
+              </View>
+            ) : (
+              <ScrollView 
+                className="flex-1" 
+                contentContainerStyle={{ 
+                  flexDirection: 'row', 
+                  flexWrap: 'wrap', 
+                  justifyContent: 'space-between',
+                  paddingBottom: 20
+                }}
+              >
+                {gifs.length > 0 ? gifs.map((gif) => (
                   <TouchableOpacity 
                     key={gif.id} 
                     onPress={() => { 
@@ -297,15 +347,19 @@ export default function ChatScreen() {
                     className="mb-2 w-[48%]"
                   >
                     <Image 
-                      source={{ uri: gif.images.fixed_height_small.url }} 
+                      source={{ uri: gif.images.preview_gif?.url || gif.images.fixed_height_small.url }} 
                       className="h-32 w-full rounded-lg bg-zinc-900" 
                       resizeMode="cover" 
                     />
                   </TouchableOpacity>
-                ))}
+                )) : (
+                  <View className="flex-1 items-center justify-center pt-20">
+                    <Text className="text-zinc-500">No GIFs found</Text>
+                  </View>
+                )}
+              </ScrollView>
+            )}
 
-            </ScrollView>
-          )}
         </View>
       </Modal>
 
