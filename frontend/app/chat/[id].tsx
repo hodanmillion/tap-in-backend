@@ -9,7 +9,7 @@ import { useLocation } from '@/hooks/useLocation';
 import * as Location from 'expo-location';
 
 const CHAT_RADIUS_METERS = 20;
-const GIPHY_API_KEY = process.env.EXPO_PUBLIC_GIPHY_API_KEY || 'dc6zaTOxFJmzC';
+const GIPHY_API_KEY = process.env.EXPO_PUBLIC_GIPHY_API_KEY || 'l1WfAFgqA5WupWoMaCaWKB12G54J6LtZ';
 
 export default function ChatScreen() {
   const { id: initialId } = useLocalSearchParams();
