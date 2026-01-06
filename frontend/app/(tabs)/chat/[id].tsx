@@ -7,6 +7,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { useLocation } from '@/hooks/useLocation';
 
+const CHAT_RADIUS_METERS = 20;
+
 export default function ChatScreen() {
   const { id: initialId } = useLocalSearchParams();
   const [id, setId] = useState<string | null>(null);
@@ -17,6 +19,7 @@ export default function ChatScreen() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [isOutOfRange, setIsOutOfRange] = useState(false);
+  const [isExpired, setIsExpired] = useState(false);
   const flatListRef = useRef<FlatList>(null);
   
   const { location } = useLocation(user?.id);
@@ -79,7 +82,13 @@ export default function ChatScreen() {
         room.latitude,
         room.longitude
       );
-      setIsOutOfRange(distance > (room.radius || 1000));
+      setIsOutOfRange(distance > CHAT_RADIUS_METERS);
+      
+      if (room.expires_at) {
+        const now = new Date();
+        const expires = new Date(room.expires_at);
+        setIsExpired(now > expires);
+      }
     }
   }, [room, location]);
 
@@ -262,11 +271,13 @@ export default function ChatScreen() {
           }}
         />
 
-        {isOutOfRange && room?.type !== 'private' ? (
+        {(isOutOfRange || isExpired) && room?.type !== 'private' ? (
           <View className="flex-row items-center border-t border-border bg-destructive/10 p-4 pb-8">
             <Lock size={20} color="#ef4444" className="mr-3" />
             <Text className="flex-1 text-sm font-semibold text-destructive">
-              You've left the region. You can no longer participate in this chat.
+              {isExpired 
+                ? 'This chat has expired after 48 hours.'
+                : "You've left the 20m area. Move back to chat."}
             </Text>
           </View>
         ) : (

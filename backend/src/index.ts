@@ -48,141 +48,135 @@ app.post('/profiles', zValidator('json', profileSchema), async (c) => {
     return c.json(data);
   });
   
-  // Auto-sync rooms based on location
-  app.post('/rooms/sync', async (c) => {
-    const { userId, latitude, longitude } = await c.req.json();
-  
-    // 1. Update user location
-    await supabase
-      .from('profiles')
-      .update({ 
-        latitude, 
-        longitude, 
-        last_seen: new Date().toISOString() 
-      })
-      .eq('id', userId);
-  
-    // 2. Find all public/auto_generated rooms (we'll filter them by distance)
-    const { data: publicRooms, error: roomsError } = await supabase
+const CHAT_RADIUS_METERS = 20;
+const CHAT_EXPIRY_HOURS = 48;
+
+function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLng = (lng2 - lng1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) *
+      Math.cos(lat2 * (Math.PI / 180)) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2);
+  const cVal = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return 6371000 * cVal;
+}
+
+app.post('/rooms/sync', async (c) => {
+  const { userId, latitude, longitude, address } = await c.req.json();
+
+  await supabase
+    .from('profiles')
+    .update({ 
+      latitude, 
+      longitude, 
+      last_seen: new Date().toISOString() 
+    })
+    .eq('id', userId);
+
+  const now = new Date();
+  const { data: publicRooms, error: roomsError } = await supabase
+    .from('chat_rooms')
+    .select('*')
+    .in('type', ['public', 'auto_generated'])
+    .or(`expires_at.is.null,expires_at.gt.${now.toISOString()}`);
+
+  if (roomsError) return c.json({ error: roomsError.message }, 400);
+
+  const nearbyRooms = (publicRooms || []).filter(room => {
+    if (room.latitude === null || room.longitude === null) return false;
+    const distance = calculateDistance(latitude, longitude, room.latitude, room.longitude);
+    return distance <= CHAT_RADIUS_METERS;
+  });
+
+  let nearbyRoomIds = nearbyRooms.map(r => r.id);
+
+  if (nearbyRoomIds.length === 0) {
+    const latDelta = CHAT_RADIUS_METERS / 111000;
+    const { data: anyNearbyRooms } = await supabase
       .from('chat_rooms')
-      .select('*')
-      .in('type', ['public', 'auto_generated']);
-  
-    if (roomsError) return c.json({ error: roomsError.message }, 400);
-  
-    const nearbyRooms = (publicRooms || []).filter(room => {
-      if (room.latitude === null || room.longitude === null) return false;
-      const dLat = (room.latitude - latitude) * (Math.PI / 180);
-      const dLng = (room.longitude - longitude) * (Math.PI / 180);
-      const a =
-        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos(latitude * (Math.PI / 180)) *
-          Math.cos(room.latitude * (Math.PI / 180)) *
-          Math.sin(dLng / 2) *
-          Math.sin(dLng / 2);
-      const cVal = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      const distance = 6371000 * cVal;
-      return distance <= (room.radius || 500);
+      .select('id, latitude, longitude')
+      .in('type', ['public', 'auto_generated'])
+      .or(`expires_at.is.null,expires_at.gt.${now.toISOString()}`)
+      .gte('latitude', latitude - latDelta)
+      .lte('latitude', latitude + latDelta)
+      .gte('longitude', longitude - latDelta)
+      .lte('longitude', longitude + latDelta);
+
+    const actuallyNearby = (anyNearbyRooms || []).filter(room => {
+      const distance = calculateDistance(latitude, longitude, room.latitude, room.longitude);
+      return distance <= CHAT_RADIUS_METERS;
     });
 
-    let nearbyRoomIds = nearbyRooms.map(r => r.id);
+    if (actuallyNearby.length === 0) {
+      const expiresAt = new Date(now.getTime() + CHAT_EXPIRY_HOURS * 60 * 60 * 1000);
+      const roomName = address || `Chat @ ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
+      
+      const { data: newRoom } = await supabase
+        .from('chat_rooms')
+        .insert({
+          name: roomName,
+          type: 'auto_generated',
+          latitude,
+          longitude,
+          radius: CHAT_RADIUS_METERS,
+          expires_at: expiresAt.toISOString()
+        })
+        .select()
+        .single();
 
-    // 2.5 Auto-generate a room if none nearby
-    if (nearbyRoomIds.length === 0) {
-      const latDelta = 1000 / 111000; // ~1km
-      const { data: nearbyUsers } = await supabase
-        .from('profiles')
-        .select('id')
-        .neq('id', userId)
-        .gte('latitude', latitude - latDelta)
-        .lte('latitude', latitude + latDelta)
-        .gte('longitude', longitude - latDelta)
-        .lte('longitude', longitude + latDelta)
-        .gte('last_seen', new Date(Date.now() - 30 * 60 * 1000).toISOString()); // Active in last 30m
-
-      // For better UX during testing: If no nearby users, we still might generate 
-      // if there are NO rooms within 1km at all.
-      if (true) { // Always check for generation if nearbyRoomIds is empty
-        // Check if there are ANY rooms within 1km
-        const { data: anyNearbyRooms } = await supabase
-          .from('chat_rooms')
-          .select('id')
-          .gte('latitude', latitude - latDelta)
-          .lte('latitude', latitude + latDelta)
-          .gte('longitude', longitude - latDelta)
-          .lte('longitude', longitude + latDelta)
-          .limit(1);
-
-        if (!anyNearbyRooms || anyNearbyRooms.length === 0) {
-          // Create a new auto-generated room
-          const { data: newRoom } = await supabase
-            .from('chat_rooms')
-            .insert({
-              name: `New Spot @ ${latitude.toFixed(2)}, ${longitude.toFixed(2)}`,
-              type: 'auto_generated',
-              latitude,
-              longitude,
-              radius: 500
-            })
-            .select()
-            .single();
-
-          if (newRoom) {
-            nearbyRoomIds.push(newRoom.id);
-            await supabase.from('room_participants').insert({ room_id: newRoom.id, user_id: userId });
-          }
-        }
+      if (newRoom) {
+        nearbyRoomIds.push(newRoom.id);
+        await supabase.from('room_participants').insert({ room_id: newRoom.id, user_id: userId });
       }
     }
-  
-    // 3. Get current public/auto_generated room participations for this user
-    const { data: currentParticipations } = await supabase
+  }
+
+  const { data: currentParticipations } = await supabase
+    .from('room_participants')
+    .select('room_id, chat_rooms!inner(type)')
+    .eq('user_id', userId)
+    .in('chat_rooms.type', ['public', 'auto_generated']);
+
+  const currentRoomIds = currentParticipations?.map(p => p.room_id) || [];
+
+  const roomsToJoin = nearbyRoomIds.filter(id => !currentRoomIds.includes(id));
+  if (roomsToJoin.length > 0) {
+    await supabase
       .from('room_participants')
-      .select('room_id, chat_rooms!inner(type)')
+      .insert(roomsToJoin.map(roomId => ({ room_id: roomId, user_id: userId })));
+  }
+
+  const roomsToLeave = currentRoomIds.filter(id => !nearbyRoomIds.includes(id));
+  if (roomsToLeave.length > 0) {
+    await supabase
+      .from('room_participants')
+      .delete()
       .eq('user_id', userId)
-      .in('chat_rooms.type', ['public', 'auto_generated']);
-  
-    const currentRoomIds = currentParticipations?.map(p => p.room_id) || [];
-  
-    // 4. Join new rooms
-    const roomsToJoin = nearbyRoomIds.filter(id => !currentRoomIds.includes(id));
-    if (roomsToJoin.length > 0) {
-      await supabase
-        .from('room_participants')
-        .insert(roomsToJoin.map(roomId => ({ room_id: roomId, user_id: userId })));
-    }
-  
-    // 5. Leave rooms no longer nearby
-    const roomsToLeave = currentRoomIds.filter(id => !nearbyRoomIds.includes(id));
-    if (roomsToLeave.length > 0) {
-      await supabase
-        .from('room_participants')
-        .delete()
-        .eq('user_id', userId)
-        .in('room_id', roomsToLeave);
-    }
-  
-    return c.json({
-      active_rooms: nearbyRoomIds,
-      joined: roomsToJoin,
-      left: roomsToLeave
-    });
+      .in('room_id', roomsToLeave);
+  }
+
+  return c.json({
+    active_rooms: nearbyRoomIds,
+    joined: roomsToJoin,
+    left: roomsToLeave
   });
+});
   
-  // Get nearby chat rooms
 app.get('/rooms/nearby', async (c) => {
   const lat = parseFloat(c.req.query('lat') || '0');
   const lng = parseFloat(c.req.query('lng') || '0');
-  const radius = parseFloat(c.req.query('radius') || '1000'); // meters
 
-  // Simple bounding box for nearby rooms (for more accuracy, use PostGIS if enabled)
-  // 1 degree lat ~ 111km, 1 degree lng ~ 111km * cos(lat)
-  const latDelta = radius / 111000;
-  const lngDelta = radius / (111000 * Math.cos(lat * (Math.PI / 180)));
+  const now = new Date();
+  const latDelta = CHAT_RADIUS_METERS / 111000;
+  const lngDelta = CHAT_RADIUS_METERS / (111000 * Math.cos(lat * (Math.PI / 180)));
 
   const { data, error } = await supabase
     .from('chat_rooms')
     .select('*')
+    .or(`expires_at.is.null,expires_at.gt.${now.toISOString()}`)
     .gte('latitude', lat - latDelta)
     .lte('latitude', lat + latDelta)
     .gte('longitude', lng - lngDelta)
@@ -190,23 +184,13 @@ app.get('/rooms/nearby', async (c) => {
 
   if (error) return c.json({ error: error.message }, 400);
 
-  // Filter by actual distance
   const filteredRooms = data.filter((room) => {
-    const dLat = (room.latitude - lat) * (Math.PI / 180);
-    const dLng = (room.longitude - lng) * (Math.PI / 180);
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(lat * (Math.PI / 180)) *
-        Math.cos(room.latitude * (Math.PI / 180)) *
-        Math.sin(dLng / 2) *
-        Math.sin(dLng / 2);
-    const cVal = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    const distance = 6371000 * cVal; // Distance in meters
-    return distance <= (room.radius || radius);
+    const distance = calculateDistance(lat, lng, room.latitude, room.longitude);
+    return distance <= CHAT_RADIUS_METERS;
   });
 
-    return c.json(filteredRooms);
-  });
+  return c.json(filteredRooms);
+});
   
   // Get nearby users
   app.get('/profiles/nearby', async (c) => {
@@ -320,7 +304,7 @@ app.post('/friends/request', async (c) => {
     if (error) return c.json({ error: error.message }, 400);
   
     // Map to just the friend's profile
-    const friends = data.map((f: any) => {
+    const friends = data.map((f: { user_1: { id: string }; user_2: { id: string } }) => {
       return f.user_1.id === userId ? f.user_2 : f.user_1;
     });
   

@@ -3,10 +3,22 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useLocation } from '@/hooks/useLocation';
 import { useEffect, useState } from 'react';
-import { MapPin, Users, ArrowRight } from 'lucide-react-native';
+import { MapPin, Users, ArrowRight, Clock } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiRequest } from '@/lib/api';
+
+function getTimeRemaining(expiresAt: string | null): string {
+  if (!expiresAt) return 'Permanent';
+  const now = new Date();
+  const expires = new Date(expiresAt);
+  const diff = expires.getTime() - now.getTime();
+  if (diff <= 0) return 'Expired';
+  const hours = Math.floor(diff / (1000 * 60 * 60));
+  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+  if (hours > 0) return `${hours}h ${minutes}m left`;
+  return `${minutes}m left`;
+}
 
 export default function HomeScreen() {
   const [userId, setUserId] = useState<string | undefined>();
@@ -23,11 +35,11 @@ export default function HomeScreen() {
     queryKey: ['nearbyRooms', location?.coords.latitude, location?.coords.longitude],
     queryFn: async () => {
       if (!location) return [];
-      
       const { latitude, longitude } = location.coords;
-      return apiRequest(`/rooms/nearby?lat=${latitude}&lng=${longitude}&radius=1000`);
+      return apiRequest(`/rooms/nearby?lat=${latitude}&lng=${longitude}`);
     },
     enabled: !!location,
+    refetchInterval: 10000,
   });
 
   return (
@@ -38,7 +50,7 @@ export default function HomeScreen() {
           <View className="mt-2 flex-row items-center gap-1">
             <MapPin size={16} color="#6b7280" />
             <Text className="text-sm text-muted-foreground">
-              {location ? 'Current Location Active' : errorMsg || 'Locating...'}
+              {location ? '20m radius active' : errorMsg || 'Locating...'}
             </Text>
           </View>
         </View>
@@ -63,9 +75,12 @@ export default function HomeScreen() {
                   <Text className="text-lg font-semibold text-foreground">
                     {item.name}
                   </Text>
-                  <Text className="text-sm text-muted-foreground">
-                    {item.radius}m radius • Join the conversation
-                  </Text>
+                  <View className="flex-row items-center gap-1">
+                    <Clock size={12} color="#6b7280" />
+                    <Text className="text-sm text-muted-foreground">
+                      {getTimeRemaining(item.expires_at)}
+                    </Text>
+                  </View>
                 </View>
                 <ArrowRight size={20} color="#6b7280" />
               </TouchableOpacity>
@@ -76,7 +91,7 @@ export default function HomeScreen() {
                   No active chats nearby.
                 </Text>
                 <Text className="mt-2 text-center text-sm text-muted-foreground">
-                  Try moving to a more populated area or wait for others to join.
+                  Move around - a new chat will appear when you enter a new area!
                 </Text>
               </View>
             }

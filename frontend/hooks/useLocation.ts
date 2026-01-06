@@ -16,21 +16,19 @@ export function useLocation(userId: string | undefined) {
         }
 
         let location = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
+          accuracy: Location.Accuracy.High,
         });
         setLocation(location);
 
-        // Sync location and rooms if user is logged in
         if (userId) {
           await syncLocationAndRooms(userId, location.coords.latitude, location.coords.longitude);
         }
 
-        // Subscribe to location updates
         const subscription = await Location.watchPositionAsync(
           {
-            accuracy: Location.Accuracy.Balanced,
-            timeInterval: 60000, // Update every minute
-            distanceInterval: 10, // Or every 10 meters
+            accuracy: Location.Accuracy.High,
+            timeInterval: 10000,
+            distanceInterval: 5,
           },
           (newLocation) => {
             setLocation(newLocation);
@@ -52,9 +50,21 @@ export function useLocation(userId: string | undefined) {
 
   async function syncLocationAndRooms(userId: string, latitude: number, longitude: number) {
     try {
+      let address: string | undefined;
+      try {
+        const reverseGeocode = await Location.reverseGeocodeAsync({ latitude, longitude });
+        if (reverseGeocode && reverseGeocode.length > 0) {
+          const loc = reverseGeocode[0];
+          const parts = [loc.street, loc.name, loc.city].filter(Boolean);
+          address = parts.length > 0 ? parts.join(', ') : undefined;
+        }
+      } catch (geoErr) {
+        console.log('Reverse geocode failed:', geoErr);
+      }
+
       await apiRequest('/rooms/sync', {
         method: 'POST',
-        body: JSON.stringify({ userId, latitude, longitude }),
+        body: JSON.stringify({ userId, latitude, longitude, address }),
       });
     } catch (err) {
       console.error('Failed to sync location and rooms:', err);
