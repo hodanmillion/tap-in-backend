@@ -19,8 +19,9 @@ export default function ChatScreen() {
   const [newMessage, setNewMessage] = useState('');
   const [room, setRoom] = useState<any>(null);
   const [user, setUser] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [uploading, setUploading] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [roomNotFound, setRoomNotFound] = useState(false);
+    const [uploading, setUploading] = useState(false);
   const [isOutOfRange, setIsOutOfRange] = useState(false);
   const [isExpired, setIsExpired] = useState(false);
   const [gifModalVisible, setGifModalVisible] = useState(false);
@@ -123,7 +124,13 @@ export default function ChatScreen() {
       .eq('id', id)
       .single();
     
-    if (data?.type === 'private') {
+    if (!data) {
+      setRoomNotFound(true);
+      setLoading(false);
+      return;
+    }
+    
+    if (data.type === 'private') {
       const { data: participants } = await supabase
         .from('room_participants')
         .select('profiles(full_name, username)')
@@ -133,15 +140,15 @@ export default function ChatScreen() {
       
       const otherUser = (participants as any)?.profiles;
       setRoom({ ...data, name: otherUser?.full_name || `@${otherUser?.username}` || 'Private Chat' });
-        } else if (data) {
-          let updatedRoom = { ...data };
-          // If name looks like a placeholder, try to get real address
-          if (data.type === 'auto_generated' || data.name === 'Ottawa Tech Hub') {
-            try {
-              const reverseGeocode = await Location.reverseGeocodeAsync({ 
-                latitude: data.latitude, 
-                longitude: data.longitude 
-              });
+          } else if (data) {
+            let updatedRoom = { ...data };
+            // If name looks like a placeholder, try to get real address
+            if (data.type === 'auto_generated') {
+              try {
+                const reverseGeocode = await Location.reverseGeocodeAsync({ 
+                  latitude: data.latitude, 
+                  longitude: data.longitude 
+                });
               if (reverseGeocode && reverseGeocode.length > 0) {
                 const loc = reverseGeocode[0];
                 const address = loc.street || loc.name || loc.city || 'Nearby Chat';
@@ -170,6 +177,7 @@ export default function ChatScreen() {
   }
 
   async function sendMessage(content?: string, type: 'text' | 'image' | 'gif' = 'text') {
+    if (roomNotFound || isExpired) return;
     if (isOutOfRange && room?.type !== 'private') return;
     
     const finalContent = content || newMessage;
@@ -185,7 +193,12 @@ export default function ChatScreen() {
     if (type === 'text') setNewMessage('');
     
     const { error } = await supabase.from('messages').insert(message);
-    if (error) console.error('Error sending message:', error);
+    if (error) {
+      console.error('Error sending message:', error);
+      if (error.code === '23503') {
+        setRoomNotFound(true);
+      }
+    }
   }
 
   async function pickImage() {
@@ -365,16 +378,18 @@ export default function ChatScreen() {
           }}
         />
 
-        {(isOutOfRange || isExpired) && room?.type !== 'private' ? (
-          <View className="flex-row items-center border-t border-zinc-800 bg-red-950/20 p-4 pb-8">
-            <Lock size={20} color="#ef4444" className="mr-3" />
-            <Text className="flex-1 text-sm font-semibold text-red-400">
-              {isExpired 
-                ? 'This chat has expired after 48 hours.'
-                : `You've left the ${room.radius || 20}m area. Move back to chat.`}
-            </Text>
-          </View>
-        ) : (
+          {(isOutOfRange || isExpired || roomNotFound) && room?.type !== 'private' ? (
+            <View className="flex-row items-center border-t border-zinc-800 bg-red-950/20 p-4 pb-8">
+              <Lock size={20} color="#ef4444" className="mr-3" />
+              <Text className="flex-1 text-sm font-semibold text-red-400">
+                {roomNotFound 
+                  ? 'This chat room is no longer active or has been removed.'
+                  : isExpired 
+                    ? 'This chat has expired after 48 hours.'
+                    : `You've left the ${room?.radius || 20}m area. Move back to chat.`}
+              </Text>
+            </View>
+          ) : (
             <View className="flex-row items-center border-t border-zinc-900 bg-zinc-950 px-4 py-3 pb-10">
               <TouchableOpacity onPress={() => setGifModalVisible(true)} className="mr-3 p-1">
                 <Smile size={24} color="#a1a1aa" />

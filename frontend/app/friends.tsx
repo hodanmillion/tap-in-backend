@@ -31,7 +31,7 @@ export default function FriendsScreen() {
       <View className="flex-1 px-6">
         <View className="mb-6 mt-4 flex-row items-center">
           <TouchableOpacity onPress={() => router.back()} className="mr-4">
-            <ArrowLeft size={24} color="#000" />
+            <ArrowLeft size={24} color="#3b82f6" />
           </TouchableOpacity>
           <Text className="text-3xl font-bold text-foreground">My Friends</Text>
         </View>
@@ -48,7 +48,7 @@ export default function FriendsScreen() {
               <TouchableOpacity
                 onPress={() => {
                   // Navigate to private chat (Task 3)
-                  router.push(`/(tabs)/chat/private_${item.id}`);
+                  router.push(`/chat/private_${item.id}`);
                 }}
                 className="mb-4 flex-row items-center rounded-2xl bg-card p-4 shadow-sm"
               >
