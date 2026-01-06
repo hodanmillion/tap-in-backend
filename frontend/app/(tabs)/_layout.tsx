@@ -50,12 +50,6 @@ export default function TabsLayout() {
             tabBarIcon: ({ color, size }) => <User color={color} size={size} />,
           }}
         />
-        <Tabs.Screen
-          name="chat/[id]"
-          options={{
-            href: null,
-          }}
-        />
       </Tabs>
 
   );

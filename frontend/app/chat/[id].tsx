@@ -1,17 +1,19 @@
-import { View, Text, FlatList, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ActivityIndicator, Image, Modal, ScrollView } from 'react-native';
-import { useLocalSearchParams, Stack } from 'expo-router';
+import { View, Text, FlatList, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ActivityIndicator, Image, Modal, ScrollView, Pressable } from 'react-native';
+import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
 import { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Send, Image as ImageIcon, Mic, Lock, Smile, X, Search } from 'lucide-react-native';
+import { Send, Image as ImageIcon, Mic, Lock, Smile, X, Search, ChevronLeft } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { useLocation } from '@/hooks/useLocation';
+import * as Location from 'expo-location';
 
 const CHAT_RADIUS_METERS = 20;
 const GIPHY_API_KEY = 'dc6zaTOxFJmzC'; // Public beta key
 
 export default function ChatScreen() {
   const { id: initialId } = useLocalSearchParams();
+  const router = useRouter();
   const [id, setId] = useState<string | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
@@ -22,6 +24,7 @@ export default function ChatScreen() {
   const [isOutOfRange, setIsOutOfRange] = useState(false);
   const [isExpired, setIsExpired] = useState(false);
   const [gifModalVisible, setGifModalVisible] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [gifSearch, setGifSearch] = useState('');
   const [gifs, setGifs] = useState<any[]>([]);
   const [gifLoading, setGifLoading] = useState(false);
@@ -87,7 +90,7 @@ export default function ChatScreen() {
         room.latitude,
         room.longitude
       );
-      setIsOutOfRange(distance > CHAT_RADIUS_METERS);
+      setIsOutOfRange(distance > (room.radius || CHAT_RADIUS_METERS));
       
       if (room.expires_at) {
         const now = new Date();
@@ -130,8 +133,25 @@ export default function ChatScreen() {
       
       const otherUser = (participants as any)?.profiles;
       setRoom({ ...data, name: otherUser?.full_name || `@${otherUser?.username}` || 'Private Chat' });
-    } else {
-      setRoom(data);
+    } else if (data) {
+      let updatedRoom = { ...data };
+      // If name is Ottawa Tech Hub or looks like a placeholder, try to get real address
+      if (data.name === 'Ottawa Tech Hub' || data.type === 'auto_generated') {
+        try {
+          const reverseGeocode = await Location.reverseGeocodeAsync({ 
+            latitude: data.latitude, 
+            longitude: data.longitude 
+          });
+          if (reverseGeocode && reverseGeocode.length > 0) {
+            const loc = reverseGeocode[0];
+            const address = [loc.street, loc.name, loc.city].filter(Boolean).join(', ');
+            if (address) updatedRoom.name = address;
+          }
+        } catch (e) {
+          console.log('Header geocode failed', e);
+        }
+      }
+      setRoom(updatedRoom);
     }
     setLoading(false);
   }
@@ -242,7 +262,20 @@ export default function ChatScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['bottom']}>
-      <Stack.Screen options={{ title: room?.name || 'Chat', headerShown: true }} />
+      <Stack.Screen 
+        options={{ 
+          title: room?.name || 'Chat', 
+          headerShown: true,
+          headerLeft: () => (
+            <TouchableOpacity onPress={() => router.back()} className="mr-4">
+              <ChevronLeft size={28} color="#3b82f6" />
+            </TouchableOpacity>
+          ),
+          headerStyle: { backgroundColor: '#09090b' },
+          headerTitleStyle: { color: '#ffffff', fontSize: 17, fontWeight: '600' },
+          headerShadowVisible: false,
+        }} 
+      />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         className="flex-1"
@@ -276,13 +309,17 @@ export default function ChatScreen() {
                   )}
                   
                   {item.type === 'image' || item.type === 'gif' ? (
-                    <View className="overflow-hidden rounded-lg">
+                    <TouchableOpacity 
+                      activeOpacity={0.9} 
+                      onPress={() => setSelectedImage(item.content)}
+                      className="overflow-hidden rounded-lg"
+                    >
                       <Image
                         source={{ uri: item.content }}
                         className="h-48 w-64"
                         resizeMode="cover"
                       />
-                    </View>
+                    </TouchableOpacity>
                   ) : (
                     <Text
                       className={`text-[16px] leading-5 ${
@@ -314,7 +351,7 @@ export default function ChatScreen() {
             <Text className="flex-1 text-sm font-semibold text-red-400">
               {isExpired 
                 ? 'This chat has expired after 48 hours.'
-                : "You've left the 20m area. Move back to chat."}
+                : `You've left the ${room.radius || 20}m area. Move back to chat.`}
             </Text>
           </View>
         ) : (
@@ -402,6 +439,33 @@ export default function ChatScreen() {
             </ScrollView>
           )}
         </View>
+      </Modal>
+
+      {/* Image Expansion Modal */}
+      <Modal
+        visible={!!selectedImage}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setSelectedImage(null)}
+      >
+        <Pressable 
+          className="flex-1 bg-black/95 items-center justify-center"
+          onPress={() => setSelectedImage(null)}
+        >
+          <TouchableOpacity 
+            className="absolute top-12 right-6 z-10 p-2 bg-zinc-900/50 rounded-full"
+            onPress={() => setSelectedImage(null)}
+          >
+            <X size={24} color="white" />
+          </TouchableOpacity>
+          {selectedImage && (
+            <Image
+              source={{ uri: selectedImage }}
+              className="w-full h-full"
+              resizeMode="contain"
+            />
+          )}
+        </Pressable>
       </Modal>
     </SafeAreaView>
   );

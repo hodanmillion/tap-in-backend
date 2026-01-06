@@ -63,10 +63,11 @@ export default function HomeScreen() {
           <FlatList
             data={nearbyRooms}
             keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                onPress={() => router.push(`/(tabs)/chat/${item.id}`)}
-                className="mb-4 flex-row items-center rounded-2xl bg-card p-4 shadow-sm"
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  onPress={() => router.push(`/chat/${item.id}`)}
+                  className="mb-4 flex-row items-center rounded-2xl bg-card p-4 shadow-sm"
+
               >
                 <View className="h-12 w-12 items-center justify-center rounded-full bg-primary/10">
                   <Users size={24} color="#3b82f6" />

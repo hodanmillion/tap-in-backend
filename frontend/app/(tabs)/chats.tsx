@@ -53,9 +53,10 @@ export default function ChatsScreen() {
             data={rooms}
             keyExtractor={(item) => item.id}
             renderItem={({ item }) => (
-              <TouchableOpacity
-                onPress={() => router.push(`/(tabs)/chat/${item.id}`)}
-                className="mb-4 flex-row items-center rounded-2xl bg-card p-4 shadow-sm"
+                <TouchableOpacity
+                  onPress={() => router.push(`/chat/${item.id}`)}
+                  className="mb-4 flex-row items-center rounded-2xl bg-card p-4 shadow-sm"
+
               >
                 <View className="h-12 w-12 items-center justify-center rounded-full bg-secondary">
                   <MessageSquare size={24} color="#6b7280" />
