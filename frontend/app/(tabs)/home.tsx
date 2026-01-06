@@ -69,8 +69,29 @@ export default function HomeScreen() {
       if (!location) return [];
       const { latitude, longitude } = location.coords;
       const rooms = await apiRequest(`/rooms/nearby?lat=${latitude}&lng=${longitude}`);
-      // Filter out any that still might have the unwanted name if we can't resolve it
-      return rooms.filter((r: any) => r.name !== 'Ottawa Tech Hub');
+      
+      // Deduplicate by name and proximity (approx 10m)
+      const uniqueRooms: any[] = [];
+      for (const room of rooms) {
+        const isDuplicate = uniqueRooms.some(r => {
+          if (r.name === room.name) return true;
+          if (room.latitude && room.longitude && r.latitude && r.longitude) {
+            const dist = Math.sqrt(
+              Math.pow(room.latitude - r.latitude, 2) + 
+              Math.pow(room.longitude - r.longitude, 2)
+            );
+            // ~10m in degrees (very rough estimate, but okay for deduplication)
+            return dist < 0.0001;
+          }
+          return false;
+        });
+        
+        if (!isDuplicate) {
+          uniqueRooms.push(room);
+        }
+      }
+      
+      return uniqueRooms.filter((r: any) => r.name !== 'Ottawa Tech Hub');
     },
     enabled: !!location,
     refetchInterval: 10000,

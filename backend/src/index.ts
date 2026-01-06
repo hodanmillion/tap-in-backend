@@ -93,22 +93,24 @@ app.post('/rooms/sync', async (c) => {
 
   let nearbyRoomIds = nearbyRooms.map(r => r.id);
 
-  if (nearbyRoomIds.length === 0) {
-    const latDelta = CHAT_RADIUS_METERS / 111000;
-    const { data: anyNearbyRooms } = await supabase
-      .from('chat_rooms')
-      .select('id, latitude, longitude')
-      .in('type', ['public', 'auto_generated'])
-      .or(`expires_at.is.null,expires_at.gt.${now.toISOString()}`)
-      .gte('latitude', latitude - latDelta)
-      .lte('latitude', latitude + latDelta)
-      .gte('longitude', longitude - latDelta)
-      .lte('longitude', longitude + latDelta);
-
-    const actuallyNearby = (anyNearbyRooms || []).filter(room => {
-      const distance = calculateDistance(latitude, longitude, room.latitude, room.longitude);
-      return distance <= CHAT_RADIUS_METERS;
-    });
+    if (nearbyRoomIds.length === 0) {
+      // Use a slightly larger radius for creation check to avoid close duplicates
+      const CREATION_CHECK_RADIUS = CHAT_RADIUS_METERS + 5;
+      const latDelta = CREATION_CHECK_RADIUS / 111000;
+      const { data: anyNearbyRooms } = await supabase
+        .from('chat_rooms')
+        .select('id, latitude, longitude')
+        .in('type', ['public', 'auto_generated'])
+        .or(`expires_at.is.null,expires_at.gt.${now.toISOString()}`)
+        .gte('latitude', latitude - latDelta)
+        .lte('latitude', latitude + latDelta)
+        .gte('longitude', longitude - latDelta)
+        .lte('longitude', longitude + latDelta);
+  
+      const actuallyNearby = (anyNearbyRooms || []).filter(room => {
+        const distance = calculateDistance(latitude, longitude, room.latitude, room.longitude);
+        return distance <= CREATION_CHECK_RADIUS;
+      });
 
     if (actuallyNearby.length === 0) {
       const expiresAt = new Date(now.getTime() + CHAT_EXPIRY_HOURS * 60 * 60 * 1000);

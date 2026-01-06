@@ -1,6 +1,6 @@
 import { View, Text, FlatList, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ActivityIndicator, Image, Modal, ScrollView, Pressable } from 'react-native';
 import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo, useLayoutEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Send, Image as ImageIcon, Mic, Lock, Smile, X, Search, ChevronLeft, Camera } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -19,9 +19,9 @@ export default function ChatScreen() {
   const [newMessage, setNewMessage] = useState('');
   const [room, setRoom] = useState<any>(null);
   const [user, setUser] = useState<any>(null);
-    const [loading, setLoading] = useState(true);
-    const [roomNotFound, setRoomNotFound] = useState(false);
-    const [uploading, setUploading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [roomNotFound, setRoomNotFound] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [isOutOfRange, setIsOutOfRange] = useState(false);
   const [isExpired, setIsExpired] = useState(false);
   const [gifModalVisible, setGifModalVisible] = useState(false);
@@ -30,8 +30,14 @@ export default function ChatScreen() {
   const [gifs, setGifs] = useState<any[]>([]);
   const [gifLoading, setGifLoading] = useState(false);
   const flatListRef = useRef<FlatList>(null);
-  
+
   const { location } = useLocation(user?.id);
+
+  const headerLeftComponent = useMemo(() => (
+    <TouchableOpacity onPress={() => router.back()} className="mr-4">
+      <ChevronLeft size={28} color="#3b82f6" />
+    </TouchableOpacity>
+  ), [router]);
 
   useEffect(() => {
     resolveRoomId();
@@ -284,6 +290,15 @@ export default function ChatScreen() {
     return () => clearTimeout(timer);
   }, [gifSearch]);
 
+  const headerOptions = useMemo(() => ({ 
+    title: room?.name || 'Chat', 
+    headerShown: true,
+    headerLeft: () => headerLeftComponent,
+    headerStyle: { backgroundColor: '#09090b' },
+    headerTitleStyle: { color: '#ffffff', fontSize: 17, fontWeight: '600' },
+    headerShadowVisible: false,
+  }), [room?.name, headerLeftComponent]);
+
   if (loading) {
     return (
       <View className="flex-1 items-center justify-center bg-zinc-950">
@@ -295,20 +310,7 @@ export default function ChatScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['bottom']}>
-      <Stack.Screen 
-        options={{ 
-          title: room?.name || 'Chat', 
-          headerShown: true,
-          headerLeft: () => (
-            <TouchableOpacity onPress={() => router.back()} className="mr-4">
-              <ChevronLeft size={28} color="#3b82f6" />
-            </TouchableOpacity>
-          ),
-          headerStyle: { backgroundColor: '#09090b' },
-          headerTitleStyle: { color: '#ffffff', fontSize: 17, fontWeight: '600' },
-          headerShadowVisible: false,
-        }} 
-      />
+      <Stack.Screen options={headerOptions} />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         className="flex-1"
