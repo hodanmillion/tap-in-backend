@@ -1,6 +1,6 @@
 import * as Location from 'expo-location';
 import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { apiRequest } from '@/lib/api';
 
 export function useLocation(userId: string | undefined) {
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
@@ -20,9 +20,9 @@ export function useLocation(userId: string | undefined) {
         });
         setLocation(location);
 
-        // Update location in database if user is logged in
+        // Sync location and rooms if user is logged in
         if (userId) {
-          await updateProfileLocation(userId, location.coords.latitude, location.coords.longitude);
+          await syncLocationAndRooms(userId, location.coords.latitude, location.coords.longitude);
         }
 
         // Subscribe to location updates
@@ -35,7 +35,7 @@ export function useLocation(userId: string | undefined) {
           (newLocation) => {
             setLocation(newLocation);
             if (userId) {
-              updateProfileLocation(userId, newLocation.coords.latitude, newLocation.coords.longitude);
+              syncLocationAndRooms(userId, newLocation.coords.latitude, newLocation.coords.longitude);
             }
           }
         );
@@ -50,18 +50,14 @@ export function useLocation(userId: string | undefined) {
     })();
   }, [userId]);
 
-  async function updateProfileLocation(id: string, lat: number, lng: number) {
+  async function syncLocationAndRooms(userId: string, latitude: number, longitude: number) {
     try {
-      await supabase
-        .from('profiles')
-        .update({
-          latitude: lat,
-          longitude: lng,
-          last_seen: new Date().toISOString(),
-        })
-        .eq('id', id);
+      await apiRequest('/rooms/sync', {
+        method: 'POST',
+        body: JSON.stringify({ userId, latitude, longitude }),
+      });
     } catch (err) {
-      console.error('Failed to update location:', err);
+      console.error('Failed to sync location and rooms:', err);
     }
   }
 

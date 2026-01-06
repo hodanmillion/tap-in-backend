@@ -45,10 +45,81 @@ app.post('/profiles', zValidator('json', profileSchema), async (c) => {
     .single();
 
   if (error) return c.json({ error: error.message }, 400);
-  return c.json(data);
-});
-
-// Get nearby chat rooms
+    return c.json(data);
+  });
+  
+  // Auto-sync rooms based on location
+  app.post('/rooms/sync', async (c) => {
+    const { userId, latitude, longitude } = await c.req.json();
+  
+    // 1. Update user location
+    await supabase
+      .from('profiles')
+      .update({ 
+        latitude, 
+        longitude, 
+        last_seen: new Date().toISOString() 
+      })
+      .eq('id', userId);
+  
+    // 2. Find all public rooms (we'll filter them by distance)
+    const { data: publicRooms, error: roomsError } = await supabase
+      .from('chat_rooms')
+      .select('*')
+      .eq('type', 'public');
+  
+    if (roomsError) return c.json({ error: roomsError.message }, 400);
+  
+    const nearbyRoomIds = (publicRooms || []).filter(room => {
+      if (room.latitude === null || room.longitude === null) return false;
+      const dLat = (room.latitude - latitude) * (Math.PI / 180);
+      const dLng = (room.longitude - longitude) * (Math.PI / 180);
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(latitude * (Math.PI / 180)) *
+          Math.cos(room.latitude * (Math.PI / 180)) *
+          Math.sin(dLng / 2) *
+          Math.sin(dLng / 2);
+      const cVal = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      const distance = 6371000 * cVal;
+      return distance <= (room.radius || 500);
+    }).map(r => r.id);
+  
+    // 3. Get current public room participations for this user
+    const { data: currentParticipations } = await supabase
+      .from('room_participants')
+      .select('room_id, chat_rooms!inner(type)')
+      .eq('user_id', userId)
+      .eq('chat_rooms.type', 'public');
+  
+    const currentRoomIds = currentParticipations?.map(p => p.room_id) || [];
+  
+    // 4. Join new rooms
+    const roomsToJoin = nearbyRoomIds.filter(id => !currentRoomIds.includes(id));
+    if (roomsToJoin.length > 0) {
+      await supabase
+        .from('room_participants')
+        .insert(roomsToJoin.map(roomId => ({ room_id: roomId, user_id: userId })));
+    }
+  
+    // 5. Leave rooms no longer nearby
+    const roomsToLeave = currentRoomIds.filter(id => !nearbyRoomIds.includes(id));
+    if (roomsToLeave.length > 0) {
+      await supabase
+        .from('room_participants')
+        .delete()
+        .eq('user_id', userId)
+        .in('room_id', roomsToLeave);
+    }
+  
+    return c.json({
+      active_rooms: nearbyRoomIds,
+      joined: roomsToJoin,
+      left: roomsToLeave
+    });
+  });
+  
+  // Get nearby chat rooms
 app.get('/rooms/nearby', async (c) => {
   const lat = parseFloat(c.req.query('lat') || '0');
   const lng = parseFloat(c.req.query('lng') || '0');
