@@ -7,6 +7,7 @@ import { MapPin, Users, ArrowRight, Clock } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiRequest } from '@/lib/api';
+import * as Location from 'expo-location';
 
 function getTimeRemaining(expiresAt: string | null): string {
   if (!expiresAt) return 'Permanent';
@@ -18,6 +19,37 @@ function getTimeRemaining(expiresAt: string | null): string {
   const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
   if (hours > 0) return `${hours}h ${minutes}m left`;
   return `${minutes}m left`;
+}
+
+function RoomName({ room }: { room: any }) {
+  const [name, setName] = useState(room.name);
+
+  useEffect(() => {
+    async function resolveName() {
+      if (room.type === 'auto_generated' || room.name === 'Ottawa Tech Hub') {
+        try {
+          const reverseGeocode = await Location.reverseGeocodeAsync({
+            latitude: room.latitude,
+            longitude: room.longitude
+          });
+          if (reverseGeocode && reverseGeocode.length > 0) {
+            const loc = reverseGeocode[0];
+            const address = loc.street || loc.name || loc.city || 'Nearby Chat';
+            setName(address);
+          }
+        } catch (e) {
+          console.log('Geocode failed', e);
+        }
+      }
+    }
+    resolveName();
+  }, [room]);
+
+  return (
+    <Text className="text-lg font-semibold text-foreground" numberOfLines={1}>
+      {name}
+    </Text>
+  );
 }
 
 export default function HomeScreen() {
@@ -36,7 +68,9 @@ export default function HomeScreen() {
     queryFn: async () => {
       if (!location) return [];
       const { latitude, longitude } = location.coords;
-      return apiRequest(`/rooms/nearby?lat=${latitude}&lng=${longitude}`);
+      const rooms = await apiRequest(`/rooms/nearby?lat=${latitude}&lng=${longitude}`);
+      // Filter out any that still might have the unwanted name if we can't resolve it
+      return rooms.filter((r: any) => r.name !== 'Ottawa Tech Hub');
     },
     enabled: !!location,
     refetchInterval: 10000,
@@ -63,20 +97,16 @@ export default function HomeScreen() {
           <FlatList
             data={nearbyRooms}
             keyExtractor={(item) => item.id}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  onPress={() => router.push(`/chat/${item.id}`)}
-                  className="mb-4 flex-row items-center rounded-2xl bg-card p-4 shadow-sm"
-
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                onPress={() => router.push(`/chat/${item.id}`)}
+                className="mb-4 flex-row items-center rounded-2xl bg-card p-4 shadow-sm"
               >
                 <View className="h-12 w-12 items-center justify-center rounded-full bg-primary/10">
                   <Users size={24} color="#3b82f6" />
                 </View>
                 <View className="ml-4 flex-1">
-                    <Text className="text-lg font-semibold text-foreground" numberOfLines={1}>
-                      {item.name}
-                    </Text>
-
+                  <RoomName room={item} />
                   <View className="flex-row items-center gap-1">
                     <Clock size={12} color="#6b7280" />
                     <Text className="text-sm text-muted-foreground">

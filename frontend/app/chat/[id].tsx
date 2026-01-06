@@ -133,26 +133,26 @@ export default function ChatScreen() {
       
       const otherUser = (participants as any)?.profiles;
       setRoom({ ...data, name: otherUser?.full_name || `@${otherUser?.username}` || 'Private Chat' });
-      } else if (data) {
-        let updatedRoom = { ...data };
-        // If name is Ottawa Tech Hub or looks like a placeholder, try to get real address
-        if (data.name === 'Ottawa Tech Hub' || data.type === 'auto_generated') {
-          try {
-            const reverseGeocode = await Location.reverseGeocodeAsync({ 
-              latitude: data.latitude, 
-              longitude: data.longitude 
-            });
-            if (reverseGeocode && reverseGeocode.length > 0) {
-              const loc = reverseGeocode[0];
-              const address = loc.street || loc.name || loc.city || 'Unknown';
-              if (address) updatedRoom.name = address;
+        } else if (data) {
+          let updatedRoom = { ...data };
+          // If name looks like a placeholder, try to get real address
+          if (data.type === 'auto_generated' || data.name === 'Ottawa Tech Hub') {
+            try {
+              const reverseGeocode = await Location.reverseGeocodeAsync({ 
+                latitude: data.latitude, 
+                longitude: data.longitude 
+              });
+              if (reverseGeocode && reverseGeocode.length > 0) {
+                const loc = reverseGeocode[0];
+                const address = loc.street || loc.name || loc.city || 'Nearby Chat';
+                if (address) updatedRoom.name = address;
+              }
+            } catch (e) {
+              console.log('Header geocode failed', e);
             }
-          } catch (e) {
-            console.log('Header geocode failed', e);
           }
+          setRoom(updatedRoom);
         }
-        setRoom(updatedRoom);
-      }
 
     setLoading(false);
   }
