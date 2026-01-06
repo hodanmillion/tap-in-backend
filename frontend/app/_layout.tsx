@@ -52,7 +52,7 @@ export default function RootLayout() {
       <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="chat/[id]" options={{ headerShown: false, presentation: 'card' }} />
+        <Stack.Screen name="chat/[id]" options={{ headerShown: true, presentation: 'card', animation: 'slide_from_right' }} />
         <Stack.Screen name="friends" options={{ headerShown: false, presentation: 'card' }} />
         <Stack.Screen name="index" options={{ headerShown: false }} />
       </Stack>

@@ -20,6 +20,7 @@ export default function ChatScreen() {
   const [room, setRoom] = useState<any>(null);
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [roomNotFound, setRoomNotFound] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [isOutOfRange, setIsOutOfRange] = useState(false);
@@ -41,6 +42,7 @@ export default function ChatScreen() {
 
   useEffect(() => {
     resolveRoomId();
+    setTimeout(() => setInitialLoading(false), 50);
   }, [initialId]);
 
   async function resolveRoomId() {
@@ -182,6 +184,15 @@ export default function ChatScreen() {
     return () => clearTimeout(timer);
   }, [gifSearch]);
 
+  const defaultHeaderOptions = useMemo(() => ({
+    title: 'Loading...',
+    headerShown: true,
+    headerLeft: () => headerLeftComponent,
+    headerStyle: { backgroundColor: '#09090b' },
+    headerTitleStyle: { color: '#ffffff', fontSize: 17, fontWeight: '600' as any },
+    headerShadowVisible: false,
+  }), [headerLeftComponent]);
+
   const headerOptions = useMemo(() => ({ 
     title: room?.name || 'Chat', 
     headerShown: true,
@@ -191,10 +202,18 @@ export default function ChatScreen() {
     headerShadowVisible: false,
   }), [room?.name, headerLeftComponent]);
 
+  if (initialLoading) {
+    return (
+      <View className="flex-1 bg-zinc-950">
+        <Stack.Screen options={defaultHeaderOptions} />
+      </View>
+    );
+  }
+
   if (loading) {
     return (
       <View className="flex-1 items-center justify-center bg-zinc-950">
-        <Stack.Screen options={{ title: 'Chat', headerShown: true }} />
+        <Stack.Screen options={defaultHeaderOptions} />
         <ActivityIndicator size="large" color="#3b82f6" />
       </View>
     );

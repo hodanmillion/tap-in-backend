@@ -21,7 +21,6 @@ export default function ChatsScreen() {
     queryFn: async () => {
       if (!userId) return [];
 
-      // Fetch rooms through participants table - much more efficient
       const { data: participants, error } = await supabase
         .from('room_participants')
         .select('room_id, chat_rooms(*)')
@@ -29,13 +28,12 @@ export default function ChatsScreen() {
 
       if (error) throw error;
 
-      // Extract and filter valid rooms
       const uniqueRooms = (participants || [])
-        .map(p => p.chat_rooms)
-        .filter(Boolean)
+        .map(p => p.chat_rooms as any)
+        .filter((r: any) => r !== null && typeof r === 'object' && 'id' in r)
         .filter((r: any) => r.name !== 'Ottawa Tech Hub');
 
-      return uniqueRooms;
+      return uniqueRooms as Array<{ id: string; name: string }>;
     },
     enabled: !!userId,
   });
