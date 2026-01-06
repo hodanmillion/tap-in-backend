@@ -73,9 +73,10 @@ export default function HomeScreen() {
                   <Users size={24} color="#3b82f6" />
                 </View>
                 <View className="ml-4 flex-1">
-                  <Text className="text-lg font-semibold text-foreground">
-                    {item.name}
-                  </Text>
+                    <Text className="text-lg font-semibold text-foreground" numberOfLines={1}>
+                      {item.name}
+                    </Text>
+
                   <View className="flex-row items-center gap-1">
                     <Clock size={12} color="#6b7280" />
                     <Text className="text-sm text-muted-foreground">

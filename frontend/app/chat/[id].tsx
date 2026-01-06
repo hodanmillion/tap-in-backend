@@ -2,7 +2,7 @@ import { View, Text, FlatList, TextInput, TouchableOpacity, KeyboardAvoidingView
 import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
 import { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Send, Image as ImageIcon, Mic, Lock, Smile, X, Search, ChevronLeft } from 'lucide-react-native';
+import { Send, Image as ImageIcon, Mic, Lock, Smile, X, Search, ChevronLeft, Camera } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { useLocation } from '@/hooks/useLocation';
@@ -133,26 +133,27 @@ export default function ChatScreen() {
       
       const otherUser = (participants as any)?.profiles;
       setRoom({ ...data, name: otherUser?.full_name || `@${otherUser?.username}` || 'Private Chat' });
-    } else if (data) {
-      let updatedRoom = { ...data };
-      // If name is Ottawa Tech Hub or looks like a placeholder, try to get real address
-      if (data.name === 'Ottawa Tech Hub' || data.type === 'auto_generated') {
-        try {
-          const reverseGeocode = await Location.reverseGeocodeAsync({ 
-            latitude: data.latitude, 
-            longitude: data.longitude 
-          });
-          if (reverseGeocode && reverseGeocode.length > 0) {
-            const loc = reverseGeocode[0];
-            const address = [loc.street, loc.name, loc.city].filter(Boolean).join(', ');
-            if (address) updatedRoom.name = address;
+      } else if (data) {
+        let updatedRoom = { ...data };
+        // If name is Ottawa Tech Hub or looks like a placeholder, try to get real address
+        if (data.name === 'Ottawa Tech Hub' || data.type === 'auto_generated') {
+          try {
+            const reverseGeocode = await Location.reverseGeocodeAsync({ 
+              latitude: data.latitude, 
+              longitude: data.longitude 
+            });
+            if (reverseGeocode && reverseGeocode.length > 0) {
+              const loc = reverseGeocode[0];
+              const address = loc.street || loc.name || loc.city || 'Unknown';
+              if (address) updatedRoom.name = address;
+            }
+          } catch (e) {
+            console.log('Header geocode failed', e);
           }
-        } catch (e) {
-          console.log('Header geocode failed', e);
         }
+        setRoom(updatedRoom);
       }
-      setRoom(updatedRoom);
-    }
+
     setLoading(false);
   }
 
@@ -192,6 +193,25 @@ export default function ChatScreen() {
     
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
+      allowsEditing: true,
+      quality: 0.5,
+    });
+
+    if (!result.canceled) {
+      uploadImage(result.assets[0].uri);
+    }
+  }
+
+  async function takePicture() {
+    if (isOutOfRange && room?.type !== 'private') return;
+
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      alert('Sorry, we need camera permissions to make this work!');
+      return;
+    }
+    
+    const result = await ImagePicker.launchCameraAsync({
       allowsEditing: true,
       quality: 0.5,
     });
@@ -355,37 +375,41 @@ export default function ChatScreen() {
             </Text>
           </View>
         ) : (
-          <View className="flex-row items-center border-t border-zinc-900 bg-zinc-950 px-4 py-3 pb-10">
-            <TouchableOpacity onPress={() => setGifModalVisible(true)} className="mr-3 p-1">
-              <Smile size={24} color="#a1a1aa" />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={pickImage} className="mr-3 p-1" disabled={uploading}>
-              {uploading ? (
-                <ActivityIndicator size="small" color="#3b82f6" />
-              ) : (
-                <ImageIcon size={24} color="#a1a1aa" />
-              )}
-            </TouchableOpacity>
-            <View className="mr-3 flex-1 rounded-2xl bg-zinc-900 px-4 py-2">
-              <TextInput
-                placeholder="Type a message..."
-                placeholderTextColor="#71717a"
-                value={newMessage}
-                onChangeText={setNewMessage}
-                className="max-h-24 text-[16px] text-zinc-100"
-                multiline
-              />
+            <View className="flex-row items-center border-t border-zinc-900 bg-zinc-950 px-4 py-3 pb-10">
+              <TouchableOpacity onPress={() => setGifModalVisible(true)} className="mr-3 p-1">
+                <Smile size={24} color="#a1a1aa" />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={takePicture} className="mr-3 p-1" disabled={uploading}>
+                <Camera size={24} color="#a1a1aa" />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={pickImage} className="mr-3 p-1" disabled={uploading}>
+                {uploading ? (
+                  <ActivityIndicator size="small" color="#3b82f6" />
+                ) : (
+                  <ImageIcon size={24} color="#a1a1aa" />
+                )}
+              </TouchableOpacity>
+              <View className="mr-3 flex-1 rounded-2xl bg-zinc-900 px-4 py-2">
+                <TextInput
+                  placeholder="Type a message..."
+                  placeholderTextColor="#71717a"
+                  value={newMessage}
+                  onChangeText={setNewMessage}
+                  className="max-h-24 text-[16px] text-zinc-100"
+                  multiline
+                />
+              </View>
+              <TouchableOpacity
+                onPress={() => sendMessage()}
+                className={`h-10 w-10 items-center justify-center rounded-full ${
+                  newMessage.trim() ? 'bg-blue-600' : 'bg-zinc-800'
+                }`}
+                disabled={!newMessage.trim()}
+              >
+                <Send size={20} color={newMessage.trim() ? "white" : "#71717a"} />
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity
-              onPress={() => sendMessage()}
-              className={`h-10 w-10 items-center justify-center rounded-full ${
-                newMessage.trim() ? 'bg-blue-600' : 'bg-zinc-800'
-              }`}
-              disabled={!newMessage.trim()}
-            >
-              <Send size={20} color={newMessage.trim() ? "white" : "#71717a"} />
-            </TouchableOpacity>
-          </View>
+
         )}
       </KeyboardAvoidingView>
 

@@ -112,7 +112,7 @@ app.post('/rooms/sync', async (c) => {
 
     if (actuallyNearby.length === 0) {
       const expiresAt = new Date(now.getTime() + CHAT_EXPIRY_HOURS * 60 * 60 * 1000);
-      const roomName = address || `Chat @ ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
+      const roomName = (address && address.split(',')[0]) || `Chat @ ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
       
       const { data: newRoom } = await supabase
         .from('chat_rooms')
