@@ -51,18 +51,26 @@ app.post('/profiles', zValidator('json', profileSchema), async (c) => {
 const CHAT_RADIUS_METERS = 20;
 const CHAT_EXPIRY_HOURS = 48;
 
-app.post('/rooms/sync', async (c) => {
-  const { userId, latitude, longitude, address } = await c.req.json();
+  app.post('/rooms/sync', async (c) => {
+    const { userId, latitude, longitude, address } = await c.req.json();
 
-  // Update profile location (trigger handles geography column)
-  await supabase
-    .from('profiles')
-    .update({ 
-      latitude, 
-      longitude, 
-      last_seen: new Date().toISOString() 
-    })
-    .eq('id', userId);
+    if (!userId) return c.json({ error: 'User ID is required' }, 400);
+
+    // Ensure profile exists and update location (trigger handles geography column)
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .upsert({ 
+        id: userId,
+        latitude, 
+        longitude, 
+        last_seen: new Date().toISOString() 
+      }, { onConflict: 'id' });
+
+    if (profileError) {
+      console.error('Profile upsert error:', profileError);
+      return c.json({ error: profileError.message }, 400);
+    }
+
 
   // Get nearby rooms using PostGIS (highly optimized)
   const { data: nearbyRooms, error: roomsError } = await supabase.rpc('get_nearby_rooms', {
