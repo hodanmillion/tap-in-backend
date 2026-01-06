@@ -1,6 +1,9 @@
 import * as Location from 'expo-location';
 import { useEffect, useState, useRef } from 'react';
 import { apiRequest } from '@/lib/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const LOCATION_CACHE_KEY = 'last_known_location';
 
 export function useLocation(userId: string | undefined) {
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
@@ -12,20 +15,42 @@ export function useLocation(userId: string | undefined) {
 
     (async () => {
       try {
+        // 1. Try to load from persistent cache first (instant)
+        const cached = await AsyncStorage.getItem(LOCATION_CACHE_KEY);
+        if (cached) {
+          const parsedCache = JSON.parse(cached);
+          setLocation(parsedCache);
+        }
+
         let { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') {
           setErrorMsg('Permission to access location was denied');
           return;
         }
 
-        // Get initial position quickly
-        let initialLocation = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced, // Balanced is faster for initial load
-        });
-        setLocation(initialLocation);
+        // 2. Get OS-level last known position (fast)
+        let initialLocation = await Location.getLastKnownPositionAsync();
+        
+        if (initialLocation) {
+          setLocation(initialLocation);
+          AsyncStorage.setItem(LOCATION_CACHE_KEY, JSON.stringify(initialLocation));
+          if (userId) {
+            syncLocationAndRooms(userId, initialLocation.coords.latitude, initialLocation.coords.longitude);
+          }
+        }
 
-        if (userId) {
-          syncLocationAndRooms(userId, initialLocation.coords.latitude, initialLocation.coords.longitude);
+        // 3. Get fresh current position (most accurate)
+        const currentPosition = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+        
+        setLocation(currentPosition);
+        AsyncStorage.setItem(LOCATION_CACHE_KEY, JSON.stringify(currentPosition));
+
+        if (userId && (!initialLocation || 
+            Math.abs(currentPosition.coords.latitude - initialLocation.coords.latitude) > 0.001 ||
+            Math.abs(currentPosition.coords.longitude - initialLocation.coords.longitude) > 0.001)) {
+          syncLocationAndRooms(userId, currentPosition.coords.latitude, currentPosition.coords.longitude);
         }
 
         subscription = await Location.watchPositionAsync(
