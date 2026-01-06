@@ -1,13 +1,14 @@
-import { View, Text, FlatList, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ActivityIndicator, Image } from 'react-native';
+import { View, Text, FlatList, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ActivityIndicator, Image, Modal, ScrollView } from 'react-native';
 import { useLocalSearchParams, Stack } from 'expo-router';
 import { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Send, Image as ImageIcon, Mic, Lock } from 'lucide-react-native';
+import { Send, Image as ImageIcon, Mic, Lock, Smile, X, Search } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { useLocation } from '@/hooks/useLocation';
 
 const CHAT_RADIUS_METERS = 20;
+const GIPHY_API_KEY = 'dc6zaTOxFJmzC'; // Public beta key
 
 export default function ChatScreen() {
   const { id: initialId } = useLocalSearchParams();
@@ -20,6 +21,10 @@ export default function ChatScreen() {
   const [uploading, setUploading] = useState(false);
   const [isOutOfRange, setIsOutOfRange] = useState(false);
   const [isExpired, setIsExpired] = useState(false);
+  const [gifModalVisible, setGifModalVisible] = useState(false);
+  const [gifSearch, setGifSearch] = useState('');
+  const [gifs, setGifs] = useState<any[]>([]);
+  const [gifLoading, setGifLoading] = useState(false);
   const flatListRef = useRef<FlatList>(null);
   
   const { location } = useLocation(user?.id);
@@ -143,7 +148,7 @@ export default function ChatScreen() {
     if (data) setMessages(data);
   }
 
-  async function sendMessage(content?: string, type: 'text' | 'image' = 'text') {
+  async function sendMessage(content?: string, type: 'text' | 'image' | 'gif' = 'text') {
     if (isOutOfRange && room?.type !== 'private') return;
     
     const finalContent = content || newMessage;
@@ -205,15 +210,35 @@ export default function ChatScreen() {
     }
   }
 
-    if (loading) {
-      return (
-        <View className="flex-1 items-center justify-center bg-zinc-950">
-          <Stack.Screen options={{ title: 'Chat', headerShown: true }} />
-          <ActivityIndicator size="large" color="#3b82f6" />
-        </View>
-      );
+  async function searchGifs() {
+    if (!gifSearch.trim()) return;
+    setGifLoading(true);
+    try {
+      const response = await fetch(`https://api.giphy.com/v1/gifs/search?api_key=${GIPHY_API_KEY}&q=${gifSearch}&limit=20`);
+      const data = await response.json();
+      setGifs(data.data);
+    } catch (error) {
+      console.error('GIF search failed:', error);
+    } finally {
+      setGifLoading(false);
     }
+  }
 
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (gifSearch) searchGifs();
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [gifSearch]);
+
+  if (loading) {
+    return (
+      <View className="flex-1 items-center justify-center bg-zinc-950">
+        <Stack.Screen options={{ title: 'Chat', headerShown: true }} />
+        <ActivityIndicator size="large" color="#3b82f6" />
+      </View>
+    );
+  }
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['bottom']}>
@@ -229,59 +254,58 @@ export default function ChatScreen() {
           inverted
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ padding: 16 }}
-            renderItem={({ item }) => {
-              const isMine = item.sender_id === user?.id;
-              return (
+          renderItem={({ item }) => {
+            const isMine = item.sender_id === user?.id;
+            return (
+              <View
+                className={`mb-4 flex-row ${
+                  isMine ? 'justify-end' : 'justify-start'
+                }`}
+              >
                 <View
-                  className={`mb-4 flex-row ${
-                    isMine ? 'justify-end' : 'justify-start'
+                  className={`max-w-[80%] rounded-2xl px-4 py-2 ${
+                    isMine
+                      ? 'bg-blue-600 rounded-br-none'
+                      : 'bg-zinc-800 rounded-bl-none'
                   }`}
                 >
-                  <View
-                    className={`max-w-[80%] rounded-2xl px-4 py-2 ${
-                      isMine
-                        ? 'bg-blue-600 rounded-br-none'
-                        : 'bg-zinc-800 rounded-bl-none'
-                    }`}
-                  >
-                    {!isMine && (
-                      <Text className="mb-1 text-xs font-bold text-zinc-400">
-                        {item.profiles?.full_name || 'User'}
-                      </Text>
-                    )}
-                    
-                    {item.type === 'image' ? (
-                      <View className="overflow-hidden rounded-lg">
-                        <Image
-                          source={{ uri: item.content }}
-                          className="h-48 w-64"
-                          resizeMode="cover"
-                        />
-                      </View>
-                    ) : (
-                      <Text
-                        className={`text-[16px] leading-5 ${
-                          isMine ? 'text-white' : 'text-zinc-100'
-                        }`}
-                      >
-                        {item.content}
-                      </Text>
-                    )}
-                    
-                    <View className="mt-1 flex-row items-center justify-end">
-                      <Text
-                        className={`text-[10px] opacity-60 ${
-                          isMine ? 'text-blue-100' : 'text-zinc-400'
-                        }`}
-                      >
-                        {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </Text>
+                  {!isMine && (
+                    <Text className="mb-1 text-xs font-bold text-zinc-400">
+                      {item.profiles?.full_name || 'User'}
+                    </Text>
+                  )}
+                  
+                  {item.type === 'image' || item.type === 'gif' ? (
+                    <View className="overflow-hidden rounded-lg">
+                      <Image
+                        source={{ uri: item.content }}
+                        className="h-48 w-64"
+                        resizeMode="cover"
+                      />
                     </View>
+                  ) : (
+                    <Text
+                      className={`text-[16px] leading-5 ${
+                        isMine ? 'text-white' : 'text-zinc-100'
+                      }`}
+                    >
+                      {item.content}
+                    </Text>
+                  )}
+                  
+                  <View className="mt-1 flex-row items-center justify-end">
+                    <Text
+                      className={`text-[10px] opacity-60 ${
+                        isMine ? 'text-blue-100' : 'text-zinc-400'
+                      }`}
+                    >
+                      {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </Text>
                   </View>
                 </View>
-              );
-            }}
-
+              </View>
+            );
+          }}
         />
 
         {(isOutOfRange || isExpired) && room?.type !== 'private' ? (
@@ -295,8 +319,8 @@ export default function ChatScreen() {
           </View>
         ) : (
           <View className="flex-row items-center border-t border-zinc-900 bg-zinc-950 px-4 py-3 pb-10">
-            <TouchableOpacity className="mr-3 p-1">
-              <Mic size={24} color="#a1a1aa" />
+            <TouchableOpacity onPress={() => setGifModalVisible(true)} className="mr-3 p-1">
+              <Smile size={24} color="#a1a1aa" />
             </TouchableOpacity>
             <TouchableOpacity onPress={pickImage} className="mr-3 p-1" disabled={uploading}>
               {uploading ? (
@@ -327,6 +351,58 @@ export default function ChatScreen() {
           </View>
         )}
       </KeyboardAvoidingView>
+
+      <Modal
+        visible={gifModalVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setGifModalVisible(false)}
+      >
+        <View className="flex-1 bg-zinc-950 p-4">
+          <View className="mb-4 flex-row items-center justify-between">
+            <Text className="text-xl font-bold text-white">Search GIFs</Text>
+            <TouchableOpacity onPress={() => setGifModalVisible(false)}>
+              <X size={24} color="white" />
+            </TouchableOpacity>
+          </View>
+          
+          <View className="mb-4 flex-row items-center rounded-xl bg-zinc-900 px-4 py-2">
+            <Search size={20} color="#71717a" />
+            <TextInput
+              placeholder="Search Giphy..."
+              placeholderTextColor="#71717a"
+              value={gifSearch}
+              onChangeText={setGifSearch}
+              className="ml-2 flex-1 text-white"
+              autoFocus
+            />
+          </View>
+
+          {gifLoading ? (
+            <ActivityIndicator size="large" color="#3b82f6" className="mt-10" />
+          ) : (
+            <ScrollView className="flex-1" contentContainerStyle={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+              {gifs.map((gif) => (
+                <TouchableOpacity
+                  key={gif.id}
+                  onPress={() => {
+                    sendMessage(gif.images.fixed_height.url, 'gif');
+                    setGifModalVisible(false);
+                    setGifSearch('');
+                  }}
+                  className="mb-2 w-[48%]"
+                >
+                  <Image
+                    source={{ uri: gif.images.fixed_height.url }}
+                    className="h-32 w-full rounded-lg bg-zinc-900"
+                    resizeMode="cover"
+                  />
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          )}
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
