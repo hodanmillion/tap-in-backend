@@ -70,7 +70,7 @@ app.post('/profiles', zValidator('json', profileSchema), async (c) => {
   
     if (roomsError) return c.json({ error: roomsError.message }, 400);
   
-    const nearbyRoomIds = (publicRooms || []).filter(room => {
+    const nearbyRooms = (publicRooms || []).filter(room => {
       if (room.latitude === null || room.longitude === null) return false;
       const dLat = (room.latitude - latitude) * (Math.PI / 180);
       const dLng = (room.longitude - longitude) * (Math.PI / 180);
@@ -83,7 +83,57 @@ app.post('/profiles', zValidator('json', profileSchema), async (c) => {
       const cVal = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
       const distance = 6371000 * cVal;
       return distance <= (room.radius || 500);
-    }).map(r => r.id);
+    });
+
+    let nearbyRoomIds = nearbyRooms.map(r => r.id);
+
+    // 2.5 Auto-generate a room if none nearby
+    if (nearbyRoomIds.length === 0) {
+      const latDelta = 1000 / 111000; // ~1km
+      const { data: nearbyUsers } = await supabase
+        .from('profiles')
+        .select('id')
+        .neq('id', userId)
+        .gte('latitude', latitude - latDelta)
+        .lte('latitude', latitude + latDelta)
+        .gte('longitude', longitude - latDelta)
+        .lte('longitude', longitude + latDelta)
+        .gte('last_seen', new Date(Date.now() - 30 * 60 * 1000).toISOString()); // Active in last 30m
+
+      // For better UX during testing: If no nearby users, we still might generate 
+      // if there are NO rooms within 1km at all.
+      if (true) { // Always check for generation if nearbyRoomIds is empty
+        // Check if there are ANY rooms within 1km
+        const { data: anyNearbyRooms } = await supabase
+          .from('chat_rooms')
+          .select('id')
+          .gte('latitude', latitude - latDelta)
+          .lte('latitude', latitude + latDelta)
+          .gte('longitude', longitude - latDelta)
+          .lte('longitude', longitude + latDelta)
+          .limit(1);
+
+        if (!anyNearbyRooms || anyNearbyRooms.length === 0) {
+          // Create a new auto-generated room
+          const { data: newRoom } = await supabase
+            .from('chat_rooms')
+            .insert({
+              name: `New Spot @ ${latitude.toFixed(2)}, ${longitude.toFixed(2)}`,
+              type: 'auto_generated',
+              latitude,
+              longitude,
+              radius: 500
+            })
+            .select()
+            .single();
+
+          if (newRoom) {
+            nearbyRoomIds.push(newRoom.id);
+            await supabase.from('room_participants').insert({ room_id: newRoom.id, user_id: userId });
+          }
+        }
+      }
+    }
   
     // 3. Get current public/auto_generated room participations for this user
     const { data: currentParticipations } = await supabase
