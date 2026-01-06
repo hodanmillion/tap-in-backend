@@ -7,37 +7,46 @@ export function useLocation(userId: string | undefined) {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!userId) return;
-
     (async () => {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        setErrorMsg('Permission to access location was denied');
-        return;
-      }
-
-      let location = await Location.getCurrentPositionAsync({});
-      setLocation(location);
-
-      // Update location in database
-      await updateProfileLocation(userId, location.coords.latitude, location.coords.longitude);
-
-      // Subscribe to location updates
-      const subscription = await Location.watchPositionAsync(
-        {
-          accuracy: Location.Accuracy.Balanced,
-          timeInterval: 60000, // Update every minute
-          distanceInterval: 10, // Or every 10 meters
-        },
-        (newLocation) => {
-          setLocation(newLocation);
-          updateProfileLocation(userId, newLocation.coords.latitude, newLocation.coords.longitude);
+      try {
+        let { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          setErrorMsg('Permission to access location was denied');
+          return;
         }
-      );
 
-      return () => {
-        subscription.remove();
-      };
+        let location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+        setLocation(location);
+
+        // Update location in database if user is logged in
+        if (userId) {
+          await updateProfileLocation(userId, location.coords.latitude, location.coords.longitude);
+        }
+
+        // Subscribe to location updates
+        const subscription = await Location.watchPositionAsync(
+          {
+            accuracy: Location.Accuracy.Balanced,
+            timeInterval: 60000, // Update every minute
+            distanceInterval: 10, // Or every 10 meters
+          },
+          (newLocation) => {
+            setLocation(newLocation);
+            if (userId) {
+              updateProfileLocation(userId, newLocation.coords.latitude, newLocation.coords.longitude);
+            }
+          }
+        );
+
+        return () => {
+          subscription.remove();
+        };
+      } catch (err) {
+        console.error('Error getting location:', err);
+        setErrorMsg('Error getting location');
+      }
     })();
   }, [userId]);
 
