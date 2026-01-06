@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { MessageSquare } from 'lucide-react-native';
 import { useRouter, Stack } from 'expo-router';
 import { useEffect, useState } from 'react';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function FriendsScreen() {
   const [userId, setUserId] = useState<string | undefined>();
@@ -26,13 +27,13 @@ export default function FriendsScreen() {
   });
 
   return (
-    <View className="flex-1 bg-background">
+    <SafeAreaView className="flex-1 bg-background" edges={['top']}>
       <Stack.Screen 
         options={{ 
           title: 'My Friends',
           headerShown: true,
           headerStyle: { backgroundColor: '#09090b' },
-          headerTitleStyle: { color: '#ffffff', fontSize: 17, fontWeight: '600' },
+          headerTitleStyle: { color: '#ffffff', fontSize: 17, fontWeight: '600' as any },
           headerTintColor: '#3b82f6',
           headerShadowVisible: false,
         }} 
@@ -90,6 +91,6 @@ export default function FriendsScreen() {
           />
         )}
       </View>
-    </View>
+    </SafeAreaView>
   );
 }

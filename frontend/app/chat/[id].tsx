@@ -187,7 +187,7 @@ export default function ChatScreen() {
     headerShown: true,
     headerLeft: () => headerLeftComponent,
     headerStyle: { backgroundColor: '#09090b' },
-    headerTitleStyle: { color: '#ffffff', fontSize: 17, fontWeight: '600' },
+    headerTitleStyle: { color: '#ffffff', fontSize: 17, fontWeight: '600' as any },
     headerShadowVisible: false,
   }), [room?.name, headerLeftComponent]);
 
