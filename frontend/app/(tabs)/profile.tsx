@@ -1,29 +1,35 @@
-import { View, Text, Image, TouchableOpacity, Alert, ScrollView } from 'react-native';
-import { useEffect, useState } from 'react';
+import { View, Text, Image, TouchableOpacity, Alert, ScrollView, ActivityIndicator } from 'react-native';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { User, LogOut, Settings, Bell, Shield, CircleHelp, Users } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useState, useEffect } from 'react';
 
 export default function ProfileScreen() {
-  const [profile, setProfile] = useState<any>(null);
+  const [userId, setUserId] = useState<string | null>(null);
   const router = useRouter();
 
   useEffect(() => {
-    fetchProfile();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setUserId(user?.id || null);
+    });
   }, []);
 
-  async function fetchProfile() {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      const { data } = await supabase
+  const { data: profile, isLoading } = useQuery({
+    queryKey: ['profile', userId],
+    queryFn: async () => {
+      if (!userId) return null;
+      const { data, error } = await supabase
         .from('profiles')
         .select('*')
-        .eq('id', user.id)
+        .eq('id', userId)
         .single();
-      setProfile(data);
-    }
-  }
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!userId,
+  });
 
   async function handleSignOut() {
     const { error } = await supabase.auth.signOut();
@@ -38,6 +44,14 @@ export default function ProfileScreen() {
     { icon: <CircleHelp size={20} color="#6b7280" />, label: 'Help Center' },
     { icon: <Settings size={20} color="#6b7280" />, label: 'Settings' },
   ];
+
+  if (isLoading) {
+    return (
+      <View className="flex-1 items-center justify-center bg-background">
+        <ActivityIndicator size="large" color="#3b82f6" />
+      </View>
+    );
+  }
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top']}>

@@ -2,12 +2,14 @@ import { View, Text, FlatList, TouchableOpacity, ActivityIndicator } from 'react
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useLocation } from '@/hooks/useLocation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, memo } from 'react';
 import { MapPin, Users, ArrowRight, Clock } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiRequest } from '@/lib/api';
 import * as Location from 'expo-location';
+
+const geocodeCache = new Map<string, string>();
 
 function getTimeRemaining(expiresAt: string | null): string {
   if (!expiresAt) return 'Permanent';
@@ -21,36 +23,43 @@ function getTimeRemaining(expiresAt: string | null): string {
   return `${minutes}m left`;
 }
 
-function RoomName({ room }: { room: any }) {
+const RoomName = memo(({ room }: { room: any }) => {
   const [name, setName] = useState(room.name);
+  const cacheKey = `${room.latitude?.toFixed(4)},${room.longitude?.toFixed(4)}`;
 
   useEffect(() => {
     async function resolveName() {
-      if (room.type === 'auto_generated' || room.name === 'Ottawa Tech Hub') {
-        try {
-          const reverseGeocode = await Location.reverseGeocodeAsync({
-            latitude: room.latitude,
-            longitude: room.longitude
-          });
-          if (reverseGeocode && reverseGeocode.length > 0) {
-            const loc = reverseGeocode[0];
-            const address = loc.street || loc.name || loc.city || 'Nearby Chat';
-            setName(address);
-          }
-        } catch (e) {
-          console.log('Geocode failed', e);
+      if (room.type !== 'auto_generated' && room.name !== 'Ottawa Tech Hub') return;
+      
+      if (geocodeCache.has(cacheKey)) {
+        setName(geocodeCache.get(cacheKey));
+        return;
+      }
+
+      try {
+        const reverseGeocode = await Location.reverseGeocodeAsync({
+          latitude: room.latitude,
+          longitude: room.longitude
+        });
+        if (reverseGeocode && reverseGeocode.length > 0) {
+          const loc = reverseGeocode[0];
+          const address = loc.street || loc.name || loc.city || 'Nearby Chat';
+          geocodeCache.set(cacheKey, address);
+          setName(address);
         }
+      } catch (e) {
+        console.log('Geocode failed', e);
       }
     }
     resolveName();
-  }, [room]);
+  }, [room.latitude, room.longitude, room.type, room.name, cacheKey]);
 
   return (
     <Text className="text-lg font-semibold text-foreground" numberOfLines={1}>
       {name}
     </Text>
   );
-}
+});
 
 export default function HomeScreen() {
   const [userId, setUserId] = useState<string | undefined>();

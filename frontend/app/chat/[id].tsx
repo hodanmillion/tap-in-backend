@@ -267,11 +267,24 @@ export default function ChatScreen() {
           </View>
           {gifLoading ? <ActivityIndicator size="large" color="#3b82f6" className="mt-10" /> : (
             <ScrollView className="flex-1" contentContainerStyle={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
-              {gifs.map((gif) => (
-                <TouchableOpacity key={gif.id} onPress={() => { sendMessage(gif.images.fixed_height.url, 'gif'); setGifModalVisible(false); setGifSearch(''); }} className="mb-2 w-[48%]">
-                  <Image source={{ uri: gif.images.fixed_height.url }} className="h-32 w-full rounded-lg bg-zinc-900" resizeMode="cover" />
-                </TouchableOpacity>
-              ))}
+                {gifs.map((gif) => (
+                  <TouchableOpacity 
+                    key={gif.id} 
+                    onPress={() => { 
+                      sendMessage(gif.images.fixed_height.url, 'gif'); 
+                      setGifModalVisible(false); 
+                      setGifSearch(''); 
+                    }} 
+                    className="mb-2 w-[48%]"
+                  >
+                    <Image 
+                      source={{ uri: gif.images.fixed_height_small.url }} 
+                      className="h-32 w-full rounded-lg bg-zinc-900" 
+                      resizeMode="cover" 
+                    />
+                  </TouchableOpacity>
+                ))}
+
             </ScrollView>
           )}
         </View>

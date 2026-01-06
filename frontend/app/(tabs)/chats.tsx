@@ -1,38 +1,44 @@
 import { View, Text, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { MessageSquare, Clock } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useState, useEffect } from 'react';
 
 export default function ChatsScreen() {
-  const [rooms, setRooms] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [userId, setUserId] = useState<string | null>(null);
   const router = useRouter();
 
   useEffect(() => {
-    fetchMyRooms();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setUserId(user?.id || null);
+    });
   }, []);
 
-  async function fetchMyRooms() {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+  const { data: rooms, isLoading, refetch } = useQuery({
+    queryKey: ['myChatRooms', userId],
+    queryFn: async () => {
+      if (!userId) return [];
 
-    // Fetch rooms where the user has sent messages (past history)
-    const { data: messages } = await supabase
-      .from('messages')
-      .select('room_id, chat_rooms(*)')
-      .eq('sender_id', user.id)
-      .order('created_at', { ascending: false });
+      // Fetch rooms through participants table - much more efficient
+      const { data: participants, error } = await supabase
+        .from('room_participants')
+        .select('room_id, chat_rooms(*)')
+        .eq('user_id', userId);
 
-    // Deduplicate rooms
-    const uniqueRooms = Array.from(
-      new Map(messages?.map((m) => [m.room_id, m.chat_rooms])).values()
-    ).filter(Boolean);
+      if (error) throw error;
 
-    setRooms(uniqueRooms);
-    setLoading(false);
-  }
+      // Extract and filter valid rooms
+      const uniqueRooms = (participants || [])
+        .map(p => p.chat_rooms)
+        .filter(Boolean)
+        .filter((r: any) => r.name !== 'Ottawa Tech Hub');
+
+      return uniqueRooms;
+    },
+    enabled: !!userId,
+  });
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top']}>
@@ -44,7 +50,7 @@ export default function ChatsScreen() {
           </Text>
         </View>
 
-        {loading ? (
+        {isLoading ? (
           <View className="flex-1 items-center justify-center">
             <ActivityIndicator size="large" color="#3b82f6" />
           </View>
@@ -52,11 +58,12 @@ export default function ChatsScreen() {
           <FlatList
             data={rooms}
             keyExtractor={(item) => item.id}
+            onRefresh={refetch}
+            refreshing={isLoading}
             renderItem={({ item }) => (
-                <TouchableOpacity
-                  onPress={() => router.push(`/chat/${item.id}`)}
-                  className="mb-4 flex-row items-center rounded-2xl bg-card p-4 shadow-sm"
-
+              <TouchableOpacity
+                onPress={() => router.push(`/chat/${item.id}`)}
+                className="mb-4 flex-row items-center rounded-2xl bg-card p-4 shadow-sm"
               >
                 <View className="h-12 w-12 items-center justify-center rounded-full bg-secondary">
                   <MessageSquare size={24} color="#6b7280" />
