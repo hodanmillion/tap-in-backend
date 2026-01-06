@@ -144,12 +144,26 @@ app.post('/rooms/sync', async (c) => {
 
   const currentRoomIds = currentParticipations?.map(p => p.room_id) || [];
 
-  const roomsToJoin = nearbyRoomIds.filter(id => !currentRoomIds.includes(id));
-  if (roomsToJoin.length > 0) {
-    await supabase
-      .from('room_participants')
-      .insert(roomsToJoin.map(roomId => ({ room_id: roomId, user_id: userId })));
-  }
+    const roomsToJoin = nearbyRoomIds.filter(id => !currentRoomIds.includes(id));
+    if (roomsToJoin.length > 0) {
+      await supabase
+        .from('room_participants')
+        .insert(roomsToJoin.map(roomId => ({ room_id: roomId, user_id: userId })));
+
+      // Notify user about new nearby rooms
+      for (const roomId of roomsToJoin) {
+        const room = nearbyRooms.find(r => r.id === roomId);
+        if (room && room.type === 'auto_generated') {
+          await createNotification(
+            userId,
+            'new_room',
+            'New Chat Nearby',
+            `You've joined "${room.name}" automatically because you're nearby.`,
+            { room_id: roomId }
+          );
+        }
+      }
+    }
 
   const roomsToLeave = currentRoomIds.filter(id => !nearbyRoomIds.includes(id));
   if (roomsToLeave.length > 0) {
@@ -239,9 +253,30 @@ app.get('/rooms/nearby', async (c) => {
     return c.json(filteredProfiles);
   });
   
-  // Manage friend requests
+  // Helper to create notifications
+async function createNotification(userId: string, type: string, title: string, content: string, data: any = {}) {
+  await supabase
+    .from('notifications')
+    .insert({
+      user_id: userId,
+      type,
+      title,
+      content,
+      data
+    });
+}
+
+// Manage friend requests
 app.post('/friends/request', async (c) => {
   const { sender_id, receiver_id } = await c.req.json();
+  
+  // Get sender name for notification
+  const { data: sender } = await supabase
+    .from('profiles')
+    .select('username, full_name')
+    .eq('id', sender_id)
+    .single();
+
   const { data, error } = await supabase
     .from('friend_requests')
     .insert({ sender_id, receiver_id, status: 'pending' })
@@ -249,27 +284,37 @@ app.post('/friends/request', async (c) => {
     .single();
 
   if (error) return c.json({ error: error.message }, 400);
-    return c.json(data);
-  });
-  
-  app.get('/friends/requests/:userId', async (c) => {
-    const userId = c.req.param('userId');
-    const { data, error } = await supabase
-      .from('friend_requests')
-      .select('*, sender:profiles!friend_requests_sender_id_fkey(*)')
-      .eq('receiver_id', userId)
-      .eq('status', 'pending');
-  
-    if (error) return c.json({ error: error.message }, 400);
-    return c.json(data);
-  });
-  
-  app.post('/friends/accept', async (c) => {
+
+  // Notify receiver
+  await createNotification(
+    receiver_id,
+    'friend_request',
+    'New Friend Request',
+    `${sender?.full_name || sender?.username || 'Someone'} sent you a friend request.`,
+    { sender_id }
+  );
+
+  return c.json(data);
+});
+
+app.get('/friends/requests/:userId', async (c) => {
+  const userId = c.req.param('userId');
+  const { data, error } = await supabase
+    .from('friend_requests')
+    .select('*, sender:profiles!friend_requests_sender_id_fkey(*)')
+    .eq('receiver_id', userId)
+    .eq('status', 'pending');
+
+  if (error) return c.json({ error: error.message }, 400);
+  return c.json(data);
+});
+
+app.post('/friends/accept', async (c) => {
   const { request_id } = await c.req.json();
   
   const { data: request, error: fetchError } = await supabase
     .from('friend_requests')
-    .select('*')
+    .select('*, receiver:profiles!friend_requests_receiver_id_fkey(username, full_name)')
     .eq('id', request_id)
     .single();
 
@@ -289,75 +334,124 @@ app.post('/friends/request', async (c) => {
     .single();
 
   if (error) return c.json({ error: error.message }, 400);
-    return c.json(data);
+
+  // Notify sender that request was accepted
+  await createNotification(
+    request.sender_id,
+    'friend_accept',
+    'Friend Request Accepted',
+    `${request.receiver?.full_name || request.receiver?.username || 'Someone'} accepted your friend request!`,
+    { friend_id: request.receiver_id }
+  );
+
+  return c.json(data);
+});
+
+app.get('/friends/:userId', async (c) => {
+  const userId = c.req.param('userId');
+  const { data, error } = await supabase
+    .from('friends')
+    .select(`
+      id,
+      user_1:profiles!friends_user_id_1_fkey(*),
+      user_2:profiles!friends_user_id_2_fkey(*)
+    `)
+    .or(`user_id_1.eq.${userId},user_id_2.eq.${userId}`);
+
+  if (error) return c.json({ error: error.message }, 400);
+
+  // Map to just the friend's profile
+  const friends = data.map((f: any) => {
+    return f.user_1.id === userId ? f.user_2 : f.user_1;
   });
-  
-  app.get('/friends/:userId', async (c) => {
-    const userId = c.req.param('userId');
-    const { data, error } = await supabase
-      .from('friends')
-      .select(`
-        id,
-        user_1:profiles!friends_user_id_1_fkey(*),
-        user_2:profiles!friends_user_id_2_fkey(*)
-      `)
-      .or(`user_id_1.eq.${userId},user_id_2.eq.${userId}`);
-  
-    if (error) return c.json({ error: error.message }, 400);
-  
-    // Map to just the friend's profile
-    const friends = data.map((f: { user_1: { id: string }; user_2: { id: string } }) => {
-      return f.user_1.id === userId ? f.user_2 : f.user_1;
-    });
-  
-    return c.json(friends);
-  });
-  
-  app.post('/rooms/private', async (c) => {
-    const { user1_id, user2_id } = await c.req.json();
-  
-    // Check if private room already exists between these two users
-    const { data: rooms, error: fetchError } = await supabase
-      .from('chat_rooms')
-      .select('id, room_participants!inner(user_id)')
-      .eq('type', 'private')
-      .eq('room_participants.user_id', user1_id);
-  
-    if (fetchError) return c.json({ error: fetchError.message }, 400);
-  
-    // Further filter for rooms where user2_id is also a participant
-    // (This is a bit tricky with Supabase's simple JS client, but doable)
-    for (const room of rooms || []) {
-      const { data: participants } = await supabase
-        .from('room_participants')
-        .select('user_id')
-        .eq('room_id', room.id);
-      
-      const userIds = participants?.map(p => p.user_id);
-      if (userIds?.includes(user2_id)) {
-        return c.json({ room_id: room.id });
-      }
-    }
-  
-    // Create new private room
-    const { data: newRoom, error: createError } = await supabase
-      .from('chat_rooms')
-      .insert({ name: 'Private Chat', type: 'private' })
-      .select()
-      .single();
-  
-    if (createError) return c.json({ error: createError.message }, 400);
-  
-    // Add participants
-    await supabase
+
+  return c.json(friends);
+});
+
+app.post('/rooms/private', async (c) => {
+  const { user1_id, user2_id } = await c.req.json();
+
+  // Get user1 info for notification
+  const { data: user1 } = await supabase
+    .from('profiles')
+    .select('username, full_name')
+    .eq('id', user1_id)
+    .single();
+
+  // Check if private room already exists
+  const { data: rooms, error: fetchError } = await supabase
+    .from('chat_rooms')
+    .select('id, room_participants!inner(user_id)')
+    .eq('type', 'private')
+    .eq('room_participants.user_id', user1_id);
+
+  if (fetchError) return c.json({ error: fetchError.message }, 400);
+
+  for (const room of rooms || []) {
+    const { data: participants } = await supabase
       .from('room_participants')
-      .insert([
-        { room_id: newRoom.id, user_id: user1_id },
-        { room_id: newRoom.id, user_id: user2_id }
-      ]);
-  
-    return c.json({ room_id: newRoom.id });
-  });
+      .select('user_id')
+      .eq('room_id', room.id);
+    
+    const userIds = participants?.map(p => p.user_id);
+    if (userIds?.includes(user2_id)) {
+      return c.json({ room_id: room.id });
+    }
+  }
+
+  // Create new private room
+  const { data: newRoom, error: createError } = await supabase
+    .from('chat_rooms')
+    .insert({ name: 'Private Chat', type: 'private' })
+    .select()
+    .single();
+
+  if (createError) return c.json({ error: createError.message }, 400);
+
+  // Add participants
+  await supabase
+    .from('room_participants')
+    .insert([
+      { room_id: newRoom.id, user_id: user1_id },
+      { room_id: newRoom.id, user_id: user2_id }
+    ]);
+
+  // Notify user2 about the new private chat
+  await createNotification(
+    user2_id,
+    'new_message',
+    'New Private Chat',
+    `${user1?.full_name || user1?.username || 'Someone'} started a private chat with you.`,
+    { room_id: newRoom.id, sender_id: user1_id }
+  );
+
+  return c.json({ room_id: newRoom.id });
+});
+
+// Notifications endpoints
+app.get('/notifications/:userId', async (c) => {
+  const userId = c.req.param('userId');
+  const { data, error } = await supabase
+    .from('notifications')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(50);
+
+  if (error) return c.json({ error: error.message }, 400);
+  return c.json(data);
+});
+
+app.post('/notifications/read', async (c) => {
+  const { notificationIds } = await c.req.json();
+  const { error } = await supabase
+    .from('notifications')
+    .update({ is_read: true })
+    .in('id', notificationIds);
+
+  if (error) return c.json({ error: error.message }, 400);
+  return c.json({ success: true });
+});
   
   export default {
   fetch: app.fetch,

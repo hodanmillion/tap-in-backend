@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { Home, MessageCircle, User, Users } from 'lucide-react-native';
+import { Home, MessageCircle, User, Users, Heart } from 'lucide-react-native';
 import { useColorScheme } from 'nativewind';
 import { NAV_THEME } from '@/lib/theme';
 
@@ -15,11 +15,16 @@ export default function TabsLayout() {
         tabBarStyle: {
           backgroundColor: theme.colors.card,
           borderTopColor: theme.colors.border,
+          height: 60,
+          paddingBottom: 10,
         },
         headerStyle: {
           backgroundColor: theme.colors.card,
         },
         headerTintColor: theme.colors.text,
+        headerTitleStyle: {
+          fontWeight: 'bold',
+        },
       }}
     >
       <Tabs.Screen
@@ -37,20 +42,26 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="friends"
+        options={{
+          title: 'Friends',
+          tabBarIcon: ({ color, size }) => <Heart color={color} size={size} />,
+        }}
+      />
+      <Tabs.Screen
         name="chats"
         options={{
           title: 'Chats',
           tabBarIcon: ({ color, size }) => <MessageCircle color={color} size={size} />,
         }}
       />
-        <Tabs.Screen
-          name="profile"
-          options={{
-            title: 'Profile',
-            tabBarIcon: ({ color, size }) => <User color={color} size={size} />,
-          }}
-        />
-      </Tabs>
-
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: 'Profile',
+          tabBarIcon: ({ color, size }) => <User color={color} size={size} />,
+        }}
+      />
+    </Tabs>
   );
 }

@@ -31,13 +31,13 @@ export default function ProfileScreen() {
     else router.replace('/(auth)/login');
   }
 
-  const menuItems = [
-    { icon: <Users size={20} color="#3b82f6" />, label: 'My Friends', route: '/friends' },
-    { icon: <Bell size={20} color="#6b7280" />, label: 'Notifications' },
-    { icon: <Shield size={20} color="#6b7280" />, label: 'Privacy & Security' },
-    { icon: <CircleHelp size={20} color="#6b7280" />, label: 'Help Center' },
-    { icon: <Settings size={20} color="#6b7280" />, label: 'Settings' },
-  ];
+    const menuItems = [
+      { icon: <Users size={20} color="#3b82f6" />, label: 'My Friends', route: '/friends' },
+      { icon: <Bell size={20} color="#6b7280" />, label: 'Notifications', route: '/notifications' },
+      { icon: <Shield size={20} color="#6b7280" />, label: 'Privacy & Security' },
+      { icon: <CircleHelp size={20} color="#6b7280" />, label: 'Help Center' },
+      { icon: <Settings size={20} color="#6b7280" />, label: 'Settings' },
+    ];
 
   if (authLoading || (user?.id && profileLoading)) {
     return (

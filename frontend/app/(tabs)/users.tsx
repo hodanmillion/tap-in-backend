@@ -1,15 +1,15 @@
 import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, Image, Alert } from 'react-native';
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocation } from '@/hooks/useLocation';
-import { useEffect, useState } from 'react';
-import { UserPlus, Check, Clock } from 'lucide-react-native';
+import { useState } from 'react';
+import { UserPlus, Clock, MapPin, Search } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/context/AuthContext';
 
 export default function UsersScreen() {
   const { user } = useAuth();
   const { location } = useLocation(user?.id);
+  const queryClient = useQueryClient();
   const [sentRequests, setSentRequests] = useState<Set<string>>(new Set());
 
   const { data: nearbyUsers, isLoading, refetch } = useQuery({
@@ -26,54 +26,64 @@ export default function UsersScreen() {
     enabled: !!location && !!user?.id,
   });
 
-  async function sendFriendRequest(receiverId: string) {
-    if (!user?.id) return;
-
-    try {
+  const sendRequestMutation = useMutation({
+    mutationFn: async (receiverId: string) => {
       const response = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/friends/request`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sender_id: user.id, receiver_id: receiverId }),
+        body: JSON.stringify({ sender_id: user?.id, receiver_id: receiverId }),
       });
-
-      if (response.ok) {
-        setSentRequests((prev) => new Set([...prev, receiverId]));
-        Alert.alert('Success', 'Friend request sent!');
-      } else {
-        const err = await response.json();
-        Alert.alert('Error', err.error || 'Failed to send request');
-      }
-    } catch (error) {
-      Alert.alert('Error', 'An error occurred');
-    }
-  }
-
-  const { data: incomingRequests, refetch: refetchRequests } = useQuery({
-    queryKey: ['incomingRequests', userId],
-    queryFn: async () => {
-      if (!userId) return [];
-      const response = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/friends/requests/${userId}`);
-      return response.json();
+      if (!response.ok) throw new Error('Failed to send request');
+      return receiverId;
     },
-    enabled: !!userId,
+    onSuccess: (receiverId) => {
+      setSentRequests((prev) => new Set([...prev, receiverId]));
+      Alert.alert('Success', 'Friend request sent!');
+    },
+    onError: () => {
+      Alert.alert('Error', 'Failed to send request');
+    }
   });
 
-  async function acceptRequest(requestId: string) {
-    try {
-      const response = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/friends/accept`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ request_id: requestId }),
-      });
-
-      if (response.ok) {
-        Alert.alert('Success', 'Friend request accepted!');
-        refetchRequests();
-      }
-    } catch (error) {
-      Alert.alert('Error', 'An error occurred');
-    }
-  }
+  const renderUser = ({ item }: { item: any }) => (
+    <View className="mb-4 flex-row items-center rounded-3xl bg-card p-4 shadow-sm border border-border/50">
+      <View className="h-16 w-16 items-center justify-center rounded-full bg-secondary overflow-hidden">
+        {item.avatar_url ? (
+          <Image source={{ uri: item.avatar_url }} className="h-16 w-16" />
+        ) : (
+          <Text className="text-2xl font-bold text-muted-foreground">
+            {item.username?.charAt(0).toUpperCase() || 'U'}
+          </Text>
+        )}
+      </View>
+      <View className="ml-4 flex-1">
+        <Text className="text-lg font-bold text-foreground">
+          {item.full_name || item.username || 'Anonymous'}
+        </Text>
+        <View className="flex-row items-center mt-1">
+          <MapPin size={12} color="#9ca3af" />
+          <Text className="ml-1 text-xs text-muted-foreground">Nearby</Text>
+        </View>
+      </View>
+      
+      {sentRequests.has(item.id) ? (
+        <View className="rounded-full bg-secondary/50 px-4 py-2 flex-row items-center">
+          <Clock size={14} color="#9ca3af" />
+          <Text className="ml-2 text-xs font-bold text-muted-foreground">Pending</Text>
+        </View>
+      ) : (
+        <TouchableOpacity
+          onPress={() => sendRequestMutation.mutate(item.id)}
+          disabled={sendRequestMutation.isPending}
+          className="rounded-full bg-primary px-4 py-2"
+        >
+          <Text className="text-xs font-bold text-primary-foreground">
+            {sendRequestMutation.isPending ? '...' : 'Connect'}
+          </Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top']}>
@@ -81,40 +91,14 @@ export default function UsersScreen() {
         <View className="mb-6 mt-4">
           <Text className="text-3xl font-bold text-foreground">Discover</Text>
           <Text className="text-sm text-muted-foreground">
-            People nearby you in real time.
+            Find people nearby and connect.
           </Text>
         </View>
 
-        {incomingRequests && incomingRequests.length > 0 && (
-          <View className="mb-6">
-            <Text className="mb-3 text-sm font-bold uppercase tracking-wider text-muted-foreground">
-              Friend Requests ({incomingRequests.length})
-            </Text>
-            {incomingRequests.map((req: any) => (
-              <View key={req.id} className="mb-2 flex-row items-center rounded-2xl bg-primary/5 p-3">
-                <View className="h-10 w-10 items-center justify-center rounded-full bg-secondary">
-                  <Text className="text-base font-bold text-muted-foreground">
-                    {req.sender?.username?.charAt(0).toUpperCase()}
-                  </Text>
-                </View>
-                <View className="ml-3 flex-1">
-                  <Text className="font-semibold text-foreground">{req.sender?.username}</Text>
-                  <Text className="text-xs text-muted-foreground">wants to connect</Text>
-                </View>
-                <TouchableOpacity
-                  onPress={() => acceptRequest(req.id)}
-                  className="rounded-full bg-primary px-4 py-2"
-                >
-                  <Text className="text-xs font-bold text-primary-foreground">Accept</Text>
-                </TouchableOpacity>
-              </View>
-            ))}
-          </View>
-        )}
-
-        <Text className="mb-3 text-sm font-bold uppercase tracking-wider text-muted-foreground">
-          Nearby People
-        </Text>
+        <View className="mb-6 flex-row items-center rounded-2xl bg-secondary/50 px-4 py-3">
+          <Search size={20} color="#9ca3af" />
+          <Text className="ml-3 text-muted-foreground">Search for people...</Text>
+        </View>
 
         {isLoading ? (
           <View className="flex-1 items-center justify-center">
@@ -124,47 +108,16 @@ export default function UsersScreen() {
           <FlatList
             data={nearbyUsers}
             keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <View className="mb-4 flex-row items-center rounded-2xl bg-card p-4 shadow-sm">
-                <View className="h-12 w-12 items-center justify-center rounded-full bg-secondary">
-                  {item.avatar_url ? (
-                    <Image source={{ uri: item.avatar_url }} className="h-12 w-12 rounded-full" />
-                  ) : (
-                    <Text className="text-lg font-bold text-muted-foreground">
-                      {item.username?.charAt(0).toUpperCase() || 'U'}
-                    </Text>
-                  )}
-                </View>
-                <View className="ml-4 flex-1">
-                  <Text className="text-lg font-semibold text-foreground">
-                    {item.full_name || item.username || 'Anonymous'}
-                  </Text>
-                  <Text className="text-sm text-muted-foreground">
-                    @{item.username || 'user'}
-                  </Text>
-                </View>
-                
-                {sentRequests.has(item.id) ? (
-                  <View className="rounded-full bg-secondary p-2">
-                    <Clock size={20} color="#9ca3af" />
-                  </View>
-                ) : (
-                  <TouchableOpacity
-                    onPress={() => sendFriendRequest(item.id)}
-                    className="rounded-full bg-primary p-2"
-                  >
-                    <UserPlus size={20} color="#fff" />
-                  </TouchableOpacity>
-                )}
-              </View>
-            )}
+            renderItem={renderUser}
+            showsVerticalScrollIndicator={false}
             ListEmptyComponent={
-              <View className="mt-10 items-center justify-center p-10">
-                <Text className="text-center text-lg text-muted-foreground">
+              <View className="mt-10 items-center justify-center p-10 bg-secondary/20 rounded-3xl border border-dashed border-border">
+                <MapPin size={40} color="#9ca3af" />
+                <Text className="mt-4 text-center text-lg font-semibold text-muted-foreground">
                   No one else nearby yet.
                 </Text>
                 <Text className="mt-2 text-center text-sm text-muted-foreground">
-                  Be the first to Tap In here!
+                  Try moving to a different location or check back later!
                 </Text>
               </View>
             }

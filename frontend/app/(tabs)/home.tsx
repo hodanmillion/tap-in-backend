@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useLocation } from '@/hooks/useLocation';
 import { useEffect, useState, memo } from 'react';
-import { MapPin, Users, ArrowRight, Clock } from 'lucide-react-native';
+import { MapPin, Users, ArrowRight, Clock, Bell } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiRequest } from '@/lib/api';
@@ -67,6 +67,18 @@ export default function HomeScreen() {
   const { location, errorMsg } = useLocation(user?.id);
   const router = useRouter();
 
+  const { data: notifications } = useQuery({
+    queryKey: ['notifications', user?.id],
+    queryFn: async () => {
+      const response = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/notifications/${user?.id}`);
+      return response.json();
+    },
+    enabled: !!user?.id,
+    refetchInterval: 30000,
+  });
+
+  const unreadCount = notifications?.filter((n: any) => !n.is_read).length || 0;
+
   const { data: nearbyRooms, isLoading, refetch } = useQuery({
     queryKey: ['nearbyRooms', location?.coords.latitude, location?.coords.longitude],
     queryFn: async () => {
@@ -104,14 +116,27 @@ export default function HomeScreen() {
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top']}>
       <View className="flex-1 px-6">
-        <View className="mb-6 mt-4">
-          <Text className="text-3xl font-bold text-foreground">Nearby Chats</Text>
-          <View className="mt-2 flex-row items-center gap-1">
-            <MapPin size={16} color="#6b7280" />
-            <Text className="text-sm text-muted-foreground">
-              {location ? '20m radius active' : errorMsg || 'Locating...'}
-            </Text>
+        <View className="mb-6 mt-4 flex-row items-center justify-between">
+          <View>
+            <Text className="text-3xl font-bold text-foreground">Nearby Chats</Text>
+            <View className="mt-2 flex-row items-center gap-1">
+              <MapPin size={16} color="#6b7280" />
+              <Text className="text-sm text-muted-foreground">
+                {location ? '20m radius active' : errorMsg || 'Locating...'}
+              </Text>
+            </View>
           </View>
+          <TouchableOpacity 
+            onPress={() => router.push('/notifications')}
+            className="relative h-12 w-12 items-center justify-center rounded-full bg-secondary"
+          >
+            <Bell size={24} color="#3b82f6" />
+            {unreadCount > 0 && (
+              <View className="absolute right-2 top-2 h-5 w-5 items-center justify-center rounded-full bg-red-500 border-2 border-background">
+                <Text className="text-[10px] font-bold text-white">{unreadCount > 9 ? '9+' : unreadCount}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
         </View>
 
         {isLoading ? (
