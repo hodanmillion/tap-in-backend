@@ -1,12 +1,16 @@
 import { View, Text, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
+import Animated from 'react-native-reanimated';
+import { cssInterop } from 'nativewind';
 import { useQuery } from '@tanstack/react-query';
 import { useLocation } from '@/hooks/useLocation';
-import { memo } from 'react';
+import React, { memo } from 'react';
 import { MapPin, Users, ArrowRight, Clock, Bell } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiRequest } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
+
+cssInterop(Animated.View, { className: 'style' });
 
 function getTimeRemaining(expiresAt: string | null): string {
   if (!expiresAt) return 'Permanent';
@@ -22,12 +26,12 @@ function getTimeRemaining(expiresAt: string | null): string {
 
 const RoomItemSkeleton = () => (
   <View className="mb-4 flex-row items-center rounded-2xl bg-card p-4 shadow-sm opacity-50">
-    <View className="h-12 w-12 rounded-full bg-secondary animate-pulse" />
+    <Animated.View className="h-12 w-12 rounded-full bg-secondary animate-pulse" />
     <View className="ml-4 flex-1 gap-2">
-      <View className="h-4 w-32 rounded bg-secondary animate-pulse" />
-      <View className="h-3 w-20 rounded bg-secondary animate-pulse" />
+      <Animated.View className="h-4 w-32 rounded bg-secondary animate-pulse" />
+      <Animated.View className="h-3 w-20 rounded bg-secondary animate-pulse" />
     </View>
-    <View className="h-5 w-5 rounded bg-secondary animate-pulse" />
+    <Animated.View className="h-5 w-5 rounded bg-secondary animate-pulse" />
   </View>
 );
 
@@ -62,11 +66,10 @@ export default function HomeScreen() {
   const { data: notifications } = useQuery({
     queryKey: ['notifications', user?.id],
     queryFn: async () => {
-      const response = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/notifications/${user?.id}`);
-      return response.json();
+      return apiRequest(`/notifications/${user?.id}`);
     },
     enabled: !!user?.id,
-    refetchInterval: 60000, // Reduced frequency
+    refetchInterval: 60000,
     staleTime: 30000,
   });
 
@@ -80,9 +83,9 @@ export default function HomeScreen() {
       return apiRequest(`/rooms/nearby?lat=${latitude}&lng=${longitude}`);
     },
     enabled: !!location,
-    staleTime: 15000, // Cache for 15 seconds
-    gcTime: 1000 * 60 * 5, // Keep in garbage collector for 5 mins
-    placeholderData: (previousData) => previousData, // Seamless transitions
+    staleTime: 15000,
+    gcTime: 1000 * 60 * 5,
+    placeholderData: (previousData) => previousData,
   });
 
   const rooms = nearbyRooms || [];
