@@ -62,11 +62,11 @@ app.post('/profiles', zValidator('json', profileSchema), async (c) => {
       })
       .eq('id', userId);
   
-    // 2. Find all public rooms (we'll filter them by distance)
+    // 2. Find all public/auto_generated rooms (we'll filter them by distance)
     const { data: publicRooms, error: roomsError } = await supabase
       .from('chat_rooms')
       .select('*')
-      .eq('type', 'public');
+      .in('type', ['public', 'auto_generated']);
   
     if (roomsError) return c.json({ error: roomsError.message }, 400);
   
@@ -85,12 +85,12 @@ app.post('/profiles', zValidator('json', profileSchema), async (c) => {
       return distance <= (room.radius || 500);
     }).map(r => r.id);
   
-    // 3. Get current public room participations for this user
+    // 3. Get current public/auto_generated room participations for this user
     const { data: currentParticipations } = await supabase
       .from('room_participants')
       .select('room_id, chat_rooms!inner(type)')
       .eq('user_id', userId)
-      .eq('chat_rooms.type', 'public');
+      .in('chat_rooms.type', ['public', 'auto_generated']);
   
     const currentRoomIds = currentParticipations?.map(p => p.room_id) || [];
   

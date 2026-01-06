@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { MapPin, Users, ArrowRight } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { apiRequest } from '@/lib/api';
 
 export default function HomeScreen() {
   const [userId, setUserId] = useState<string | undefined>();
@@ -24,10 +25,7 @@ export default function HomeScreen() {
       if (!location) return [];
       
       const { latitude, longitude } = location.coords;
-      const response = await fetch(
-        `${process.env.EXPO_PUBLIC_BACKEND_URL}/rooms/nearby?lat=${latitude}&lng=${longitude}&radius=1000`
-      );
-      return response.json();
+      return apiRequest(`/rooms/nearby?lat=${latitude}&lng=${longitude}&radius=1000`);
     },
     enabled: !!location,
   });
