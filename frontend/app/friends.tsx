@@ -1,10 +1,9 @@
 import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, Image } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
+import { MessageSquare } from 'lucide-react-native';
+import { useRouter, Stack } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { MessageSquare, ArrowLeft } from 'lucide-react-native';
-import { useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function FriendsScreen() {
   const [userId, setUserId] = useState<string | undefined>();
@@ -27,15 +26,18 @@ export default function FriendsScreen() {
   });
 
   return (
-    <SafeAreaView className="flex-1 bg-background">
+    <View className="flex-1 bg-background">
+      <Stack.Screen 
+        options={{ 
+          title: 'My Friends',
+          headerShown: true,
+          headerStyle: { backgroundColor: '#09090b' },
+          headerTitleStyle: { color: '#ffffff', fontSize: 17, fontWeight: '600' },
+          headerTintColor: '#3b82f6',
+          headerShadowVisible: false,
+        }} 
+      />
       <View className="flex-1 px-6">
-        <View className="mb-6 mt-4 flex-row items-center">
-          <TouchableOpacity onPress={() => router.back()} className="mr-4">
-            <ArrowLeft size={24} color="#3b82f6" />
-          </TouchableOpacity>
-          <Text className="text-3xl font-bold text-foreground">My Friends</Text>
-        </View>
-
         {isLoading ? (
           <View className="flex-1 items-center justify-center">
             <ActivityIndicator size="large" color="#3b82f6" />
@@ -47,7 +49,6 @@ export default function FriendsScreen() {
             renderItem={({ item }) => (
               <TouchableOpacity
                 onPress={() => {
-                  // Navigate to private chat (Task 3)
                   router.push(`/chat/private_${item.id}`);
                 }}
                 className="mb-4 flex-row items-center rounded-2xl bg-card p-4 shadow-sm"
@@ -89,6 +90,6 @@ export default function FriendsScreen() {
           />
         )}
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
