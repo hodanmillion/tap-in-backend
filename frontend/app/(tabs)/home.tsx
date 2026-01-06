@@ -1,9 +1,9 @@
+import React, { memo } from 'react';
 import { View, Text, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { cssInterop } from 'nativewind';
 import { useQuery } from '@tanstack/react-query';
 import { useLocation } from '@/hooks/useLocation';
-import React, { memo } from 'react';
 import { MapPin, Users, ArrowRight, Clock, Bell } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -35,7 +35,7 @@ const RoomItemSkeleton = () => (
   </View>
 );
 
-const RoomItem = memo(({ item, onPress }: { item: any; onPress: () => void }) => (
+const RoomItem = ({ item, onPress }: { item: any; onPress: () => void }) => (
   <TouchableOpacity
     onPress={onPress}
     className="mb-4 flex-row items-center rounded-2xl bg-card p-4 shadow-sm active:opacity-70"
@@ -56,7 +56,7 @@ const RoomItem = memo(({ item, onPress }: { item: any; onPress: () => void }) =>
     </View>
     <ArrowRight size={20} color="#6b7280" />
   </TouchableOpacity>
-));
+);
 
 export default function HomeScreen() {
   const { user } = useAuth();
