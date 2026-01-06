@@ -1,7 +1,5 @@
 import React, { memo } from 'react';
-import { View, Text, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
-import Animated from 'react-native-reanimated';
-import { cssInterop } from 'nativewind';
+import { View, Text, FlatList, TouchableOpacity } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useLocation } from '@/hooks/useLocation';
 import { MapPin, Users, ArrowRight, Clock, Bell } from 'lucide-react-native';
@@ -9,8 +7,6 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiRequest } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
-
-cssInterop(Animated.View, { className: 'style' });
 
 function getTimeRemaining(expiresAt: string | null): string {
   if (!expiresAt) return 'Permanent';
@@ -26,16 +22,16 @@ function getTimeRemaining(expiresAt: string | null): string {
 
 const RoomItemSkeleton = () => (
   <View className="mb-4 flex-row items-center rounded-2xl bg-card p-4 shadow-sm opacity-50">
-    <Animated.View className="h-12 w-12 rounded-full bg-secondary animate-pulse" />
+    <View className="h-12 w-12 rounded-full bg-secondary" />
     <View className="ml-4 flex-1 gap-2">
-      <Animated.View className="h-4 w-32 rounded bg-secondary animate-pulse" />
-      <Animated.View className="h-3 w-20 rounded bg-secondary animate-pulse" />
+      <View className="h-4 w-32 rounded bg-secondary" />
+      <View className="h-3 w-20 rounded bg-secondary" />
     </View>
-    <Animated.View className="h-5 w-5 rounded bg-secondary animate-pulse" />
+    <View className="h-5 w-5 rounded bg-secondary" />
   </View>
 );
 
-const RoomItem = ({ item, onPress }: { item: any; onPress: () => void }) => (
+const RoomItem = memo(({ item, onPress }: { item: any; onPress: () => void }) => (
   <TouchableOpacity
     onPress={onPress}
     className="mb-4 flex-row items-center rounded-2xl bg-card p-4 shadow-sm active:opacity-70"
@@ -56,7 +52,7 @@ const RoomItem = ({ item, onPress }: { item: any; onPress: () => void }) => (
     </View>
     <ArrowRight size={20} color="#6b7280" />
   </TouchableOpacity>
-);
+));
 
 export default function HomeScreen() {
   const { user } = useAuth();
