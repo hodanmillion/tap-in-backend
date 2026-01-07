@@ -3,9 +3,11 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "npm-run-all --parallel backend frontend",
+    "dev": "npm-run-all --parallel backend app",
     "backend": "cd backend && bun run dev",
-    "frontend": "cd frontend && expo start --tunnel",
+    "backend:tunnel": "cd backend && bun run dev:tunnel",
+    "app": "cd frontend && bun run dev",
+    "dev:tunnel": "echo '🚀 Starting backend with ngrok...' && npm run backend:tunnel && echo '\n📱 Now run: npm run app (in a new terminal)'",
     "build": "cd backend && bun install && bun run build.js",
     "start": "cd backend && node dist/index.js",
     "lint": "cd backend && bun run lint && cd ../frontend && bun run lint",
