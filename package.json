@@ -11,7 +11,9 @@
     "build": "cd backend && bun install && bun build.js",
     "start": "cd backend && node dist/index.js",
     "lint": "cd backend && bun run lint && cd ../frontend && bun run lint",
-    "format": "cd backend && bun run format && cd ../frontend && bun run format"
+    "format": "cd backend && bun run format && cd ../frontend && bun run format",
+    "render-build": "cd backend && bun install && bun build.js",
+    "render-start": "cd backend && node dist/index.js"
   },
   "devDependencies": {
     "npm-run-all": "^4.1.5"
