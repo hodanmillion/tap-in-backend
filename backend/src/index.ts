@@ -3,6 +3,7 @@ import { cors } from 'hono/cors';
 import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
+import { serve } from '@hono/node-server';
 
 const app = new Hono();
 
@@ -386,7 +387,13 @@ app.post('/notifications/read', async (c) => {
   return c.json({ success: true });
 });
   
-export default {
+const port = process.env.PORT ? parseInt(process.env.PORT) : 3002;
+
+console.log(`Server is running on port ${port}`);
+
+serve({
   fetch: app.fetch,
-  port: 3002,
-};
+  port,
+});
+
+export default app;
