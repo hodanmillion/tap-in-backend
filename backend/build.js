@@ -7,7 +7,7 @@ await build({
   target: 'node20',
   format: 'esm',
   outfile: 'dist/index.js',
-  external: ['@libsql/client', 'hono'],
+  external: [],
   sourcemap: true,
   minify: true,
   logLevel: 'info',
