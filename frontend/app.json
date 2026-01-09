@@ -19,7 +19,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.TapIn.myapp",
-      "buildNumber": "3",
+        "buildNumber": "2",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Allow Tap In to access your location to find nearby users and chat rooms.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Allow Tap In to access your location even when the app is in the background.",
