@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "TapIn",
-    "slug": "bc9693db-f378-4750-b50b-d518eea4468c",
+    "slug": "tapln",
     "version": "1.4.8",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -61,12 +61,9 @@
     "experiments": {
       "typedRoutes": true
     },
-    "extra": {
-      "router": {},
-      "eas": {
-        "projectId": "9c015992-1e8d-412c-b95f-51f1b73aa0a2"
-      }
-    },
+      "extra": {
+        "router": {}
+      },
     "owner": "hodanmo15"
   }
 }
