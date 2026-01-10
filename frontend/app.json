@@ -2,7 +2,7 @@
   "expo": {
     "name": "TapIn",
     "slug": "bc9693db-f378-4750-b50b-d518eea4468c",
-    "version": "1.4.7",
+    "version": "1.4.8",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "tapin",
@@ -19,7 +19,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.TapIn.myapp",
-        "buildNumber": "2",
+          "buildNumber": "3",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Allow Tap In to access your location to find nearby users and chat rooms.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Allow Tap In to access your location even when the app is in the background.",
