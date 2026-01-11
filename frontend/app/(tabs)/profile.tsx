@@ -65,6 +65,21 @@ export default function ProfileScreen() {
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
   const [uploading, setUploading] = useState(false);
 
+  const { data: profile, isLoading: profileIsLoading } = useQuery({
+    queryKey: ['profile', user?.id],
+    queryFn: async () => {
+      if (!user?.id) return null;
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user?.id,
+  });
+
   // Edit form state
   const [formData, setFormData] = useState({
     full_name: '',
@@ -74,6 +89,20 @@ export default function ProfileScreen() {
     location_name: '',
     website: '',
   });
+
+  // Update form data when profile is loaded
+  React.useEffect(() => {
+    if (profile) {
+      setFormData({
+        full_name: profile.full_name || '',
+        username: profile.username || '',
+        bio: profile.bio || '',
+        occupation: profile.occupation || '',
+        location_name: profile.location_name || '',
+        website: profile.website || '',
+      });
+    }
+  }, [profile]);
 
   const { data: activity, isLoading: activityLoading } = useQuery({
     queryKey: ['profile-activity', user?.id],
@@ -214,7 +243,7 @@ export default function ProfileScreen() {
     updateProfileMutation.mutate(formData);
   };
 
-  if (authLoading || (user?.id && profileLoading)) {
+  if (authLoading || (user?.id && profileIsLoading)) {
     return (
       <View className="flex-1 items-center justify-center bg-background">
         <ActivityIndicator size="large" color={theme.primary} />
