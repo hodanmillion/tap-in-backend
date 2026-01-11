@@ -23,6 +23,11 @@
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "ascAppId": "6757430767",
+        "appleId": "hodanmo15@gmail.com"
+      }
+    }
   }
 }
