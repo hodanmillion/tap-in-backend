@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import process from 'node:process';
 
-const PORT = process.env.NGROK_PORT ? Number(process.env.NGROK_PORT) : 3002;
+const PORT = process.env.NGROK_PORT ? Number(process.env.NGROK_PORT) : 3003;
 
 const require = createRequire(import.meta.url);
 

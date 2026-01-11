@@ -1,5 +1,4 @@
 import { Hono } from 'hono';
-import { serve } from '@hono/node-server';
 import { cors } from 'hono/cors';
 import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
@@ -136,7 +135,6 @@ const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!supabaseUrl || !supabaseKey) {
   console.error('ERROR: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is missing from environment variables!');
-  console.log('Available Env Vars:', Object.keys(process.env).join(', '));
 }
 
 // Create Supabase client safely
@@ -148,7 +146,6 @@ try {
 } catch (err) {
   const error = err as Error;
   console.error('CRITICAL: Failed to initialize Supabase client:', error.message);
-  // We don't exit here, but the server will fail on requests that need Supabase
 }
 
 // 3. App Initialization
@@ -164,7 +161,7 @@ app.use(
 
 // 4. Endpoints
 
-// Health Check (Crucial for Render)
+// Health Check
 app.get('/health', (c) => {
   return c.json({
     status: 'ok',
@@ -190,7 +187,6 @@ app.post(
     const { user1_id, user2_id } = c.req.valid('json');
 
     try {
-      // 1. Check if private room already exists
       const { data: existingRooms } = await supabase
         .from('chat_rooms')
         .select('id')
@@ -199,8 +195,6 @@ app.post(
 
       if (existingRooms && existingRooms.length > 0) {
         const roomIds = existingRooms.map((r) => r.id);
-
-        // Find room where both users are participants
         const { data: participants } = await supabase
           .from('room_participants')
           .select('room_id')
@@ -218,7 +212,6 @@ app.post(
         }
       }
 
-      // 2. Create new private room if none found
       const { data: newRoom, error: roomError } = await supabase
         .from('chat_rooms')
         .insert({
@@ -230,7 +223,6 @@ app.post(
 
       if (roomError) throw roomError;
 
-      // 3. Add both participants
       const { error: partError } = await supabase.from('room_participants').insert([
         { room_id: newRoom.id, user_id: user1_id },
         { room_id: newRoom.id, user_id: user2_id },
@@ -263,7 +255,6 @@ app.post(
     const { userId, latitude, longitude, address } = c.req.valid('json');
 
     try {
-      // 1. Update user location in profiles
       await supabase
         .from('profiles')
         .update({
@@ -273,16 +264,13 @@ app.post(
         })
         .eq('id', userId);
 
-      // 2. Check for nearby auto-generated rooms (within 20m)
-      // Note: In a production app, use PostGIS or a more efficient geofence.
-      // For this MVP, we fetch recent auto-rooms and filter.
       const { data: nearbyRooms } = await supabase
         .from('chat_rooms')
         .select('*')
         .eq('type', 'auto_generated')
         .gt('expires_at', new Date().toISOString());
 
-      const R = 6371000; // Meters
+      const R = 6371000;
       const radius = 20;
 
       let currentRoom = nearbyRooms?.find((room) => {
@@ -298,9 +286,8 @@ app.post(
         return d <= (room.radius || radius);
       });
 
-      // 3. Create room if none found nearby
       if (!currentRoom) {
-        const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(); // 2 hours
+        const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
         const { data: newRoom, error } = await supabase
           .from('chat_rooms')
           .insert({
@@ -340,10 +327,9 @@ app.get('/rooms/nearby', async (c) => {
 
     if (error) throw error;
 
-    // Filter by distance (20m for auto, or all private)
     const R = 6371000;
     const filtered = rooms.filter((room) => {
-      if (room.type === 'private') return false; // Handled separately in chats tab
+      if (room.type === 'private') return false;
 
       const dLat = (room.latitude - lat) * (Math.PI / 180);
       const dLon = (room.longitude - lng) * (Math.PI / 180);
@@ -383,27 +369,5 @@ app.get('/notifications/:userId', async (c) => {
     return c.json({ error: error.message }, 500);
   }
 });
-
-// 5. Server Startup
-if (typeof process !== 'undefined' && process.env.NODE_ENV !== 'test') {
-  const port = Number(process.env.PORT) || 3002;
-
-  try {
-    serve(
-      {
-        fetch: app.fetch,
-        port,
-      },
-      (info) => {
-        console.log(`>>> SERVER READY: http://localhost:${info.port}`);
-        console.log(`>>> HEALTH CHECK: http://localhost:${info.port}/health`);
-      }
-    );
-  } catch (err) {
-    const error = err as Error;
-    console.error('CRITICAL: Server failed to start:', error.message);
-    process.exit(1);
-  }
-}
 
 export default app;
