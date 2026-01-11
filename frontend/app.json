@@ -2,29 +2,29 @@
   "expo": {
     "name": "TapIn",
     "slug": "tap-in",
-    "version": "15.0.0",
+    "version": "15.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "tapin",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": false,
-      "splash": {
+    "splash": {
+      "image": "./assets/images/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#6366f1",
+      "dark": {
         "image": "./assets/images/splash.png",
         "resizeMode": "contain",
-        "backgroundColor": "#4338ca",
-        "dark": {
-          "image": "./assets/images/splash.png",
-          "resizeMode": "contain",
-          "backgroundColor": "#1e1b4b"
-        }
-      },
+        "backgroundColor": "#1e1b4b"
+      }
+    },
       "assetBundlePatterns": [
         "**/*"
       ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.TapIn.myapp",
-        "buildNumber": "33",
+      "buildNumber": "34",
         "infoPlist": {
           "NSLocationWhenInUseUsageDescription": "Allow Tap In to access your location to find nearby users and chat rooms.",
           "NSLocationAlwaysAndWhenInUseUsageDescription": "Allow Tap In to access your location even when the app is in the background.",
