@@ -697,4 +697,40 @@ app.post(
   }
 );
 
+// PATCH /profiles/:userId - Update profile
+app.patch(
+  '/profiles/:userId',
+  zValidator(
+    'json',
+    z.object({
+      full_name: z.string().optional(),
+      username: z.string().optional(),
+      avatar_url: z.string().optional(),
+      bio: z.string().optional(),
+      website: z.string().optional(),
+      location_name: z.string().optional(),
+      occupation: z.string().optional(),
+    })
+  ),
+  async (c) => {
+    const userId = c.req.param('userId');
+    const updates = c.req.valid('json');
+
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .update(updates)
+        .eq('id', userId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return c.json(data);
+    } catch (err) {
+      const error = err as Error;
+      return c.json({ error: error.message }, 500);
+    }
+  }
+);
+
 export default app;
