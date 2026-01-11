@@ -8,16 +8,16 @@
     "scheme": "tapin",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": false,
-"splash": {
-          "image": "./assets/images/splash.png",
-          "resizeMode": "contain",
-          "backgroundColor": "#ffffff",
-          "dark": {
+  "splash": {
             "image": "./assets/images/splash.png",
             "resizeMode": "contain",
-            "backgroundColor": "#0a0a0f"
-          }
-        },
+            "backgroundColor": "#6366f1",
+            "dark": {
+              "image": "./assets/images/splash.png",
+              "resizeMode": "contain",
+              "backgroundColor": "#6366f1"
+            }
+          },
       "assetBundlePatterns": [
         "**/*"
       ],
