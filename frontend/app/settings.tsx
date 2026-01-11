@@ -100,9 +100,9 @@ function SettingsContent() {
         </View>
         <Text className={`ml-4 text-base font-bold ${destructive ? 'text-destructive' : 'text-foreground'}`}>
           {label}
-        </Text>
-      </div>
-      {isSwitch ? (
+          </Text>
+        </View>
+        {isSwitch ? (
         <Switch
           value={switchValue}
           onValueChange={onSwitchChange}
