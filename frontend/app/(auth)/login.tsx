@@ -1,16 +1,22 @@
-import { View, Text, Alert, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { View, Text, Alert, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity } from 'react-native';
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Link, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Logo } from '@/components/Logo';
+import { useColorScheme } from 'nativewind';
+import { THEME } from '@/lib/theme';
+import { ChevronRight, Mail, Lock } from 'lucide-react-native';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const { colorScheme } = useColorScheme();
+  const theme = THEME[colorScheme ?? 'light'];
 
   async function signInWithEmail() {
     setLoading(true);
@@ -24,48 +30,79 @@ export default function LoginScreen() {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-background">
+    <SafeAreaView className="flex-1 bg-background" edges={['top']}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         className="flex-1">
         <ScrollView 
           contentContainerStyle={{ flexGrow: 1 }} 
-          className="p-6"
+          className="px-8"
           keyboardShouldPersistTaps="handled"
         >
-          <View className="mb-10 mt-10">
-            <Text className="text-4xl font-bold text-foreground">Tap In</Text>
-            <Text className="mt-2 text-lg text-muted-foreground">
-              Connect with people around you in real time.
-            </Text>
+          <View className="flex-1 justify-center py-12">
+            <View className="items-center mb-12">
+              <Logo size="lg" className="mb-6 shadow-2xl" />
+              <Text className="text-4xl font-black text-foreground tracking-tight">Log in to TapIn</Text>
+              <Text className="mt-3 text-center text-base font-medium text-muted-foreground px-4">
+                Enter email/password to get start
+              </Text>
+            </View>
+
+            <View className="space-y-4">
+              <View>
+                <Text className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] mb-2 ml-1">Email</Text>
+                <Input
+                  placeholder="email@example.com"
+                  value={email}
+                  onChangeText={setEmail}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                  className="h-16 rounded-[20px] bg-secondary/30 border-0 px-6 font-bold"
+                />
+              </View>
+
+              <View>
+                <Text className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] mb-2 ml-1">Password</Text>
+                <Input
+                  placeholder="••••••••"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  className="h-16 rounded-[20px] bg-secondary/30 border-0 px-6 font-bold"
+                />
+              </View>
+
+              <TouchableOpacity className="self-end mt-1">
+                <Text className="text-sm font-black text-primary uppercase tracking-widest">Forgot Password?</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={signInWithEmail}
+                disabled={loading}
+                className="mt-10 bg-primary h-16 rounded-[24px] items-center justify-center shadow-xl shadow-primary/30 active:opacity-90"
+              >
+                <View className="flex-row items-center">
+                  <Text className="text-lg font-black text-primary-foreground uppercase tracking-[0.1em]">Sign In</Text>
+                  <ChevronRight size={20} color={theme.primaryForeground} className="ml-2" />
+                </View>
+              </TouchableOpacity>
+
+              <View className="mt-12 flex-row justify-center items-center gap-2">
+                <Text className="text-sm font-bold text-muted-foreground uppercase tracking-widest">New here?</Text>
+                <Link href="/(auth)/register" asChild>
+                  <TouchableOpacity>
+                    <Text className="text-sm font-black text-primary uppercase tracking-widest">Create Account</Text>
+                  </TouchableOpacity>
+                </Link>
+              </View>
+            </View>
           </View>
 
-          <View className="gap-4">
-            <Input
-              label="Email"
-              placeholder="email@example.com"
-              value={email}
-              onChangeText={setEmail}
-              autoCapitalize="none"
-              keyboardType="email-address"
-            />
-            <Input
-              label="Password"
-              placeholder="Your password"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              autoCapitalize="none"
-            />
-
-            <Button title="Sign In" onPress={signInWithEmail} loading={loading} className="mt-4" />
-
-            <View className="mt-6 flex-row justify-center gap-2">
-              <Text className="text-muted-foreground">Don't have an account?</Text>
-              <Link href="/(auth)/register" asChild>
-                <Text className="font-semibold text-primary">Sign Up</Text>
-              </Link>
-            </View>
+          <View className="pb-8 items-center">
+            <Text className="text-[10px] font-black text-muted-foreground/30 uppercase tracking-[0.3em]">
+              Securim Inc. • v15.0.0
+            </Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
