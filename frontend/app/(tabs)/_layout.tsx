@@ -1,13 +1,23 @@
-import { Tabs } from 'expo-router';
-import { Home, Compass, User, Heart, MessageSquare } from 'lucide-react-native';
+import { Tabs, useRouter } from 'expo-router';
+import { Home, Compass, User, Heart, MessageSquare, Settings } from 'lucide-react-native';
 import { useColorScheme } from 'nativewind';
 import { NAV_THEME, THEME } from '@/lib/theme';
-import { View } from 'react-native';
+import { View, TouchableOpacity } from 'react-native';
 
 export default function TabsLayout() {
   const { colorScheme } = useColorScheme();
   const theme = THEME[colorScheme ?? 'light'];
   const navTheme = NAV_THEME[colorScheme ?? 'light'];
+  const router = useRouter();
+
+  const headerRight = () => (
+    <TouchableOpacity 
+      onPress={() => router.push('/settings')}
+      className="mr-5 h-10 w-10 items-center justify-center rounded-xl bg-secondary/50"
+    >
+      <Settings size={22} color={theme.foreground} />
+    </TouchableOpacity>
+  );
 
   return (
     <Tabs
@@ -15,6 +25,22 @@ export default function TabsLayout() {
         tabBarActiveTintColor: theme.primary,
         tabBarInactiveTintColor: theme.mutedForeground,
         tabBarShowLabel: true,
+        headerShown: true,
+        headerStyle: {
+          backgroundColor: theme.background,
+          elevation: 0,
+          shadowOpacity: 0,
+          borderBottomWidth: 1,
+          borderBottomColor: theme.border,
+        },
+        headerTitleStyle: {
+          fontWeight: '900',
+          fontSize: 18,
+          textTransform: 'uppercase',
+          letterSpacing: 2,
+          color: theme.foreground,
+        },
+        headerRight: headerRight,
         tabBarLabelStyle: {
           fontSize: 11,
           fontWeight: '700',
@@ -29,7 +55,6 @@ export default function TabsLayout() {
           elevation: 0,
           shadowOpacity: 0,
         },
-        headerShown: false,
       }}>
       <Tabs.Screen
         name="home"
