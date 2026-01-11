@@ -2,7 +2,7 @@ import React, { memo } from 'react';
 import { View, Text, FlatList, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocation } from '@/hooks/useLocation';
-import { MapPin, Users, ArrowRight, Clock, Bell, Plus, Settings } from 'lucide-react-native';
+import { MapPin, Users, ArrowRight, Clock, Bell, Plus, Compass } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiRequest } from '@/lib/api';
@@ -23,34 +23,35 @@ function getTimeRemaining(expiresAt: string | null): string {
 }
 
 const RoomItemSkeleton = () => (
-  <View className="mb-4 flex-row items-center rounded-3xl bg-card p-4 opacity-50 border border-border">
-    <View className="h-14 w-14 rounded-2xl bg-secondary" />
+  <View className="mb-4 flex-row items-center rounded-[24px] bg-card p-5 opacity-50 border border-border">
+    <View className="h-16 w-16 rounded-[20px] bg-secondary" />
     <View className="ml-4 flex-1 gap-2">
-      <View className="h-4 w-32 rounded bg-secondary" />
-      <View className="h-3 w-20 rounded bg-secondary" />
+      <View className="h-5 w-40 rounded bg-secondary" />
+      <View className="h-4 w-24 rounded bg-secondary" />
     </View>
-    <View className="h-6 w-6 rounded bg-secondary" />
+    <View className="h-10 w-10 rounded-full bg-secondary" />
   </View>
 );
 
 const RoomItem = memo(({ item, onPress, theme }: { item: any; onPress: () => void; theme: any }) => (
   <TouchableOpacity
     onPress={onPress}
-    className="mb-4 flex-row items-center rounded-3xl bg-card p-4 border border-border shadow-sm active:opacity-70">
-    <View className="h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
-      <Users size={28} color={theme.primary} />
+    activeOpacity={0.7}
+    className="mb-5 flex-row items-center rounded-[28px] bg-card p-5 border border-border shadow-sm">
+    <View className="h-16 w-16 items-center justify-center rounded-[20px] bg-primary/10">
+      <Users size={32} color={theme.primary} />
     </View>
     <View className="ml-4 flex-1">
-      <Text className="text-lg font-bold text-foreground" numberOfLines={1}>
+      <Text className="text-xl font-bold text-foreground leading-tight" numberOfLines={1}>
         {item.name}
       </Text>
-      <View className="flex-row items-center gap-1 mt-0.5">
+      <View className="flex-row items-center gap-1.5 mt-1">
         <Clock size={14} color={theme.mutedForeground} />
-        <Text className="text-sm font-medium text-muted-foreground">{getTimeRemaining(item.expires_at)}</Text>
+        <Text className="text-sm font-semibold text-muted-foreground">{getTimeRemaining(item.expires_at)}</Text>
       </View>
     </View>
-    <View className="h-10 w-10 items-center justify-center rounded-full bg-secondary">
-      <ArrowRight size={20} color={theme.secondaryForeground} />
+    <View className="h-11 w-11 items-center justify-center rounded-full bg-secondary">
+      <ArrowRight size={22} color={theme.secondaryForeground} />
     </View>
   </TouchableOpacity>
 ));
@@ -157,24 +158,25 @@ export default function HomeScreen() {
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top']}>
       <View className="flex-1 px-6">
-        <View className="mb-8 mt-6 flex-row items-center justify-between">
+        <View className="mb-10 mt-8 flex-row items-center justify-between">
           <View>
             <Text className="text-4xl font-black tracking-tight text-foreground">Nearby</Text>
-            <View className="mt-1 flex-row items-center gap-1.5">
-              <View className={`h-2 w-2 rounded-full ${location ? 'bg-green-500' : 'bg-amber-500'}`} />
-              <Text className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+            <View className="mt-2 flex-row items-center gap-2">
+              <View className={`h-2.5 w-2.5 rounded-full ${location ? 'bg-green-500' : 'bg-amber-500 shadow-sm shadow-amber-500'}`} />
+              <Text className="text-sm font-bold text-muted-foreground uppercase tracking-widest">
                 {location ? 'Live Discovery' : errorMsg || 'Locating...'}
               </Text>
             </View>
           </View>
-          <View className="flex-row items-center gap-3">
+          <View className="flex-row items-center gap-4">
             <TouchableOpacity
               onPress={() => router.push('/notifications')}
-              className="relative h-12 w-12 items-center justify-center rounded-2xl bg-secondary border border-border">
-              <Bell size={24} color={theme.foreground} />
+              activeOpacity={0.7}
+              className="relative h-13 w-13 items-center justify-center rounded-2xl bg-card border border-border shadow-sm">
+              <Bell size={26} color={theme.foreground} />
               {unreadCount > 0 && (
-                <View className="absolute -right-1 -top-1 h-5 w-5 items-center justify-center rounded-full border-2 border-background bg-primary">
-                  <Text className="text-[10px] font-bold text-primary-foreground">
+                <View className="absolute -right-1 -top-1 h-6 w-6 items-center justify-center rounded-full border-2 border-background bg-primary">
+                  <Text className="text-[11px] font-black text-primary-foreground">
                     {unreadCount > 9 ? '9+' : unreadCount}
                   </Text>
                 </View>
@@ -182,8 +184,9 @@ export default function HomeScreen() {
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => router.push('/profile')}
-              className="h-12 w-12 items-center justify-center rounded-2xl bg-primary">
-              <Plus size={24} color={theme.primaryForeground} />
+              activeOpacity={0.8}
+              className="h-13 w-13 items-center justify-center rounded-2xl bg-primary shadow-lg shadow-primary/40">
+              <Plus size={28} color={theme.primaryForeground} />
             </TouchableOpacity>
           </View>
         </View>
@@ -191,23 +194,30 @@ export default function HomeScreen() {
         <TouchableOpacity
           onPress={() => createRoomMutation.mutate()}
           disabled={createRoomMutation.isPending}
-          className={`mb-8 flex-row items-center justify-center gap-3 rounded-3xl bg-primary py-5 shadow-xl active:opacity-90 ${
+          activeOpacity={0.9}
+          className={`mb-10 flex-row items-center justify-center gap-3 rounded-[32px] bg-primary py-6 shadow-xl shadow-primary/30 ${
             createRoomMutation.isPending ? 'opacity-50' : ''
           }`}>
           {createRoomMutation.isPending ? (
             <ActivityIndicator color={theme.primaryForeground} size="small" />
           ) : (
             <>
-              <MapPin size={22} color={theme.primaryForeground} />
-              <Text className="text-xl font-bold text-primary-foreground">Start Nearby Chat</Text>
+              <Compass size={24} color={theme.primaryForeground} strokeWidth={2.5} />
+              <Text className="text-xl font-black text-primary-foreground tracking-tight">Drop a Pin & Chat</Text>
             </>
           )}
         </TouchableOpacity>
 
         <View className="flex-1">
-          <Text className="mb-4 text-xs font-black uppercase tracking-[0.2em] text-muted-foreground/60">
-            Active Zones
-          </Text>
+          <View className="flex-row items-center justify-between mb-5">
+            <Text className="text-xs font-black uppercase tracking-[0.25em] text-muted-foreground/50">
+              Active Zones
+            </Text>
+            {isFetching && (
+               <ActivityIndicator size="small" color={theme.primary} />
+            )}
+          </View>
+          
           {isLoading && rooms.length === 0 ? (
             <View className="flex-1">
               {[1, 2, 3, 4].map((i) => (
@@ -223,21 +233,23 @@ export default function HomeScreen() {
               )}
               ListEmptyComponent={
                 !isFetching ? (
-                  <View className="mt-10 items-center justify-center p-10 rounded-3xl border border-dashed border-border">
-                    <Users size={48} color={theme.mutedForeground} opacity={0.3} />
-                    <Text className="mt-4 text-center text-lg font-bold text-foreground">
+                  <View className="mt-10 items-center justify-center p-12 rounded-[40px] border-2 border-dashed border-border/60 bg-secondary/50">
+                    <View className="h-20 w-20 items-center justify-center rounded-full bg-background border border-border mb-6">
+                      <Users size={40} color={theme.mutedForeground} opacity={0.4} />
+                    </View>
+                    <Text className="text-2xl font-black text-foreground text-center">
                       Quiet around here
                     </Text>
-                    <Text className="mt-1 text-center text-sm text-muted-foreground">
-                      Be the first to start a conversation in this area!
+                    <Text className="mt-2 text-center text-base font-medium text-muted-foreground px-4">
+                      Be the pioneer! Start a conversation and see who's nearby.
                     </Text>
                   </View>
                 ) : null
               }
               onRefresh={refetch}
-              refreshing={isFetching && rooms.length > 0}
+              refreshing={false}
               showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingBottom: 100 }}
+              contentContainerStyle={{ paddingBottom: 120 }}
             />
           )}
         </View>

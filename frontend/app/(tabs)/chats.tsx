@@ -1,7 +1,7 @@
 import { View, Text, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import { MessageCircle, Clock, ChevronRight, Hash, MessageSquare } from 'lucide-react-native';
+import { MessageCircle, Clock, ChevronRight, Hash, MessageSquare, Compass } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/context/AuthContext';
@@ -34,7 +34,6 @@ export default function ChatsScreen() {
       return (participants || [])
         .map((p) => p.chat_rooms as any)
         .filter((r: any) => r !== null && typeof r === 'object' && 'id' in r)
-        .filter((r: any) => r.name !== 'Ottawa Tech Hub')
         .sort(
           (a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
         );
@@ -44,40 +43,39 @@ export default function ChatsScreen() {
 
   const renderRoom = ({ item }: { item: any }) => (
     <TouchableOpacity
+      activeOpacity={0.7}
       onPress={() => router.push(`/chat/${item.id}`)}
-      className="mb-4 flex-row items-center rounded-3xl border border-border bg-card p-4 shadow-sm active:opacity-70">
+      className="mb-5 flex-row items-center rounded-[28px] border border-border bg-card p-5 shadow-sm">
       <View
-        className={`h-16 w-16 items-center justify-center rounded-2xl ${
-          item.type === 'private' ? 'bg-primary/10' : 'bg-secondary'
+        className={`h-16 w-16 items-center justify-center rounded-[20px] ${
+          item.type === 'private' ? 'bg-primary/10' : 'bg-secondary/50'
         }`}>
         {item.type === 'private' ? (
-          <MessageCircle size={28} color={theme.primary} />
+          <MessageCircle size={30} color={theme.primary} />
         ) : (
-          <Hash size={28} color={theme.mutedForeground} />
+          <Hash size={30} color={theme.mutedForeground} />
         )}
       </View>
       <View className="ml-4 flex-1">
-        <View className="flex-row items-center justify-between">
-          <Text className="text-lg font-bold text-foreground" numberOfLines={1}>
-            {item.name}
-          </Text>
-        </View>
+        <Text className="text-xl font-bold text-foreground" numberOfLines={1}>
+          {item.name}
+        </Text>
         <View className="mt-1 flex-row items-center justify-between">
            <View className="flex-row items-center">
              <Clock size={12} color={theme.mutedForeground} />
-             <Text className="ml-1 text-xs font-medium text-muted-foreground">
+             <Text className="ml-1.5 text-xs font-semibold text-muted-foreground">
                {item.created_at ? new Date(item.created_at).toLocaleDateString() : 'Active'}
              </Text>
            </View>
-           <View className={`px-2 py-0.5 rounded-full ${item.type === 'private' ? 'bg-primary' : 'bg-secondary'}`}>
-             <Text className={`text-[9px] font-black uppercase tracking-tighter ${item.type === 'private' ? 'text-primary-foreground' : 'text-muted-foreground'}`}>
+           <View className={`px-2.5 py-1 rounded-full ${item.type === 'private' ? 'bg-primary/10' : 'bg-secondary'}`}>
+             <Text className={`text-[10px] font-black uppercase tracking-widest ${item.type === 'private' ? 'text-primary' : 'text-muted-foreground'}`}>
                {item.type}
              </Text>
            </View>
         </View>
       </View>
-      <View className="ml-3">
-        <ChevronRight size={18} color={theme.mutedForeground} opacity={0.3} />
+      <View className="ml-3 h-11 w-11 items-center justify-center rounded-full bg-secondary">
+        <ChevronRight size={18} color={theme.mutedForeground} opacity={0.5} />
       </View>
     </TouchableOpacity>
   );
@@ -85,10 +83,10 @@ export default function ChatsScreen() {
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top']}>
       <View className="flex-1 px-6">
-        <View className="mb-8 mt-6">
+        <View className="mb-8 mt-8">
           <Text className="text-4xl font-black tracking-tight text-foreground">Messages</Text>
-          <Text className="mt-1 text-base font-medium text-muted-foreground">
-            Your private and nearby chats.
+          <Text className="mt-2 text-base font-semibold text-muted-foreground">
+            Your active conversations.
           </Text>
         </View>
 
@@ -104,18 +102,25 @@ export default function ChatsScreen() {
             refreshing={isFetching}
             renderItem={renderRoom}
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: 100 }}
+            contentContainerStyle={{ paddingBottom: 120 }}
             ListEmptyComponent={
-              <View className="mt-10 items-center justify-center rounded-3xl border border-dashed border-border p-10">
-                <View className="h-20 w-20 items-center justify-center rounded-full bg-secondary mb-6">
-                  <MessageSquare size={32} color={theme.mutedForeground} opacity={0.3} />
+              <View className="mt-10 items-center justify-center rounded-[40px] border-2 border-dashed border-border/60 bg-secondary/50 p-12">
+                <View className="h-24 w-24 items-center justify-center rounded-full bg-background border border-border mb-8 shadow-sm">
+                  <MessageSquare size={40} color={theme.mutedForeground} opacity={0.4} />
                 </View>
-                <Text className="text-center text-xl font-black text-foreground">
-                  No chats found
+                <Text className="text-center text-2xl font-black text-foreground">
+                  Empty inbox
                 </Text>
-                <Text className="mt-2 text-center text-sm font-medium text-muted-foreground">
+                <Text className="mt-3 text-center text-base font-medium text-muted-foreground px-4">
                   Start a conversation by joining a nearby zone or connecting with friends!
                 </Text>
+                <TouchableOpacity
+                  onPress={() => router.push('/home')}
+                  activeOpacity={0.8}
+                  className="mt-8 flex-row items-center gap-2 rounded-2xl bg-primary px-8 py-4">
+                  <Compass size={20} color={theme.primaryForeground} />
+                  <Text className="font-black text-primary-foreground uppercase tracking-widest">Find Zones</Text>
+                </TouchableOpacity>
               </View>
             }
           />
