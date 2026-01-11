@@ -76,16 +76,16 @@ export default function LoginScreen() {
                   <Text className="text-xs font-bold text-primary uppercase tracking-widest">Forgot Password?</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity
-                  onPress={signInWithEmail}
-                  disabled={loading}
-                  className="mt-8 bg-primary h-14 rounded-2xl items-center justify-center shadow-lg shadow-primary/20 active:opacity-90"
-                >
-                  <View className="flex-row items-center">
-                    <Text className="text-base font-bold text-primary-foreground uppercase tracking-widest">Sign In</Text>
-                    <ChevronRight size={18} color={theme.primaryForeground} className="ml-2" />
-                  </View>
-                </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={signInWithEmail}
+                    disabled={loading}
+                    className="mt-8 bg-primary h-14 rounded-2xl items-center justify-center shadow-lg shadow-primary/20 active:opacity-90"
+                  >
+                    <View className="flex-row items-center">
+                      <Text className="text-base font-bold text-primary-foreground uppercase tracking-widest">Sign In</Text>
+                      <ChevronRight size={18} color={theme.primaryForeground} className="ml-2" />
+                    </View>
+                  </TouchableOpacity>
 
 
               <View className="mt-12 flex-row justify-center items-center gap-2">
@@ -96,10 +96,9 @@ export default function LoginScreen() {
                   </TouchableOpacity>
                 </Link>
               </View>
-            </View>
-          </View>
-
-          <View className="pb-8 items-center">
+              </View>
+  
+            <View className="pb-8 items-center">
             <Text className="text-[10px] font-black text-muted-foreground/30 uppercase tracking-[0.3em]">
               Securim Inc. • v15.0.0
             </Text>

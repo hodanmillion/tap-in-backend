@@ -27,8 +27,8 @@ export default function Index() {
   }
 
   if (session) {
-    return <Redirect href="/(tabs)" />;
+    return <Redirect href="/home" />;
   }
 
-  return <Redirect href="/(auth)/onboarding" />;
+  return <Redirect href="/onboarding" />;
 }

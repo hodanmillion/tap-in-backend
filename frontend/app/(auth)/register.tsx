@@ -143,11 +143,10 @@ export default function RegisterScreen() {
                     <Text className="text-sm font-black text-primary uppercase tracking-widest">Sign In</Text>
                   </TouchableOpacity>
                 </Link>
+                </View>
               </View>
-            </View>
-          </View>
-
-          <View className="pb-8 items-center">
+  
+            <View className="pb-8 items-center">
              <Text className="text-[10px] font-black text-muted-foreground/30 uppercase tracking-[0.3em]">
                Securim Inc. • v15.0.0
              </Text>
