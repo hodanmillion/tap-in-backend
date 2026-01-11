@@ -75,7 +75,11 @@ export default function RegisterScreen() {
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         className="flex-1">
-        <ScrollView contentContainerStyle={{ flexGrow: 1 }} className="p-6">
+        <ScrollView 
+          contentContainerStyle={{ flexGrow: 1 }} 
+          className="p-6"
+          keyboardShouldPersistTaps="handled"
+        >
           <View className="mb-10 mt-10">
             <Text className="text-4xl font-bold text-foreground">Join Tap In</Text>
             <Text className="mt-2 text-lg text-muted-foreground">

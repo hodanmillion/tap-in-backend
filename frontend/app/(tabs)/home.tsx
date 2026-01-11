@@ -1,4 +1,4 @@
-import React, { memo, useState } from 'react';
+import React, { memo } from 'react';
 import { View, Text, FlatList, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocation } from '@/hooks/useLocation';
@@ -91,12 +91,16 @@ export default function HomeScreen() {
     placeholderData: (previousData) => previousData,
   });
 
+  const rooms = Array.from(new Map((nearbyRooms || []).map((item: any) => [item.id, item])).values());
+
   const createRoomMutation = useMutation({
     mutationFn: async () => {
-      if (!location) throw new Error('Location not available');
+      if (!location) {
+        Alert.alert('Location Required', 'We are still getting your location. Please wait a moment and try again.');
+        return;
+      }
       const { latitude, longitude } = location.coords;
 
-      // Check if we already have a room within 20m in our local data to give instant feedback
       const isTooClose = rooms.some((room: any) => {
         const dist = getDistance(
           latitude,
@@ -122,6 +126,7 @@ export default function HomeScreen() {
       });
     },
     onSuccess: (data) => {
+      if (!data) return;
       queryClient.invalidateQueries({ queryKey: ['nearbyRooms'] });
       if (data.room) {
         router.push(`/chat/${data.room.id}`);
@@ -132,22 +137,14 @@ export default function HomeScreen() {
     },
   });
 
-  // Deduplicate rooms by ID and sort by distance if possible
-  const rooms = Array.from(new Map((nearbyRooms || []).map((item: any) => [item.id, item])).values());
-
-  // Helper to calculate distance in meters
   function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
-    const R = 6371e3; // metres
+    const R = 6371e3;
     const φ1 = (lat1 * Math.PI) / 180;
     const φ2 = (lat2 * Math.PI) / 180;
     const Δφ = ((lat2 - lat1) * Math.PI) / 180;
     const Δλ = ((lon2 - lon1) * Math.PI) / 180;
-
-    const a =
-      Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-      Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
     return R * c;
   }
 
@@ -167,9 +164,9 @@ export default function HomeScreen() {
           <View className="flex-row items-center gap-2">
             <TouchableOpacity
               onPress={() => createRoomMutation.mutate()}
-              disabled={createRoomMutation.isPending || !location}
+              disabled={createRoomMutation.isPending}
               className={`h-12 w-12 items-center justify-center rounded-full bg-primary ${
-                !location || createRoomMutation.isPending ? 'opacity-50' : ''
+                createRoomMutation.isPending ? 'opacity-50' : ''
               }`}>
               {createRoomMutation.isPending ? (
                 <ActivityIndicator color="white" size="small" />
@@ -194,9 +191,9 @@ export default function HomeScreen() {
 
         <TouchableOpacity
           onPress={() => createRoomMutation.mutate()}
-          disabled={createRoomMutation.isPending || !location}
+          disabled={createRoomMutation.isPending}
           className={`mb-6 flex-row items-center justify-center gap-2 rounded-2xl bg-primary p-4 shadow-md active:opacity-90 ${
-            !location || createRoomMutation.isPending ? 'opacity-50' : ''
+            createRoomMutation.isPending ? 'opacity-50' : ''
           }`}>
           <Plus size={20} color="white" />
           <Text className="text-lg font-bold text-white">Create Chat Here</Text>
