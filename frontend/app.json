@@ -63,7 +63,9 @@
     },
     "extra": {
       "router": {},
-      "eas": {}
+      "eas": {
+        "projectId": "09438138-397a-4217-ace8-19c2d7a3b92d"
+      }
     },
     "owner": "hodanmo15"
   }
