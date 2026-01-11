@@ -65,20 +65,49 @@ export default function ProfileScreen() {
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
   const [uploading, setUploading] = useState(false);
 
-  const { data: profile, isLoading: profileIsLoading } = useQuery({
-    queryKey: ['profile', user?.id],
-    queryFn: async () => {
-      if (!user?.id) return null;
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!user?.id,
-  });
+    const { data: profile, isLoading: profileIsLoading } = useQuery({
+      queryKey: ['profile', user?.id],
+      queryFn: async () => {
+        if (!user?.id) return null;
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+        if (error) throw error;
+        return data;
+      },
+      enabled: !!user?.id,
+    });
+
+    const { data: friendCount = 0 } = useQuery({
+      queryKey: ['friend-count', user?.id],
+      queryFn: async () => {
+        if (!user?.id) return 0;
+        const { count, error } = await supabase
+          .from('friends')
+          .select('*', { count: 'exact', head: true })
+          .or(`user_id_1.eq.${user.id},user_id_2.eq.${user.id}`);
+        if (error) throw error;
+        return count || 0;
+      },
+      enabled: !!user?.id,
+    });
+
+    const { data: messageCount = 0 } = useQuery({
+      queryKey: ['message-count', user?.id],
+      queryFn: async () => {
+        if (!user?.id) return 0;
+        const { count, error } = await supabase
+          .from('messages')
+          .select('*', { count: 'exact', head: true })
+          .eq('sender_id', user.id);
+        if (error) throw error;
+        return count || 0;
+      },
+      enabled: !!user?.id,
+    });
+
 
   // Edit form state
   const [formData, setFormData] = useState({
@@ -310,20 +339,21 @@ export default function ProfileScreen() {
                   <View className="h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 mr-4">
                     <Users size={24} color={theme.primary} />
                   </View>
-                  <View>
-                    <Text className="text-xl font-black text-foreground">142</Text>
-                    <Text className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Friends</Text>
+                    <View>
+                      <Text className="text-xl font-black text-foreground">{friendCount}</Text>
+                      <Text className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Friends</Text>
+                    </View>
                   </View>
-                </View>
-                <View className="h-12 w-[1px] bg-border" />
-                <View className="flex-row items-center">
-                  <View className="h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 mr-4">
-                    <MessageSquare size={24} color={theme.primary} />
-                  </View>
-                  <View>
-                    <Text className="text-xl font-black text-foreground">856</Text>
-                    <Text className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Messages</Text>
-                  </View>
+                  <View className="h-12 w-[1px] bg-border" />
+                  <View className="flex-row items-center">
+                    <View className="h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 mr-4">
+                      <MessageSquare size={24} color={theme.primary} />
+                    </View>
+                    <View>
+                      <Text className="text-xl font-black text-foreground">{messageCount}</Text>
+                      <Text className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Messages</Text>
+                    </View>
+
                 </View>
               </View>
             </View>

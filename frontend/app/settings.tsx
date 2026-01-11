@@ -220,9 +220,10 @@ function SettingsContent() {
             </View>
           </View>
 
-          <View className="items-center pb-10">
-            <Text className="text-[10px] font-black text-muted-foreground/30 uppercase tracking-[0.5em]">TapIn v15.0.0</Text>
-          </View>
+            <View className="items-center pb-10">
+              <Text className="text-[10px] font-black text-muted-foreground/30 uppercase tracking-[0.5em]">TapIn v15.1.0</Text>
+            </View>
+
         </View>
       </ScrollView>
 
