@@ -133,6 +133,49 @@ interface Database {
           created_at?: string;
         };
       };
+      friends: {
+        Row: {
+          id: string;
+          user_id_1: string;
+          user_id_2: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id_1: string;
+          user_id_2: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id_1?: string;
+          user_id_2?: string;
+          created_at?: string;
+        };
+      };
+      friend_requests: {
+        Row: {
+          id: string;
+          sender_id: string;
+          receiver_id: string;
+          status: 'pending' | 'accepted' | 'declined';
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          sender_id: string;
+          receiver_id: string;
+          status?: 'pending' | 'accepted' | 'declined';
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          sender_id?: string;
+          receiver_id?: string;
+          status?: 'pending' | 'accepted' | 'declined';
+          created_at?: string;
+        };
+      };
     };
   };
 }
@@ -437,5 +480,221 @@ app.get('/notifications/:userId', async (c) => {
     return c.json({ error: error.message }, 500);
   }
 });
+
+// GET /profiles/search - Search for users
+app.get('/profiles/search', async (c) => {
+  const query = c.req.query('q') || '';
+  const userId = c.req.query('userId');
+
+  if (!query) return c.json([]);
+
+  try {
+    let supabaseQuery = supabase
+      .from('profiles')
+      .select('id, username, full_name, avatar_url')
+      .or(`username.ilike.%${query}%,full_name.ilike.%${query}%`)
+      .limit(20);
+
+    if (userId) {
+      supabaseQuery = supabaseQuery.neq('id', userId);
+    }
+
+    const { data, error } = await supabaseQuery;
+    if (error) throw error;
+    return c.json(data || []);
+  } catch (err) {
+    const error = err as Error;
+    return c.json({ error: error.message }, 500);
+  }
+});
+
+// GET /profiles/nearby - List nearby users
+app.get('/profiles/nearby', async (c) => {
+  const lat = parseFloat(c.req.query('lat') || '0');
+  const lng = parseFloat(c.req.query('lng') || '0');
+  const radius = parseFloat(c.req.query('radius') || '1000');
+  const userId = c.req.query('userId');
+
+  try {
+    // Using simple distance calculation for now if PostGIS RPC is not available for profiles
+    // But since we have location column, we can use it.
+    // Let's try to use a RPC if it exists, otherwise use a fallback.
+    const { data, error } = await supabase.rpc('find_nearby_users', {
+      lat,
+      lng,
+      max_dist_meters: radius,
+    });
+
+    if (error) {
+      console.warn('find_nearby_users RPC failed, falling back to simple query');
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from('profiles')
+        .select('id, username, full_name, avatar_url, latitude, longitude')
+        .neq('id', userId || '')
+        .limit(50);
+      
+      if (fallbackError) throw fallbackError;
+      return c.json(fallbackData || []);
+    }
+
+    let results = data || [];
+    if (userId) {
+      results = results.filter((u: any) => u.id !== userId);
+    }
+
+    return c.json(results);
+  } catch (err) {
+    const error = err as Error;
+    return c.json({ error: error.message }, 500);
+  }
+});
+
+// GET /friends/:userId - List friends
+app.get('/friends/:userId', async (c) => {
+  const userId = c.req.param('userId');
+  try {
+    const { data, error } = await supabase
+      .from('friends')
+      .select(`
+        id,
+        user_id_1,
+        user_id_2,
+        profiles!friends_user_id_1_fkey(id, username, full_name, avatar_url),
+        profiles_2:profiles!friends_user_id_2_fkey(id, username, full_name, avatar_url)
+      `)
+      .or(`user_id_1.eq.${userId},user_id_2.eq.${userId}`);
+
+    if (error) throw error;
+
+    const friends = (data || []).map((f: any) => {
+      return f.user_id_1 === userId ? f.profiles_2 : f.profiles;
+    });
+
+    return c.json(friends);
+  } catch (err) {
+    const error = err as Error;
+    return c.json({ error: error.message }, 500);
+  }
+});
+
+// GET /friends/requests/:userId - List incoming friend requests
+app.get('/friends/requests/:userId', async (c) => {
+  const userId = c.req.param('userId');
+  try {
+    const { data, error } = await supabase
+      .from('friend_requests')
+      .select('id, sender_id, status, created_at, sender:profiles!friend_requests_sender_id_fkey(id, username, full_name, avatar_url)')
+      .eq('receiver_id', userId)
+      .eq('status', 'pending');
+
+    if (error) throw error;
+    return c.json(data || []);
+  } catch (err) {
+    const error = err as Error;
+    return c.json({ error: error.message }, 500);
+  }
+});
+
+// POST /friends/request - Send friend request
+app.post(
+  '/friends/request',
+  zValidator(
+    'json',
+    z.object({
+      sender_id: z.string(),
+      receiver_id: z.string(),
+    })
+  ),
+  async (c) => {
+    const { sender_id, receiver_id } = c.req.valid('json');
+
+    try {
+      // Check if already friends or request exists
+      const { data: existing } = await supabase
+        .from('friend_requests')
+        .select('id')
+        .or(`and(sender_id.eq.${sender_id},receiver_id.eq.${receiver_id}),and(sender_id.eq.${receiver_id},receiver_id.eq.${sender_id})`)
+        .single();
+
+      if (existing) {
+        return c.json({ error: 'Request already exists or you are already connected' }, 400);
+      }
+
+      const { data, error } = await supabase
+        .from('friend_requests')
+        .insert({
+          sender_id,
+          receiver_id,
+          status: 'pending',
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Create notification
+      await supabase.from('notifications').insert({
+        user_id: receiver_id,
+        type: 'friend_request',
+        content: 'You have a new friend request!',
+      });
+
+      return c.json(data);
+    } catch (err) {
+      const error = err as Error;
+      return c.json({ error: error.message }, 500);
+    }
+  }
+);
+
+// POST /friends/accept - Accept friend request
+app.post(
+  '/friends/accept',
+  zValidator(
+    'json',
+    z.object({
+      request_id: z.string(),
+    })
+  ),
+  async (c) => {
+    const { request_id } = c.req.valid('json');
+
+    try {
+      const { data: request, error: fetchError } = await supabase
+        .from('friend_requests')
+        .select('*')
+        .eq('id', request_id)
+        .single();
+
+      if (fetchError || !request) throw new Error('Request not found');
+
+      // Update request status
+      await supabase
+        .from('friend_requests')
+        .update({ status: 'accepted' })
+        .eq('id', request_id);
+
+      // Add to friends table
+      const { error: friendError } = await supabase.from('friends').insert({
+        user_id_1: request.sender_id,
+        user_id_2: request.receiver_id,
+      });
+
+      if (friendError) throw friendError;
+
+      // Create notification for sender
+      await supabase.from('notifications').insert({
+        user_id: request.sender_id,
+        type: 'friend_request_accepted',
+        content: 'Your friend request was accepted!',
+      });
+
+      return c.json({ success: true });
+    } catch (err) {
+      const error = err as Error;
+      return c.json({ error: error.message }, 500);
+    }
+  }
+);
 
 export default app;
