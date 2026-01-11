@@ -30,12 +30,16 @@ export function useLocation(userId: string | undefined) {
 
         // 2. Get OS-level last known position (fast)
         let initialLocation = await Location.getLastKnownPositionAsync();
-        
+
         if (initialLocation) {
           setLocation(initialLocation);
           AsyncStorage.setItem(LOCATION_CACHE_KEY, JSON.stringify(initialLocation));
           if (userId) {
-            syncLocationAndRooms(userId, initialLocation.coords.latitude, initialLocation.coords.longitude);
+            syncLocationAndRooms(
+              userId,
+              initialLocation.coords.latitude,
+              initialLocation.coords.longitude
+            );
           }
         }
 
@@ -43,14 +47,21 @@ export function useLocation(userId: string | undefined) {
         const currentPosition = await Location.getCurrentPositionAsync({
           accuracy: Location.Accuracy.Balanced,
         });
-        
+
         setLocation(currentPosition);
         AsyncStorage.setItem(LOCATION_CACHE_KEY, JSON.stringify(currentPosition));
 
-        if (userId && (!initialLocation || 
+        if (
+          userId &&
+          (!initialLocation ||
             Math.abs(currentPosition.coords.latitude - initialLocation.coords.latitude) > 0.001 ||
-            Math.abs(currentPosition.coords.longitude - initialLocation.coords.longitude) > 0.001)) {
-          syncLocationAndRooms(userId, currentPosition.coords.latitude, currentPosition.coords.longitude);
+            Math.abs(currentPosition.coords.longitude - initialLocation.coords.longitude) > 0.001)
+        ) {
+          syncLocationAndRooms(
+            userId,
+            currentPosition.coords.latitude,
+            currentPosition.coords.longitude
+          );
         }
 
         subscription = await Location.watchPositionAsync(
@@ -65,7 +76,11 @@ export function useLocation(userId: string | undefined) {
             // Throttle sync to once per 10 seconds to save battery and data
             if (userId && now - lastSyncRef.current > 10000) {
               lastSyncRef.current = now;
-              syncLocationAndRooms(userId, newLocation.coords.latitude, newLocation.coords.longitude);
+              syncLocationAndRooms(
+                userId,
+                newLocation.coords.latitude,
+                newLocation.coords.longitude
+              );
             }
           }
         );
@@ -84,14 +99,14 @@ export function useLocation(userId: string | undefined) {
     try {
       // Fire and forget geocoding, don't let it block the sync
       let address: string | undefined;
-      
+
       // We only attempt geocoding if we haven't done it recently or for room creation
       // In low reception, this might time out or fail, but we catch it.
       try {
-        const reverseGeocode = await Promise.race([
+        const reverseGeocode = (await Promise.race([
           Location.reverseGeocodeAsync({ latitude, longitude }),
-          new Promise((_, reject) => setTimeout(() => reject('Geocode timeout'), 3000))
-        ]) as Location.LocationGeocodedAddress[];
+          new Promise((_, reject) => setTimeout(() => reject('Geocode timeout'), 3000)),
+        ])) as Location.LocationGeocodedAddress[];
 
         if (reverseGeocode && reverseGeocode.length > 0) {
           const loc = reverseGeocode[0];

@@ -1,4 +1,12 @@
-import { View, Text, Image, TouchableOpacity, Alert, ScrollView, ActivityIndicator } from 'react-native';
+import {
+  View,
+  Text,
+  Image,
+  TouchableOpacity,
+  Alert,
+  ScrollView,
+  ActivityIndicator,
+} from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { User, LogOut, Settings, Bell, Shield, CircleHelp, Users } from 'lucide-react-native';
@@ -31,13 +39,13 @@ export default function ProfileScreen() {
     else router.replace('/(auth)/login');
   }
 
-    const menuItems = [
-      { icon: <Users size={20} color="#3b82f6" />, label: 'My Friends', route: '/friends' },
-      { icon: <Bell size={20} color="#6b7280" />, label: 'Notifications', route: '/notifications' },
-      { icon: <Shield size={20} color="#6b7280" />, label: 'Privacy & Security' },
-      { icon: <CircleHelp size={20} color="#6b7280" />, label: 'Help Center' },
-      { icon: <Settings size={20} color="#6b7280" />, label: 'Settings' },
-    ];
+  const menuItems = [
+    { icon: <Users size={20} color="#3b82f6" />, label: 'My Friends', route: '/friends' },
+    { icon: <Bell size={20} color="#6b7280" />, label: 'Notifications', route: '/notifications' },
+    { icon: <Shield size={20} color="#6b7280" />, label: 'Privacy & Security' },
+    { icon: <CircleHelp size={20} color="#6b7280" />, label: 'Help Center' },
+    { icon: <Settings size={20} color="#6b7280" />, label: 'Settings' },
+  ];
 
   if (authLoading || (user?.id && profileLoading)) {
     return (
@@ -53,10 +61,7 @@ export default function ProfileScreen() {
         <View className="items-center py-8">
           <View className="h-24 w-24 items-center justify-center rounded-full bg-secondary">
             {profile?.avatar_url ? (
-              <Image
-                source={{ uri: profile.avatar_url }}
-                className="h-24 w-24 rounded-full"
-              />
+              <Image source={{ uri: profile.avatar_url }} className="h-24 w-24 rounded-full" />
             ) : (
               <User size={48} color="#9ca3af" />
             )}
@@ -74,8 +79,7 @@ export default function ProfileScreen() {
               onPress={() => item.route && router.push(item.route as any)}
               className={`flex-row items-center p-4 ${
                 index !== menuItems.length - 1 ? 'border-b border-border' : ''
-              }`}
-            >
+              }`}>
               {item.icon}
               <Text className="ml-4 flex-1 text-base text-foreground">{item.label}</Text>
             </TouchableOpacity>
@@ -84,8 +88,7 @@ export default function ProfileScreen() {
 
         <TouchableOpacity
           onPress={handleSignOut}
-          className="mt-8 flex-row items-center justify-center rounded-2xl bg-destructive/10 p-4"
-        >
+          className="mt-8 flex-row items-center justify-center rounded-2xl bg-destructive/10 p-4">
           <LogOut size={20} color="#ef4444" />
           <Text className="ml-2 text-base font-semibold text-destructive">Sign Out</Text>
         </TouchableOpacity>

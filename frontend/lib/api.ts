@@ -15,15 +15,15 @@ const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:300
 export async function apiRequest<T = any>(endpoint: string, options?: RequestInit): Promise<T> {
   const url = `${BACKEND_URL}${endpoint}`;
 
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        'ngrok-skip-browser-warning': 'true',
-        'Bypass-Tunnel-Reminder': 'true',
-        ...options?.headers,
-      },
-    });
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      'ngrok-skip-browser-warning': 'true',
+      'Bypass-Tunnel-Reminder': 'true',
+      ...options?.headers,
+    },
+  });
 
   if (!response.ok) {
     let errorMessage = response.statusText;

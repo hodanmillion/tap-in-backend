@@ -1,4 +1,12 @@
-import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, Image, Alert } from 'react-native';
+import {
+  View,
+  Text,
+  FlatList,
+  TouchableOpacity,
+  ActivityIndicator,
+  Image,
+  Alert,
+} from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -9,7 +17,11 @@ export default function FriendsScreen() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
-  const { data: friends, isLoading: loadingFriends, refetch: refetchFriends } = useQuery({
+  const {
+    data: friends,
+    isLoading: loadingFriends,
+    refetch: refetchFriends,
+  } = useQuery({
     queryKey: ['friends', user?.id],
     queryFn: async () => {
       const response = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/friends/${user?.id}`);
@@ -18,10 +30,16 @@ export default function FriendsScreen() {
     enabled: !!user?.id,
   });
 
-  const { data: requests, isLoading: loadingRequests, refetch: refetchRequests } = useQuery({
+  const {
+    data: requests,
+    isLoading: loadingRequests,
+    refetch: refetchRequests,
+  } = useQuery({
     queryKey: ['friendRequests', user?.id],
     queryFn: async () => {
-      const response = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/friends/requests/${user?.id}`);
+      const response = await fetch(
+        `${process.env.EXPO_PUBLIC_BACKEND_URL}/friends/requests/${user?.id}`
+      );
       return response.json();
     },
     enabled: !!user?.id,
@@ -60,7 +78,7 @@ export default function FriendsScreen() {
   };
 
   const renderFriend = ({ item }: { item: any }) => (
-    <View className="mb-4 flex-row items-center rounded-3xl bg-card p-4 shadow-sm border border-border/50">
+    <View className="mb-4 flex-row items-center rounded-3xl border border-border/50 bg-card p-4 shadow-sm">
       <View className="h-14 w-14 items-center justify-center rounded-full bg-secondary">
         {item.avatar_url ? (
           <Image source={{ uri: item.avatar_url }} className="h-14 w-14 rounded-full" />
@@ -78,15 +96,14 @@ export default function FriendsScreen() {
       </View>
       <TouchableOpacity
         onPress={() => startChat(item.id)}
-        className="h-10 w-10 items-center justify-center rounded-full bg-primary/10"
-      >
+        className="h-10 w-10 items-center justify-center rounded-full bg-primary/10">
         <MessageCircle size={20} color="#3b82f6" />
       </TouchableOpacity>
     </View>
   );
 
   const renderRequest = ({ item }: { item: any }) => (
-    <View className="mb-4 flex-row items-center rounded-3xl bg-primary/5 p-4 border border-primary/10">
+    <View className="mb-4 flex-row items-center rounded-3xl border border-primary/10 bg-primary/5 p-4">
       <View className="h-12 w-12 items-center justify-center rounded-full bg-secondary">
         <Text className="text-lg font-bold text-muted-foreground">
           {item.sender?.username?.charAt(0).toUpperCase()}
@@ -99,8 +116,7 @@ export default function FriendsScreen() {
       <TouchableOpacity
         onPress={() => acceptMutation.mutate(item.id)}
         disabled={acceptMutation.isPending}
-        className="rounded-full bg-primary px-4 py-2"
-      >
+        className="rounded-full bg-primary px-4 py-2">
         <Text className="text-xs font-bold text-primary-foreground">
           {acceptMutation.isPending ? '...' : 'Accept'}
         </Text>
@@ -149,7 +165,7 @@ export default function FriendsScreen() {
               keyExtractor={(item) => item.id}
               showsVerticalScrollIndicator={false}
               ListEmptyComponent={
-                <View className="mt-10 items-center justify-center p-10 bg-secondary/20 rounded-3xl border border-dashed border-border">
+                <View className="mt-10 items-center justify-center rounded-3xl border border-dashed border-border bg-secondary/20 p-10">
                   <UserPlus size={40} color="#9ca3af" />
                   <Text className="mt-4 text-center text-lg font-semibold text-muted-foreground">
                     No friends yet.
@@ -157,10 +173,9 @@ export default function FriendsScreen() {
                   <Text className="mt-2 text-center text-sm text-muted-foreground">
                     Discover people nearby and send them a request!
                   </Text>
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     onPress={() => router.push('/users')}
-                    className="mt-6 rounded-full bg-primary/10 px-6 py-2"
-                  >
+                    className="mt-6 rounded-full bg-primary/10 px-6 py-2">
                     <Text className="font-bold text-primary">Discover People</Text>
                   </TouchableOpacity>
                 </View>

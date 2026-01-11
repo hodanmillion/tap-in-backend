@@ -1,4 +1,12 @@
-import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, Image, Alert } from 'react-native';
+import {
+  View,
+  Text,
+  FlatList,
+  TouchableOpacity,
+  ActivityIndicator,
+  Image,
+  Alert,
+} from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocation } from '@/hooks/useLocation';
 import { useState } from 'react';
@@ -12,11 +20,15 @@ export default function UsersScreen() {
   const queryClient = useQueryClient();
   const [sentRequests, setSentRequests] = useState<Set<string>>(new Set());
 
-  const { data: nearbyUsers, isLoading, refetch } = useQuery({
+  const {
+    data: nearbyUsers,
+    isLoading,
+    refetch,
+  } = useQuery({
     queryKey: ['nearbyUsers', location?.coords.latitude, location?.coords.longitude],
     queryFn: async () => {
       if (!location || !user?.id) return [];
-      
+
       const { latitude, longitude } = location.coords;
       const response = await fetch(
         `${process.env.EXPO_PUBLIC_BACKEND_URL}/profiles/nearby?lat=${latitude}&lng=${longitude}&radius=5000&userId=${user.id}`
@@ -42,12 +54,12 @@ export default function UsersScreen() {
     },
     onError: () => {
       Alert.alert('Error', 'Failed to send request');
-    }
+    },
   });
 
   const renderUser = ({ item }: { item: any }) => (
-    <View className="mb-4 flex-row items-center rounded-3xl bg-card p-4 shadow-sm border border-border/50">
-      <View className="h-16 w-16 items-center justify-center rounded-full bg-secondary overflow-hidden">
+    <View className="mb-4 flex-row items-center rounded-3xl border border-border/50 bg-card p-4 shadow-sm">
+      <View className="h-16 w-16 items-center justify-center overflow-hidden rounded-full bg-secondary">
         {item.avatar_url ? (
           <Image source={{ uri: item.avatar_url }} className="h-16 w-16" />
         ) : (
@@ -60,14 +72,14 @@ export default function UsersScreen() {
         <Text className="text-lg font-bold text-foreground">
           {item.full_name || item.username || 'Anonymous'}
         </Text>
-        <View className="flex-row items-center mt-1">
+        <View className="mt-1 flex-row items-center">
           <MapPin size={12} color="#9ca3af" />
           <Text className="ml-1 text-xs text-muted-foreground">Nearby</Text>
         </View>
       </View>
-      
+
       {sentRequests.has(item.id) ? (
-        <View className="rounded-full bg-secondary/50 px-4 py-2 flex-row items-center">
+        <View className="flex-row items-center rounded-full bg-secondary/50 px-4 py-2">
           <Clock size={14} color="#9ca3af" />
           <Text className="ml-2 text-xs font-bold text-muted-foreground">Pending</Text>
         </View>
@@ -75,8 +87,7 @@ export default function UsersScreen() {
         <TouchableOpacity
           onPress={() => sendRequestMutation.mutate(item.id)}
           disabled={sendRequestMutation.isPending}
-          className="rounded-full bg-primary px-4 py-2"
-        >
+          className="rounded-full bg-primary px-4 py-2">
           <Text className="text-xs font-bold text-primary-foreground">
             {sendRequestMutation.isPending ? '...' : 'Connect'}
           </Text>
@@ -90,9 +101,7 @@ export default function UsersScreen() {
       <View className="flex-1 px-6">
         <View className="mb-6 mt-4">
           <Text className="text-3xl font-bold text-foreground">Discover</Text>
-          <Text className="text-sm text-muted-foreground">
-            Find people nearby and connect.
-          </Text>
+          <Text className="text-sm text-muted-foreground">Find people nearby and connect.</Text>
         </View>
 
         <View className="mb-6 flex-row items-center rounded-2xl bg-secondary/50 px-4 py-3">
@@ -111,7 +120,7 @@ export default function UsersScreen() {
             renderItem={renderUser}
             showsVerticalScrollIndicator={false}
             ListEmptyComponent={
-              <View className="mt-10 items-center justify-center p-10 bg-secondary/20 rounded-3xl border border-dashed border-border">
+              <View className="mt-10 items-center justify-center rounded-3xl border border-dashed border-border bg-secondary/20 p-10">
                 <MapPin size={40} color="#9ca3af" />
                 <Text className="mt-4 text-center text-lg font-semibold text-muted-foreground">
                   No one else nearby yet.

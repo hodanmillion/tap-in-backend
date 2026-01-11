@@ -9,7 +9,7 @@ await build({
   outfile: 'dist/index.js',
   external: [],
   sourcemap: true,
-    minify: false,
+  minify: false,
   logLevel: 'info',
 });
 

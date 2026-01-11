@@ -21,7 +21,7 @@ function getTimeRemaining(expiresAt: string | null): string {
 }
 
 const RoomItemSkeleton = () => (
-  <View className="mb-4 flex-row items-center rounded-2xl bg-card p-4 shadow-sm opacity-50">
+  <View className="mb-4 flex-row items-center rounded-2xl bg-card p-4 opacity-50 shadow-sm">
     <View className="h-12 w-12 rounded-full bg-secondary" />
     <View className="ml-4 flex-1 gap-2">
       <View className="h-4 w-32 rounded bg-secondary" />
@@ -34,8 +34,7 @@ const RoomItemSkeleton = () => (
 const RoomItem = memo(({ item, onPress }: { item: any; onPress: () => void }) => (
   <TouchableOpacity
     onPress={onPress}
-    className="mb-4 flex-row items-center rounded-2xl bg-card p-4 shadow-sm active:opacity-70"
-  >
+    className="mb-4 flex-row items-center rounded-2xl bg-card p-4 shadow-sm active:opacity-70">
     <View className="h-12 w-12 items-center justify-center rounded-full bg-primary/10">
       <Users size={24} color="#3b82f6" />
     </View>
@@ -45,9 +44,7 @@ const RoomItem = memo(({ item, onPress }: { item: any; onPress: () => void }) =>
       </Text>
       <View className="flex-row items-center gap-1">
         <Clock size={12} color="#6b7280" />
-        <Text className="text-sm text-muted-foreground">
-          {getTimeRemaining(item.expires_at)}
-        </Text>
+        <Text className="text-sm text-muted-foreground">{getTimeRemaining(item.expires_at)}</Text>
       </View>
     </View>
     <ArrowRight size={20} color="#6b7280" />
@@ -71,8 +68,17 @@ export default function HomeScreen() {
 
   const unreadCount = notifications?.filter((n: any) => !n.is_read).length || 0;
 
-  const { data: nearbyRooms, isLoading, isFetching, refetch } = useQuery({
-    queryKey: ['nearbyRooms', location?.coords.latitude.toFixed(4), location?.coords.longitude.toFixed(4)],
+  const {
+    data: nearbyRooms,
+    isLoading,
+    isFetching,
+    refetch,
+  } = useQuery({
+    queryKey: [
+      'nearbyRooms',
+      location?.coords.latitude.toFixed(4),
+      location?.coords.longitude.toFixed(4),
+    ],
     queryFn: async () => {
       if (!location) return [];
       const { latitude, longitude } = location.coords;
@@ -99,14 +105,15 @@ export default function HomeScreen() {
               </Text>
             </View>
           </View>
-          <TouchableOpacity 
+          <TouchableOpacity
             onPress={() => router.push('/notifications')}
-            className="relative h-12 w-12 items-center justify-center rounded-full bg-secondary"
-          >
+            className="relative h-12 w-12 items-center justify-center rounded-full bg-secondary">
             <Bell size={24} color="#3b82f6" />
             {unreadCount > 0 && (
-              <View className="absolute right-2 top-2 h-5 w-5 items-center justify-center rounded-full bg-red-500 border-2 border-background">
-                <Text className="text-[10px] font-bold text-white">{unreadCount > 9 ? '9+' : unreadCount}</Text>
+              <View className="absolute right-2 top-2 h-5 w-5 items-center justify-center rounded-full border-2 border-background bg-red-500">
+                <Text className="text-[10px] font-bold text-white">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </Text>
               </View>
             )}
           </TouchableOpacity>
@@ -114,17 +121,16 @@ export default function HomeScreen() {
 
         {isLoading && rooms.length === 0 ? (
           <View className="flex-1">
-            {[1, 2, 3, 4].map((i) => <RoomItemSkeleton key={i} />)}
+            {[1, 2, 3, 4].map((i) => (
+              <RoomItemSkeleton key={i} />
+            ))}
           </View>
         ) : (
           <FlatList
             data={rooms}
             keyExtractor={(item) => item.id}
             renderItem={({ item }) => (
-              <RoomItem 
-                item={item} 
-                onPress={() => router.push(`/chat/${item.id}`)} 
-              />
+              <RoomItem item={item} onPress={() => router.push(`/chat/${item.id}`)} />
             )}
             ListEmptyComponent={
               !isFetching ? (

@@ -27,8 +27,7 @@ export default function LoginScreen() {
     <SafeAreaView className="flex-1 bg-background">
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        className="flex-1"
-      >
+        className="flex-1">
         <ScrollView contentContainerStyle={{ flexGrow: 1 }} className="p-6">
           <View className="mb-10 mt-10">
             <Text className="text-4xl font-bold text-foreground">Tap In</Text>
@@ -55,12 +54,7 @@ export default function LoginScreen() {
               autoCapitalize="none"
             />
 
-            <Button
-              title="Sign In"
-              onPress={signInWithEmail}
-              loading={loading}
-              className="mt-4"
-            />
+            <Button title="Sign In" onPress={signInWithEmail} loading={loading} className="mt-4" />
 
             <View className="mt-6 flex-row justify-center gap-2">
               <Text className="text-muted-foreground">Don't have an account?</Text>

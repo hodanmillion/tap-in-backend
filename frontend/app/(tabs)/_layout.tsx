@@ -25,8 +25,7 @@ export default function TabsLayout() {
         headerTitleStyle: {
           fontWeight: 'bold',
         },
-      }}
-    >
+      }}>
       <Tabs.Screen
         name="home"
         options={{

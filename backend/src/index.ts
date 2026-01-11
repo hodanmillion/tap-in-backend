@@ -20,6 +20,117 @@ console.log('Environment:', process.env.NODE_ENV || 'development');
 console.log('Port:', process.env.PORT || 3002);
 
 // 2. Supabase Configuration
+interface Database {
+  public: {
+    Tables: {
+      profiles: {
+        Row: {
+          id: string;
+          username: string | null;
+          avatar_url: string | null;
+          last_latitude: number | null;
+          last_longitude: number | null;
+          last_seen_at: string | null;
+        };
+        Insert: {
+          id: string;
+          username?: string | null;
+          avatar_url?: string | null;
+          last_latitude?: number | null;
+          last_longitude?: number | null;
+          last_seen_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          username?: string | null;
+          avatar_url?: string | null;
+          last_latitude?: number | null;
+          last_longitude?: number | null;
+          last_seen_at?: string | null;
+        };
+      };
+      chat_rooms: {
+        Row: {
+          id: string;
+          name: string;
+          type: 'private' | 'auto_generated';
+          latitude: number | null;
+          longitude: number | null;
+          radius: number | null;
+          expires_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          type: 'private' | 'auto_generated';
+          latitude?: number | null;
+          longitude?: number | null;
+          radius?: number | null;
+          expires_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          type?: 'private' | 'auto_generated';
+          latitude?: number | null;
+          longitude?: number | null;
+          radius?: number | null;
+          expires_at?: string | null;
+          created_at?: string;
+        };
+      };
+      room_participants: {
+        Row: {
+          id: string;
+          room_id: string;
+          user_id: string;
+          joined_at: string;
+        };
+        Insert: {
+          id?: string;
+          room_id: string;
+          user_id: string;
+          joined_at?: string;
+        };
+        Update: {
+          id?: string;
+          room_id?: string;
+          user_id?: string;
+          joined_at?: string;
+        };
+      };
+      notifications: {
+        Row: {
+          id: string;
+          user_id: string;
+          type: string;
+          content: string;
+          is_read: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          type: string;
+          content: string;
+          is_read?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          type?: string;
+          content?: string;
+          is_read?: boolean;
+          created_at?: string;
+        };
+      };
+    };
+  };
+}
+
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -29,13 +140,14 @@ if (!supabaseUrl || !supabaseKey) {
 }
 
 // Create Supabase client safely
-let supabase: ReturnType<typeof createClient>;
+let supabase: ReturnType<typeof createClient<Database>>;
 try {
   if (!supabaseUrl) throw new Error('SUPABASE_URL is missing');
-  supabase = createClient(supabaseUrl, supabaseKey || '');
+  supabase = createClient<Database>(supabaseUrl, supabaseKey || '');
   console.log('Supabase client initialized successfully');
-} catch (err: any) {
-  console.error('CRITICAL: Failed to initialize Supabase client:', err.message);
+} catch (err) {
+  const error = err as Error;
+  console.error('CRITICAL: Failed to initialize Supabase client:', error.message);
   // We don't exit here, but the server will fail on requests that need Supabase
 }
 
@@ -87,7 +199,7 @@ app.post(
 
       if (existingRooms && existingRooms.length > 0) {
         const roomIds = existingRooms.map((r) => r.id);
-        
+
         // Find room where both users are participants
         const { data: participants } = await supabase
           .from('room_participants')
@@ -127,9 +239,10 @@ app.post(
       if (partError) throw partError;
 
       return c.json({ room_id: newRoom.id });
-    } catch (err: any) {
-      console.error('Error in /rooms/private:', err);
-      return c.json({ error: err.message }, 500);
+    } catch (err) {
+      const error = err as Error;
+      console.error('Error in /rooms/private:', error);
+      return c.json({ error: error.message }, 500);
     }
   }
 );
@@ -206,9 +319,10 @@ app.post(
       }
 
       return c.json({ success: true, room: currentRoom });
-    } catch (err: any) {
-      console.error('Error in /rooms/sync:', err);
-      return c.json({ error: err.message }, 500);
+    } catch (err) {
+      const error = err as Error;
+      console.error('Error in /rooms/sync:', error);
+      return c.json({ error: error.message }, 500);
     }
   }
 );
@@ -230,7 +344,7 @@ app.get('/rooms/nearby', async (c) => {
     const R = 6371000;
     const filtered = rooms.filter((room) => {
       if (room.type === 'private') return false; // Handled separately in chats tab
-      
+
       const dLat = (room.latitude - lat) * (Math.PI / 180);
       const dLon = (room.longitude - lng) * (Math.PI / 180);
       const a =
@@ -244,9 +358,10 @@ app.get('/rooms/nearby', async (c) => {
     });
 
     return c.json(filtered);
-  } catch (err: any) {
-    console.error('Error in /rooms/nearby:', err);
-    return c.json({ error: err.message }, 500);
+  } catch (err) {
+    const error = err as Error;
+    console.error('Error in /rooms/nearby:', error);
+    return c.json({ error: error.message }, 500);
   }
 });
 
@@ -263,25 +378,30 @@ app.get('/notifications/:userId', async (c) => {
 
     if (error) throw error;
     return c.json(data || []);
-  } catch (err: any) {
-    return c.json({ error: err.message }, 500);
+  } catch (err) {
+    const error = err as Error;
+    return c.json({ error: error.message }, 500);
   }
 });
 
 // 5. Server Startup
 if (typeof process !== 'undefined' && process.env.NODE_ENV !== 'test') {
   const port = Number(process.env.PORT) || 3002;
-  
+
   try {
-    serve({
-      fetch: app.fetch,
-      port,
-    }, (info) => {
-      console.log(`>>> SERVER READY: http://localhost:${info.port}`);
-      console.log(`>>> HEALTH CHECK: http://localhost:${info.port}/health`);
-    });
-  } catch (err: any) {
-    console.error('CRITICAL: Server failed to start:', err.message);
+    serve(
+      {
+        fetch: app.fetch,
+        port,
+      },
+      (info) => {
+        console.log(`>>> SERVER READY: http://localhost:${info.port}`);
+        console.log(`>>> HEALTH CHECK: http://localhost:${info.port}/health`);
+      }
+    );
+  } catch (err) {
+    const error = err as Error;
+    console.error('CRITICAL: Server failed to start:', error.message);
     process.exit(1);
   }
 }

@@ -7,18 +7,10 @@ interface InputProps extends TextInputProps {
   containerClassName?: string;
 }
 
-export function Input({
-  label,
-  error,
-  containerClassName,
-  className,
-  ...props
-}: InputProps) {
+export function Input({ label, error, containerClassName, className, ...props }: InputProps) {
   return (
     <View className={cn('mb-4 gap-1.5', containerClassName)}>
-      {label && (
-        <Text className="text-sm font-medium text-foreground">{label}</Text>
-      )}
+      {label && <Text className="text-sm font-medium text-foreground">{label}</Text>}
       <TextInput
         className={cn(
           'h-12 w-full rounded-xl border border-input bg-background px-4 text-base text-foreground focus:border-primary',
@@ -28,9 +20,7 @@ export function Input({
         placeholderTextColor="#9ca3af"
         {...props}
       />
-      {error && (
-        <Text className="text-xs font-medium text-destructive">{error}</Text>
-      )}
+      {error && <Text className="text-xs font-medium text-destructive">{error}</Text>}
     </View>
   );
 }

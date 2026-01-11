@@ -15,7 +15,10 @@ export default function RegisterScreen() {
 
   async function signUpWithEmail() {
     setLoading(true);
-    const { data: { user }, error } = await supabase.auth.signUp({
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.signUp({
       email: email,
       password: password,
       options: {
@@ -29,18 +32,16 @@ export default function RegisterScreen() {
       Alert.alert('Error', error.message);
     } else if (user) {
       // Create profile in public.profiles
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .insert({
-          id: user.id,
-          full_name: fullName,
-          username: email.split('@')[0] + Math.floor(Math.random() * 1000),
-        });
+      const { error: profileError } = await supabase.from('profiles').insert({
+        id: user.id,
+        full_name: fullName,
+        username: email.split('@')[0] + Math.floor(Math.random() * 1000),
+      });
 
       if (profileError) {
         console.error('Profile creation error:', profileError);
       }
-      
+
       Alert.alert('Success', 'Check your email for verification link!');
       router.replace('/(auth)/login');
     }
@@ -51,8 +52,7 @@ export default function RegisterScreen() {
     <SafeAreaView className="flex-1 bg-background">
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        className="flex-1"
-      >
+        className="flex-1">
         <ScrollView contentContainerStyle={{ flexGrow: 1 }} className="p-6">
           <View className="mb-10 mt-10">
             <Text className="text-4xl font-bold text-foreground">Join Tap In</Text>

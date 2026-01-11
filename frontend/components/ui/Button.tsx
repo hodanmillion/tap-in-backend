@@ -42,18 +42,11 @@ export function Button({
         variants[variant],
         loading && 'opacity-70',
         className
-      )}
-    >
+      )}>
       {loading ? (
         <ActivityIndicator color="white" />
       ) : (
-        <Text
-          className={cn(
-            'text-base font-semibold',
-            textVariants[variant],
-            textClassName
-          )}
-        >
+        <Text className={cn('text-base font-semibold', textVariants[variant], textClassName)}>
           {title}
         </Text>
       )}
