@@ -95,6 +95,22 @@ export default function HomeScreen() {
     mutationFn: async () => {
       if (!location) throw new Error('Location not available');
       const { latitude, longitude } = location.coords;
+
+      // Check if we already have a room within 20m in our local data to give instant feedback
+      const isTooClose = rooms.some((room: any) => {
+        const dist = getDistance(
+          latitude,
+          longitude,
+          room.latitude,
+          room.longitude
+        );
+        return dist < 20;
+      });
+
+      if (isTooClose) {
+        throw new Error('A chat already exists within 20 meters of your location.');
+      }
+
       return apiRequest('/rooms/create', {
         method: 'POST',
         body: JSON.stringify({
@@ -112,11 +128,28 @@ export default function HomeScreen() {
       }
     },
     onError: (error: any) => {
-      Alert.alert('Error', error.message || 'Could not create chat room');
+      Alert.alert('Stay Connected', error.message || 'Could not create chat room');
     },
   });
 
-  const rooms = nearbyRooms || [];
+  // Deduplicate rooms by ID and sort by distance if possible
+  const rooms = Array.from(new Map((nearbyRooms || []).map((item: any) => [item.id, item])).values());
+
+  // Helper to calculate distance in meters
+  function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
+    const R = 6371e3; // metres
+    const φ1 = (lat1 * Math.PI) / 180;
+    const φ2 = (lat2 * Math.PI) / 180;
+    const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+    const Δλ = ((lon2 - lon1) * Math.PI) / 180;
+
+    const a =
+      Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+      Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return R * c;
+  }
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top']}>
