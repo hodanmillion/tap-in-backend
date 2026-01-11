@@ -2,11 +2,13 @@ import React, { memo } from 'react';
 import { View, Text, FlatList, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocation } from '@/hooks/useLocation';
-import { MapPin, Users, ArrowRight, Clock, Bell, Plus } from 'lucide-react-native';
+import { MapPin, Users, ArrowRight, Clock, Bell, Plus, Settings } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiRequest } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
+import { useColorScheme } from 'nativewind';
+import { THEME } from '@/lib/theme';
 
 function getTimeRemaining(expiresAt: string | null): string {
   if (!expiresAt) return 'Permanent';
@@ -21,38 +23,42 @@ function getTimeRemaining(expiresAt: string | null): string {
 }
 
 const RoomItemSkeleton = () => (
-  <View className="mb-4 flex-row items-center rounded-2xl bg-card p-4 opacity-50 shadow-sm">
-    <View className="h-12 w-12 rounded-full bg-secondary" />
+  <View className="mb-4 flex-row items-center rounded-3xl bg-card p-4 opacity-50 border border-border">
+    <View className="h-14 w-14 rounded-2xl bg-secondary" />
     <View className="ml-4 flex-1 gap-2">
       <View className="h-4 w-32 rounded bg-secondary" />
       <View className="h-3 w-20 rounded bg-secondary" />
     </View>
-    <View className="h-5 w-5 rounded bg-secondary" />
+    <View className="h-6 w-6 rounded bg-secondary" />
   </View>
 );
 
-const RoomItem = memo(({ item, onPress }: { item: any; onPress: () => void }) => (
+const RoomItem = memo(({ item, onPress, theme }: { item: any; onPress: () => void; theme: any }) => (
   <TouchableOpacity
     onPress={onPress}
-    className="mb-4 flex-row items-center rounded-2xl bg-card p-4 shadow-sm active:opacity-70">
-    <View className="h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-      <Users size={24} color="#3b82f6" />
+    className="mb-4 flex-row items-center rounded-3xl bg-card p-4 border border-border shadow-sm active:opacity-70">
+    <View className="h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
+      <Users size={28} color={theme.primary} />
     </View>
     <View className="ml-4 flex-1">
-      <Text className="text-lg font-semibold text-foreground" numberOfLines={1}>
+      <Text className="text-lg font-bold text-foreground" numberOfLines={1}>
         {item.name}
       </Text>
-      <View className="flex-row items-center gap-1">
-        <Clock size={12} color="#6b7280" />
-        <Text className="text-sm text-muted-foreground">{getTimeRemaining(item.expires_at)}</Text>
+      <View className="flex-row items-center gap-1 mt-0.5">
+        <Clock size={14} color={theme.mutedForeground} />
+        <Text className="text-sm font-medium text-muted-foreground">{getTimeRemaining(item.expires_at)}</Text>
       </View>
     </View>
-    <ArrowRight size={20} color="#6b7280" />
+    <View className="h-10 w-10 items-center justify-center rounded-full bg-secondary">
+      <ArrowRight size={20} color={theme.secondaryForeground} />
+    </View>
   </TouchableOpacity>
 ));
 
 export default function HomeScreen() {
   const { user } = useAuth();
+  const { colorScheme } = useColorScheme();
+  const theme = THEME[colorScheme ?? 'light'];
   const { location, errorMsg } = useLocation(user?.id);
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -151,40 +157,33 @@ export default function HomeScreen() {
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top']}>
       <View className="flex-1 px-6">
-        <View className="mb-6 mt-4 flex-row items-center justify-between">
+        <View className="mb-8 mt-6 flex-row items-center justify-between">
           <View>
-            <Text className="text-3xl font-bold text-foreground">Nearby Chats</Text>
-            <View className="mt-2 flex-row items-center gap-1">
-              <MapPin size={16} color="#6b7280" />
-              <Text className="text-sm text-muted-foreground">
-                {location ? 'Nearby chats active' : errorMsg || 'Locating...'}
+            <Text className="text-4xl font-black tracking-tight text-foreground">Nearby</Text>
+            <View className="mt-1 flex-row items-center gap-1.5">
+              <View className={`h-2 w-2 rounded-full ${location ? 'bg-green-500' : 'bg-amber-500'}`} />
+              <Text className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                {location ? 'Live Discovery' : errorMsg || 'Locating...'}
               </Text>
             </View>
           </View>
-          <View className="flex-row items-center gap-2">
-            <TouchableOpacity
-              onPress={() => createRoomMutation.mutate()}
-              disabled={createRoomMutation.isPending}
-              className={`h-12 w-12 items-center justify-center rounded-full bg-primary ${
-                createRoomMutation.isPending ? 'opacity-50' : ''
-              }`}>
-              {createRoomMutation.isPending ? (
-                <ActivityIndicator color="white" size="small" />
-              ) : (
-                <Plus size={24} color="white" />
-              )}
-            </TouchableOpacity>
+          <View className="flex-row items-center gap-3">
             <TouchableOpacity
               onPress={() => router.push('/notifications')}
-              className="relative h-12 w-12 items-center justify-center rounded-full bg-secondary">
-              <Bell size={24} color="#3b82f6" />
+              className="relative h-12 w-12 items-center justify-center rounded-2xl bg-secondary border border-border">
+              <Bell size={24} color={theme.foreground} />
               {unreadCount > 0 && (
-                <View className="absolute right-2 top-2 h-5 w-5 items-center justify-center rounded-full border-2 border-background bg-red-500">
-                  <Text className="text-[10px] font-bold text-white">
+                <View className="absolute -right-1 -top-1 h-5 w-5 items-center justify-center rounded-full border-2 border-background bg-primary">
+                  <Text className="text-[10px] font-bold text-primary-foreground">
                     {unreadCount > 9 ? '9+' : unreadCount}
                   </Text>
                 </View>
               )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => router.push('/profile')}
+              className="h-12 w-12 items-center justify-center rounded-2xl bg-primary">
+              <Plus size={24} color={theme.primaryForeground} />
             </TouchableOpacity>
           </View>
         </View>
@@ -192,43 +191,56 @@ export default function HomeScreen() {
         <TouchableOpacity
           onPress={() => createRoomMutation.mutate()}
           disabled={createRoomMutation.isPending}
-          className={`mb-6 flex-row items-center justify-center gap-2 rounded-2xl bg-primary p-4 shadow-md active:opacity-90 ${
+          className={`mb-8 flex-row items-center justify-center gap-3 rounded-3xl bg-primary py-5 shadow-xl active:opacity-90 ${
             createRoomMutation.isPending ? 'opacity-50' : ''
           }`}>
-          <Plus size={20} color="white" />
-          <Text className="text-lg font-bold text-white">Create Chat Here</Text>
+          {createRoomMutation.isPending ? (
+            <ActivityIndicator color={theme.primaryForeground} size="small" />
+          ) : (
+            <>
+              <MapPin size={22} color={theme.primaryForeground} />
+              <Text className="text-xl font-bold text-primary-foreground">Start Nearby Chat</Text>
+            </>
+          )}
         </TouchableOpacity>
 
-        {isLoading && rooms.length === 0 ? (
-          <View className="flex-1">
-            {[1, 2, 3, 4].map((i) => (
-              <RoomItemSkeleton key={i} />
-            ))}
-          </View>
-        ) : (
-          <FlatList
-            data={rooms}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <RoomItem item={item} onPress={() => router.push(`/chat/${item.id}`)} />
-            )}
-            ListEmptyComponent={
-              !isFetching ? (
-                <View className="mt-10 items-center justify-center p-10">
-                  <Text className="text-center text-lg text-muted-foreground">
-                    No active chats nearby.
-                  </Text>
-                  <Text className="mt-2 text-center text-sm text-muted-foreground">
-                    Click the button above to start a chat at your current location!
-                  </Text>
-                </View>
-              ) : null
-            }
-            onRefresh={refetch}
-            refreshing={isFetching && rooms.length > 0}
-            showsVerticalScrollIndicator={false}
-          />
-        )}
+        <View className="flex-1">
+          <Text className="mb-4 text-xs font-black uppercase tracking-[0.2em] text-muted-foreground/60">
+            Active Zones
+          </Text>
+          {isLoading && rooms.length === 0 ? (
+            <View className="flex-1">
+              {[1, 2, 3, 4].map((i) => (
+                <RoomItemSkeleton key={i} />
+              ))}
+            </View>
+          ) : (
+            <FlatList
+              data={rooms as any[]}
+              keyExtractor={(item: any) => item.id}
+              renderItem={({ item }: { item: any }) => (
+                <RoomItem item={item} theme={theme} onPress={() => router.push(`/chat/${item.id}`)} />
+              )}
+              ListEmptyComponent={
+                !isFetching ? (
+                  <View className="mt-10 items-center justify-center p-10 rounded-3xl border border-dashed border-border">
+                    <Users size={48} color={theme.mutedForeground} opacity={0.3} />
+                    <Text className="mt-4 text-center text-lg font-bold text-foreground">
+                      Quiet around here
+                    </Text>
+                    <Text className="mt-1 text-center text-sm text-muted-foreground">
+                      Be the first to start a conversation in this area!
+                    </Text>
+                  </View>
+                ) : null
+              }
+              onRefresh={refetch}
+              refreshing={isFetching && rooms.length > 0}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: 100 }}
+            />
+          )}
+        </View>
       </View>
     </SafeAreaView>
   );
