@@ -24,16 +24,46 @@ export default function ChatsScreen() {
     queryFn: async () => {
       if (!user?.id) return [];
 
-      const { data: participants, error } = await supabase
+      // 1. Get all rooms I'm a participant in
+      const { data: myParticipations, error: partError } = await supabase
         .from('room_participants')
-        .select('room_id, chat_rooms(*)')
+        .select('room_id')
         .eq('user_id', user.id);
 
-      if (error) throw error;
+      if (partError) throw partError;
+      if (!myParticipations || myParticipations.length === 0) return [];
 
-      return (participants || [])
-        .map((p) => p.chat_rooms as any)
-        .filter((r: any) => r !== null && typeof r === 'object' && 'id' in r)
+      const roomIds = myParticipations.map(p => p.room_id);
+
+      // 2. Get the room details and ALL participants for those rooms (to find the other person in private chats)
+      const { data: roomsData, error: roomsError } = await supabase
+        .from('chat_rooms')
+        .select(`
+          *,
+          room_participants(
+            user_id,
+            profiles(full_name, username, avatar_url)
+          )
+        `)
+        .in('id', roomIds);
+
+      if (roomsError) throw roomsError;
+
+      return (roomsData || [])
+        .map((room: any) => {
+          if (room.type === 'private') {
+            const otherParticipant = room.room_participants?.find(
+              (p: any) => p.user_id !== user.id
+            );
+            const profile = otherParticipant?.profiles;
+            return {
+              ...room,
+              name: profile?.full_name || `@${profile?.username}` || 'Private Chat',
+              other_user_avatar: profile?.avatar_url,
+            };
+          }
+          return room;
+        })
         .sort(
           (a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
         );
@@ -47,11 +77,15 @@ export default function ChatsScreen() {
       onPress={() => router.push(`/chat/${item.id}`)}
       className="mb-5 flex-row items-center rounded-[28px] border border-border bg-card p-5 shadow-sm">
       <View
-        className={`h-16 w-16 items-center justify-center rounded-[20px] ${
+        className={`h-16 w-16 items-center justify-center rounded-[20px] overflow-hidden ${
           item.type === 'private' ? 'bg-primary/10' : 'bg-secondary/50'
         }`}>
         {item.type === 'private' ? (
-          <MessageCircle size={30} color={theme.primary} />
+          item.other_user_avatar ? (
+            <Image source={{ uri: item.other_user_avatar }} className="h-full w-full" />
+          ) : (
+            <MessageCircle size={30} color={theme.primary} />
+          )
         ) : (
           <Hash size={30} color={theme.mutedForeground} />
         )}

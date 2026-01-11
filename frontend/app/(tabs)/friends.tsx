@@ -29,7 +29,7 @@ export default function FriendsScreen() {
   const renderFriend = ({ item }: { item: any }) => (
     <TouchableOpacity
       activeOpacity={0.7}
-      onPress={() => router.push(`/chat/${item.id}`)}
+      onPress={() => router.push(`/chat/private_${item.id}`)}
       className="mb-4 flex-row items-center rounded-3xl border border-border bg-card p-4 shadow-sm active:bg-secondary/10">
       <View className="h-14 w-14 items-center justify-center overflow-hidden rounded-2xl bg-primary/5">
         {item.avatar_url ? (
