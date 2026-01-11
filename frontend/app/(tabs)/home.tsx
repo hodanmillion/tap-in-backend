@@ -1,8 +1,8 @@
-import React, { memo } from 'react';
-import { View, Text, FlatList, TouchableOpacity } from 'react-native';
-import { useQuery } from '@tanstack/react-query';
+import React, { memo, useState } from 'react';
+import { View, Text, FlatList, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocation } from '@/hooks/useLocation';
-import { MapPin, Users, ArrowRight, Clock, Bell } from 'lucide-react-native';
+import { MapPin, Users, ArrowRight, Clock, Bell, Plus } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiRequest } from '@/lib/api';
@@ -55,6 +55,7 @@ export default function HomeScreen() {
   const { user } = useAuth();
   const { location, errorMsg } = useLocation(user?.id);
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   const { data: notifications } = useQuery({
     queryKey: ['notifications', user?.id],
@@ -90,6 +91,31 @@ export default function HomeScreen() {
     placeholderData: (previousData) => previousData,
   });
 
+  const createRoomMutation = useMutation({
+    mutationFn: async () => {
+      if (!location) throw new Error('Location not available');
+      const { latitude, longitude } = location.coords;
+      return apiRequest('/rooms/create', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: `Nearby Chat (${latitude.toFixed(3)}, ${longitude.toFixed(3)})`,
+          latitude,
+          longitude,
+          radius: 20,
+        }),
+      });
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['nearbyRooms'] });
+      if (data.room) {
+        router.push(`/chat/${data.room.id}`);
+      }
+    },
+    onError: (error: any) => {
+      Alert.alert('Error', error.message || 'Could not create chat room');
+    },
+  });
+
   const rooms = nearbyRooms || [];
 
   return (
@@ -105,19 +131,43 @@ export default function HomeScreen() {
               </Text>
             </View>
           </View>
-          <TouchableOpacity
-            onPress={() => router.push('/notifications')}
-            className="relative h-12 w-12 items-center justify-center rounded-full bg-secondary">
-            <Bell size={24} color="#3b82f6" />
-            {unreadCount > 0 && (
-              <View className="absolute right-2 top-2 h-5 w-5 items-center justify-center rounded-full border-2 border-background bg-red-500">
-                <Text className="text-[10px] font-bold text-white">
-                  {unreadCount > 9 ? '9+' : unreadCount}
-                </Text>
-              </View>
-            )}
-          </TouchableOpacity>
+          <View className="flex-row items-center gap-2">
+            <TouchableOpacity
+              onPress={() => createRoomMutation.mutate()}
+              disabled={createRoomMutation.isPending || !location}
+              className={`h-12 w-12 items-center justify-center rounded-full bg-primary ${
+                !location || createRoomMutation.isPending ? 'opacity-50' : ''
+              }`}>
+              {createRoomMutation.isPending ? (
+                <ActivityIndicator color="white" size="small" />
+              ) : (
+                <Plus size={24} color="white" />
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => router.push('/notifications')}
+              className="relative h-12 w-12 items-center justify-center rounded-full bg-secondary">
+              <Bell size={24} color="#3b82f6" />
+              {unreadCount > 0 && (
+                <View className="absolute right-2 top-2 h-5 w-5 items-center justify-center rounded-full border-2 border-background bg-red-500">
+                  <Text className="text-[10px] font-bold text-white">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
+
+        <TouchableOpacity
+          onPress={() => createRoomMutation.mutate()}
+          disabled={createRoomMutation.isPending || !location}
+          className={`mb-6 flex-row items-center justify-center gap-2 rounded-2xl bg-primary p-4 shadow-md active:opacity-90 ${
+            !location || createRoomMutation.isPending ? 'opacity-50' : ''
+          }`}>
+          <Plus size={20} color="white" />
+          <Text className="text-lg font-bold text-white">Create Chat Here</Text>
+        </TouchableOpacity>
 
         {isLoading && rooms.length === 0 ? (
           <View className="flex-1">
@@ -139,7 +189,7 @@ export default function HomeScreen() {
                     No active chats nearby.
                   </Text>
                   <Text className="mt-2 text-center text-sm text-muted-foreground">
-                    Move around - a new chat will appear when you enter a new area!
+                    Click the button above to start a chat at your current location!
                   </Text>
                 </View>
               ) : null

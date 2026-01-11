@@ -3,6 +3,7 @@ import { cors } from 'hono/cors';
 import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
+import { Resend } from 'resend';
 
 // 1. Error Handling & Logging Setup
 process.on('uncaughtException', (err) => {
@@ -16,9 +17,9 @@ process.on('unhandledRejection', (reason, promise) => {
 console.log('--- STARTING BACKEND SERVER ---');
 console.log('Timestamp:', new Date().toISOString());
 console.log('Environment:', process.env.NODE_ENV || 'development');
-console.log('Port:', process.env.PORT || 3002);
+console.log('Port:', process.env.PORT || 3003);
 
-// 2. Supabase Configuration
+// 2. Supabase & Resend Configuration
 interface Database {
   public: {
     Tables: {
@@ -26,26 +27,32 @@ interface Database {
         Row: {
           id: string;
           username: string | null;
+          full_name: string | null;
           avatar_url: string | null;
           last_latitude: number | null;
           last_longitude: number | null;
           last_seen_at: string | null;
+          created_at: string;
         };
         Insert: {
           id: string;
           username?: string | null;
+          full_name?: string | null;
           avatar_url?: string | null;
           last_latitude?: number | null;
           last_longitude?: number | null;
           last_seen_at?: string | null;
+          created_at?: string;
         };
         Update: {
           id?: string;
           username?: string | null;
+          full_name?: string | null;
           avatar_url?: string | null;
           last_latitude?: number | null;
           last_longitude?: number | null;
           last_seen_at?: string | null;
+          created_at?: string;
         };
       };
       chat_rooms: {
@@ -132,6 +139,7 @@ interface Database {
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const resendApiKey = process.env.RESEND_API_KEY;
 
 if (!supabaseUrl || !supabaseKey) {
   console.error('ERROR: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is missing from environment variables!');
@@ -146,6 +154,12 @@ try {
 } catch (err) {
   const error = err as Error;
   console.error('CRITICAL: Failed to initialize Supabase client:', error.message);
+}
+
+// Initialize Resend
+const resend = resendApiKey ? new Resend(resendApiKey) : null;
+if (!resend) {
+  console.warn('WARNING: RESEND_API_KEY is missing. Welcome emails will be disabled.');
 }
 
 // 3. App Initialization
@@ -168,10 +182,68 @@ app.get('/health', (c) => {
     uptime: process.uptime(),
     timestamp: new Date().toISOString(),
     supabase: !!supabaseUrl && !!supabaseKey,
+    resend: !!resendApiKey,
   });
 });
 
 app.get('/', (c) => c.text('Tap In API v1.0.0 is Running'));
+
+// POST /auth/welcome - Send tailored welcome email
+app.post(
+  '/auth/welcome',
+  zValidator(
+    'json',
+    z.object({
+      id: z.string(),
+      email: z.string().email(),
+      full_name: z.string().optional(),
+    })
+  ),
+  async (c) => {
+    const { email, full_name } = c.req.valid('json');
+
+    if (!resend) {
+      return c.json({ error: 'Email service not configured' }, 500);
+    }
+
+    try {
+      const { data, error } = await resend.emails.send({
+        from: 'Tap In <welcome@updates.tapin.app>',
+        to: email,
+        subject: 'Welcome to Tap In!',
+        html: `
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px;">
+            <h1 style="color: #3b82f6; font-size: 24px; font-weight: bold; margin-bottom: 16px;">Welcome to Tap In, ${full_name || 'there'}! 🚀</h1>
+            <p style="color: #4b5563; font-size: 16px; line-height: 1.5; margin-bottom: 24px;">
+              We're thrilled to have you join our community. Tap In helps you connect with people and discover what's happening right where you are.
+            </p>
+            <div style="background-color: #f8fafc; padding: 20px; border-radius: 8px; margin-bottom: 24px;">
+              <h2 style="color: #1e293b; font-size: 18px; font-weight: 600; margin-bottom: 12px;">Getting Started:</h2>
+              <ul style="color: #4b5563; font-size: 14px; line-height: 1.6; padding-left: 20px;">
+                <li>📍 <strong>Find Chats:</strong> Look at the map or list to find chats happening within 1km.</li>
+                <li>💬 <strong>Join In:</strong> Tap any chat room to start messaging people nearby.</li>
+                <li>✨ <strong>Create:</strong> Use the "Create Chat Here" button to start your own 48-hour localized chat!</li>
+              </ul>
+            </div>
+            <p style="color: #64748b; font-size: 14px; margin-bottom: 8px;">
+              Stay connected,
+            </p>
+            <p style="color: #1e293b; font-weight: bold; font-size: 16px;">
+              The Tap In Team
+            </p>
+          </div>
+        `,
+      });
+
+      if (error) throw error;
+      return c.json({ success: true, id: data?.id });
+    } catch (err) {
+      const error = err as Error;
+      console.error('Error sending welcome email:', error);
+      return c.json({ error: error.message }, 500);
+    }
+  }
+);
 
 // POST /rooms/private - Create or get private chat room
 app.post(
@@ -239,7 +311,7 @@ app.post(
   }
 );
 
-// POST /rooms/sync - Location sync and auto-room generation
+// POST /rooms/sync - Location sync only (removed auto-room generation)
 app.post(
   '/rooms/sync',
   zValidator(
@@ -248,11 +320,10 @@ app.post(
       userId: z.string(),
       latitude: z.number(),
       longitude: z.number(),
-      address: z.string().optional(),
     })
   ),
   async (c) => {
-    const { userId, latitude, longitude, address } = c.req.valid('json');
+    const { userId, latitude, longitude } = c.req.valid('json');
 
     try {
       await supabase
@@ -264,48 +335,7 @@ app.post(
         })
         .eq('id', userId);
 
-      const { data: nearbyRooms } = await supabase
-        .from('chat_rooms')
-        .select('*')
-        .eq('type', 'auto_generated')
-        .gt('expires_at', new Date().toISOString());
-
-      const R = 6371000;
-      const radius = 20;
-
-      let currentRoom = nearbyRooms?.find((room) => {
-        const dLat = (room.latitude - latitude) * (Math.PI / 180);
-        const dLon = (room.longitude - longitude) * (Math.PI / 180);
-        const a =
-          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-          Math.cos(latitude * (Math.PI / 180)) *
-            Math.cos(room.latitude * (Math.PI / 180)) *
-            Math.sin(dLon / 2) *
-            Math.sin(dLon / 2);
-        const d = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        return d <= (room.radius || radius);
-      });
-
-      if (!currentRoom) {
-        const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
-        const { data: newRoom, error } = await supabase
-          .from('chat_rooms')
-          .insert({
-            name: address || `Nearby Chat (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`,
-            type: 'auto_generated',
-            latitude,
-            longitude,
-            radius,
-            expires_at: expiresAt,
-          })
-          .select()
-          .single();
-
-        if (error) throw error;
-        currentRoom = newRoom;
-      }
-
-      return c.json({ success: true, room: currentRoom });
+      return c.json({ success: true });
     } catch (err) {
       const error = err as Error;
       console.error('Error in /rooms/sync:', error);
@@ -314,36 +344,74 @@ app.post(
   }
 );
 
-// GET /rooms/nearby - List active nearby rooms
+// POST /rooms/create - Explicitly create a chat room
+app.post(
+  '/rooms/create',
+  zValidator(
+    'json',
+    z.object({
+      name: z.string(),
+      latitude: z.number(),
+      longitude: z.number(),
+      radius: z.number().default(20),
+    })
+  ),
+  async (c) => {
+    const { name, latitude, longitude, radius } = c.req.valid('json');
+
+    try {
+      // Check if a room already exists within 20m to prevent duplicates
+      const { data: existingRooms, error: searchError } = await supabase.rpc('find_nearby_rooms', {
+        lat: latitude,
+        lng: longitude,
+        max_dist_meters: 20,
+      });
+
+      if (searchError) throw searchError;
+
+      if (existingRooms && existingRooms.length > 0) {
+        return c.json({ error: 'A chat already exists in this exact location (20m radius).' }, 400);
+      }
+
+      const { data: newRoom, error } = await supabase
+        .from('chat_rooms')
+        .insert({
+          name,
+          type: 'auto_generated',
+          latitude,
+          longitude,
+          radius,
+          // Default expires_at is now() + 48 hours set in DB
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return c.json({ success: true, room: newRoom });
+    } catch (err) {
+      const error = err as Error;
+      console.error('Error in /rooms/create:', error);
+      return c.json({ error: error.message }, 500);
+    }
+  }
+);
+
+// GET /rooms/nearby - List active nearby rooms using PostGIS
 app.get('/rooms/nearby', async (c) => {
   const lat = parseFloat(c.req.query('lat') || '0');
   const lng = parseFloat(c.req.query('lng') || '0');
+  const radius = parseFloat(c.req.query('radius') || '1000'); // Default search radius 1km
 
   try {
-    const { data: rooms, error } = await supabase
-      .from('chat_rooms')
-      .select('*')
-      .or(`expires_at.gt.${new Date().toISOString()},type.eq.private`);
+    const { data: rooms, error } = await supabase.rpc('find_nearby_rooms', {
+      lat,
+      lng,
+      max_dist_meters: radius,
+    });
 
     if (error) throw error;
 
-    const R = 6371000;
-    const filtered = rooms.filter((room) => {
-      if (room.type === 'private') return false;
-
-      const dLat = (room.latitude - lat) * (Math.PI / 180);
-      const dLon = (room.longitude - lng) * (Math.PI / 180);
-      const a =
-        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos(lat * (Math.PI / 180)) *
-          Math.cos(room.latitude * (Math.PI / 180)) *
-          Math.sin(dLon / 2) *
-          Math.sin(dLon / 2);
-      const d = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      return d <= (room.radius || 20);
-    });
-
-    return c.json(filtered);
+    return c.json(rooms || []);
   } catch (err) {
     const error = err as Error;
     console.error('Error in /rooms/nearby:', error);
