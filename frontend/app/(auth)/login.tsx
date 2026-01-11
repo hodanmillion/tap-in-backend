@@ -39,14 +39,13 @@ export default function LoginScreen() {
             className="px-6"
             keyboardShouldPersistTaps="handled"
           >
-            <View className="flex-1 justify-center py-8">
-              <View className="items-center mb-10">
-                <Logo size="lg" className="mb-6" />
-                <Text className="text-3xl font-black text-foreground tracking-tight text-center">Log in to TapIn</Text>
-                <Text className="mt-2 text-center text-base font-medium text-muted-foreground px-6">
-                  Enter your email and password to continue
-                </Text>
-              </View>
+                <View className="items-center mb-10">
+                  <Logo size="xl" className="mb-6" />
+                  <Text className="text-4xl font-black text-foreground tracking-tighter text-center">TapIn</Text>
+                  <Text className="mt-3 text-center text-base font-semibold text-muted-foreground px-6 leading-tight">
+                    Welcome back. Your connections are waiting.
+                  </Text>
+                </View>
 
               <View className="space-y-4">
                 <View>
