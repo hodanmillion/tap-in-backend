@@ -2,24 +2,29 @@
   "expo": {
     "name": "TapIn",
     "slug": "tap-in",
-    "version": "14.0.0",
+    "version": "15.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "tapin",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": false,
-    "splash": {
-        "image": "./assets/images/splash.png",
-        "resizeMode": "contain",
-        "backgroundColor": "#ffffff"
-      },
+"splash": {
+          "image": "./assets/images/splash.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff",
+          "dark": {
+            "image": "./assets/images/splash.png",
+            "resizeMode": "contain",
+            "backgroundColor": "#0a0a0f"
+          }
+        },
       "assetBundlePatterns": [
         "**/*"
       ],
       "ios": {
         "supportsTablet": true,
         "bundleIdentifier": "com.TapIn.myapp",
-        "buildNumber": "10",
+        "buildNumber": "11",
         "infoPlist": {
           "NSLocationWhenInUseUsageDescription": "Allow Tap In to access your location to find nearby users and chat rooms.",
           "NSLocationAlwaysAndWhenInUseUsageDescription": "Allow Tap In to access your location even when the app is in the background.",
@@ -28,10 +33,10 @@
         }
       },
     "android": {
-      "adaptiveIcon": {
-          "foregroundImage": "./assets/images/adaptive-icon.png",
-          "backgroundColor": "#ffffff"
-        },
+"adaptiveIcon": {
+            "foregroundImage": "./assets/images/adaptive-icon.png",
+            "backgroundColor": "#6366f1"
+          },
         "permissions": [
           "ACCESS_COARSE_LOCATION",
           "ACCESS_FINE_LOCATION",
