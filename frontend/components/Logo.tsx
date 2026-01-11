@@ -28,11 +28,19 @@ export function Logo({ size = 'md', className, ...props }: LogoProps) {
 
   return (
     <View 
-      className={`items-center justify-center bg-primary shadow-lg shadow-primary/30 ${containerSizes[size]} ${className}`}
+      className={`items-center justify-center bg-primary ${containerSizes[size]} ${className}`}
+      style={{
+        shadowColor: theme.primary,
+        shadowOffset: { width: 0, height: 12 },
+        shadowOpacity: 0.4,
+        shadowRadius: 16,
+        elevation: 20,
+      }}
       {...props}
     >
-      <View className="absolute inset-0 bg-white/10 rounded-full scale-110 opacity-20" />
-      <MapPin size={iconSizes[size]} color="white" fill="white" strokeWidth={2.5} />
+      <View className="absolute inset-0 bg-white/20 rounded-full scale-90 opacity-10" />
+      <View className="absolute inset-0 bg-black/10 rounded-full scale-110 opacity-5" />
+      <MapPin size={iconSizes[size]} color="white" fill="white" strokeWidth={2} />
     </View>
   );
 }

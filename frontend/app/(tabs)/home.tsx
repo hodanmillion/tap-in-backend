@@ -23,13 +23,13 @@ function getTimeRemaining(expiresAt: string | null): string {
 }
 
 const RoomItemSkeleton = () => (
-  <View className="mb-4 flex-row items-center rounded-[24px] bg-card p-5 opacity-50 border border-border">
-    <View className="h-16 w-16 rounded-[20px] bg-secondary" />
+  <View className="mb-4 flex-row items-center rounded-3xl bg-card p-4 opacity-50 border border-border/50">
+    <View className="h-14 w-14 rounded-2xl bg-secondary/60" />
     <View className="ml-4 flex-1 gap-2">
-      <View className="h-5 w-40 rounded bg-secondary" />
-      <View className="h-4 w-24 rounded bg-secondary" />
+      <View className="h-4 w-32 rounded bg-secondary/60" />
+      <View className="h-3 w-20 rounded bg-secondary/60" />
     </View>
-    <View className="h-10 w-10 rounded-full bg-secondary" />
+    <View className="h-9 w-9 rounded-full bg-secondary/60" />
   </View>
 );
 
@@ -37,21 +37,21 @@ const RoomItem = memo(({ item, onPress, theme }: { item: any; onPress: () => voi
   <TouchableOpacity
     onPress={onPress}
     activeOpacity={0.7}
-    className="mb-5 flex-row items-center rounded-[28px] bg-card p-5 border border-border shadow-sm">
-    <View className="h-16 w-16 items-center justify-center rounded-[20px] bg-primary/10">
-      <Users size={32} color={theme.primary} />
+    className="mb-4 flex-row items-center rounded-3xl bg-card p-4 border border-border shadow-sm active:bg-secondary/10">
+    <View className="h-14 w-14 items-center justify-center rounded-2xl bg-primary/5">
+      <Users size={28} color={theme.primary} />
     </View>
     <View className="ml-4 flex-1">
-      <Text className="text-xl font-bold text-foreground leading-tight" numberOfLines={1}>
+      <Text className="text-lg font-bold text-foreground leading-tight" numberOfLines={1}>
         {item.name}
       </Text>
       <View className="flex-row items-center gap-1.5 mt-1">
-        <Clock size={14} color={theme.mutedForeground} />
-        <Text className="text-sm font-semibold text-muted-foreground">{getTimeRemaining(item.expires_at)}</Text>
+        <Clock size={12} color={theme.mutedForeground} />
+        <Text className="text-xs font-semibold text-muted-foreground">{getTimeRemaining(item.expires_at)}</Text>
       </View>
     </View>
-    <View className="h-11 w-11 items-center justify-center rounded-full bg-secondary">
-      <ArrowRight size={22} color={theme.secondaryForeground} />
+    <View className="h-9 w-9 items-center justify-center rounded-full bg-secondary/50">
+      <ArrowRight size={18} color={theme.secondaryForeground} />
     </View>
   </TouchableOpacity>
 ));
@@ -157,26 +157,26 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top']}>
-      <View className="flex-1 px-6">
-        <View className="mb-10 mt-8 flex-row items-center justify-between">
+      <View className="flex-1 px-5">
+        <View className="mb-8 mt-6 flex-row items-center justify-between">
           <View>
-            <Text className="text-4xl font-black tracking-tight text-foreground">Nearby</Text>
-            <View className="mt-2 flex-row items-center gap-2">
-              <View className={`h-2.5 w-2.5 rounded-full ${location ? 'bg-green-500' : 'bg-amber-500 shadow-sm shadow-amber-500'}`} />
-              <Text className="text-sm font-bold text-muted-foreground uppercase tracking-widest">
+            <Text className="text-3xl font-black tracking-tight text-foreground">Nearby</Text>
+            <View className="mt-1 flex-row items-center gap-2">
+              <View className={`h-2 w-2 rounded-full ${location ? 'bg-green-500' : 'bg-amber-500 shadow-sm'}`} />
+              <Text className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
                 {location ? 'Live Discovery' : errorMsg || 'Locating...'}
               </Text>
             </View>
           </View>
-          <View className="flex-row items-center gap-4">
+          <View className="flex-row items-center gap-3">
             <TouchableOpacity
               onPress={() => router.push('/notifications')}
               activeOpacity={0.7}
-              className="relative h-13 w-13 items-center justify-center rounded-2xl bg-card border border-border shadow-sm">
-              <Bell size={26} color={theme.foreground} />
+              className="relative h-11 w-11 items-center justify-center rounded-xl bg-secondary/50 border border-border/50">
+              <Bell size={22} color={theme.foreground} />
               {unreadCount > 0 && (
-                <View className="absolute -right-1 -top-1 h-6 w-6 items-center justify-center rounded-full border-2 border-background bg-primary">
-                  <Text className="text-[11px] font-black text-primary-foreground">
+                <View className="absolute -right-1 -top-1 h-5 w-5 items-center justify-center rounded-full border-2 border-background bg-primary">
+                  <Text className="text-[9px] font-black text-primary-foreground">
                     {unreadCount > 9 ? '9+' : unreadCount}
                   </Text>
                 </View>
@@ -185,8 +185,8 @@ export default function HomeScreen() {
             <TouchableOpacity
               onPress={() => router.push('/profile')}
               activeOpacity={0.8}
-              className="h-13 w-13 items-center justify-center rounded-2xl bg-primary shadow-lg shadow-primary/40">
-              <Plus size={28} color={theme.primaryForeground} />
+              className="h-11 w-11 items-center justify-center rounded-xl bg-primary shadow-md shadow-primary/20">
+              <Plus size={24} color={theme.primaryForeground} />
             </TouchableOpacity>
           </View>
         </View>
@@ -195,22 +195,22 @@ export default function HomeScreen() {
           onPress={() => createRoomMutation.mutate()}
           disabled={createRoomMutation.isPending}
           activeOpacity={0.9}
-          className={`mb-10 flex-row items-center justify-center gap-3 rounded-[32px] bg-primary py-6 shadow-xl shadow-primary/30 ${
+          className={`mb-8 flex-row items-center justify-center gap-3 rounded-3xl bg-primary py-5 shadow-lg shadow-primary/25 ${
             createRoomMutation.isPending ? 'opacity-50' : ''
           }`}>
           {createRoomMutation.isPending ? (
             <ActivityIndicator color={theme.primaryForeground} size="small" />
           ) : (
             <>
-              <Compass size={24} color={theme.primaryForeground} strokeWidth={2.5} />
-              <Text className="text-xl font-black text-primary-foreground tracking-tight">Drop a Pin & Chat</Text>
+              <Compass size={22} color={theme.primaryForeground} strokeWidth={2.5} />
+              <Text className="text-lg font-bold text-primary-foreground tracking-tight">Drop a Pin & Chat</Text>
             </>
           )}
         </TouchableOpacity>
 
         <View className="flex-1">
-          <View className="flex-row items-center justify-between mb-5">
-            <Text className="text-xs font-black uppercase tracking-[0.25em] text-muted-foreground/50">
+          <View className="flex-row items-center justify-between mb-4">
+            <Text className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">
               Active Zones
             </Text>
             {isFetching && (

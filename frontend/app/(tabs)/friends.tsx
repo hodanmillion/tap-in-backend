@@ -37,41 +37,41 @@ export default function FriendsScreen() {
     <TouchableOpacity
       activeOpacity={0.7}
       onPress={() => router.push(`/chat/${item.id}`)}
-      className="mb-5 flex-row items-center rounded-[28px] border border-border bg-card p-5 shadow-sm">
-      <View className="h-16 w-16 items-center justify-center overflow-hidden rounded-[20px] bg-secondary/50">
+      className="mb-4 flex-row items-center rounded-3xl border border-border bg-card p-4 shadow-sm active:bg-secondary/10">
+      <View className="h-14 w-14 items-center justify-center overflow-hidden rounded-2xl bg-primary/5">
         {item.avatar_url ? (
-          <Image source={{ uri: item.avatar_url }} className="h-16 w-16" />
+          <Image source={{ uri: item.avatar_url }} className="h-14 w-14" />
         ) : (
-          <User size={32} color={theme.mutedForeground} opacity={0.3} />
+          <User size={24} color={theme.primary} />
         )}
       </View>
       <View className="ml-4 flex-1">
-        <Text className="text-xl font-bold text-foreground">
+        <Text className="text-lg font-bold text-foreground leading-tight">
           {item.full_name || item.username}
         </Text>
-        <Text className="text-sm font-semibold text-muted-foreground mt-0.5">@{item.username}</Text>
+        <Text className="text-xs font-semibold text-muted-foreground mt-1">@{item.username}</Text>
       </View>
-      <View className="h-11 w-11 items-center justify-center rounded-full bg-secondary">
-        <MessageCircle size={22} color={theme.primary} />
+      <View className="h-9 w-9 items-center justify-center rounded-full bg-secondary/50">
+        <MessageCircle size={18} color={theme.primary} />
       </View>
     </TouchableOpacity>
   );
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top']}>
-      <View className="flex-1 px-6">
-        <View className="mb-8 mt-8 flex-row items-center justify-between">
+      <View className="flex-1 px-5">
+        <View className="mb-8 mt-6 flex-row items-center justify-between">
           <View>
-            <Text className="text-4xl font-black tracking-tight text-foreground">Friends</Text>
-            <Text className="mt-2 text-base font-semibold text-muted-foreground">
-              Your inner circle.
+            <Text className="text-3xl font-black tracking-tight text-foreground">Friends</Text>
+            <Text className="mt-1 text-sm font-semibold text-muted-foreground">
+              Your inner circle
             </Text>
           </View>
           <TouchableOpacity
             onPress={() => router.push('/users')}
             activeOpacity={0.8}
-            className="h-13 w-13 items-center justify-center rounded-2xl bg-primary shadow-lg shadow-primary/30">
-            <UserPlus size={26} color={theme.primaryForeground} />
+            className="h-11 w-11 items-center justify-center rounded-xl bg-primary shadow-md shadow-primary/20">
+            <UserPlus size={22} color={theme.primaryForeground} />
           </TouchableOpacity>
         </View>
 

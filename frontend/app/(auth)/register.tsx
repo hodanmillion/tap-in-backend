@@ -76,65 +76,66 @@ export default function RegisterScreen() {
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         className="flex-1">
-        <ScrollView 
-          contentContainerStyle={{ flexGrow: 1 }} 
-          className="px-8"
-          keyboardShouldPersistTaps="handled"
-        >
-          <View className="flex-1 justify-center py-12">
-            <View className="items-center mb-10">
-              <Logo size="md" className="mb-6 shadow-xl" />
-              <Text className="text-4xl font-black text-foreground tracking-tight">Create Account</Text>
-              <Text className="mt-2 text-center text-base font-medium text-muted-foreground px-4">
-                Connecting people through technology
-              </Text>
-            </View>
-
-            <View className="space-y-4">
-              <View>
-                <Text className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] mb-2 ml-1">Full Name</Text>
-                <Input
-                  placeholder="John Doe"
-                  value={fullName}
-                  onChangeText={setFullName}
-                  className="h-16 rounded-[20px] bg-secondary/30 border-0 px-6 font-bold"
-                />
+          <ScrollView 
+            contentContainerStyle={{ flexGrow: 1 }} 
+            className="px-6"
+            keyboardShouldPersistTaps="handled"
+          >
+            <View className="flex-1 justify-center py-8">
+              <View className="items-center mb-10">
+                <Logo size="md" className="mb-6" />
+                <Text className="text-3xl font-black text-foreground tracking-tight text-center">Create Account</Text>
+                <Text className="mt-2 text-center text-base font-medium text-muted-foreground px-6">
+                  Join TapIn and connect with people nearby
+                </Text>
               </View>
 
-              <View>
-                <Text className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] mb-2 ml-1">Email</Text>
-                <Input
-                  placeholder="email@example.com"
-                  value={email}
-                  onChangeText={setEmail}
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                  className="h-16 rounded-[20px] bg-secondary/30 border-0 px-6 font-bold"
-                />
-              </View>
-
-              <View>
-                <Text className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] mb-2 ml-1">Password</Text>
-                <Input
-                  placeholder="••••••••"
-                  value={password}
-                  onChangeText={setPassword}
-                  secureTextEntry
-                  autoCapitalize="none"
-                  className="h-16 rounded-[20px] bg-secondary/30 border-0 px-6 font-bold"
-                />
-              </View>
-
-              <TouchableOpacity
-                onPress={signUpWithEmail}
-                disabled={loading}
-                className="mt-10 bg-primary h-16 rounded-[24px] items-center justify-center shadow-xl shadow-primary/30 active:opacity-90"
-              >
-                <View className="flex-row items-center">
-                  <Text className="text-lg font-black text-primary-foreground uppercase tracking-[0.1em]">Get Started</Text>
-                  <ChevronRight size={20} color={theme.primaryForeground} className="ml-2" />
+              <View className="space-y-4">
+                <View>
+                  <Text className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 ml-1">Full Name</Text>
+                  <Input
+                    placeholder="John Doe"
+                    value={fullName}
+                    onChangeText={setFullName}
+                    className="h-14 rounded-2xl bg-secondary/40 border-0 px-5 font-semibold"
+                  />
                 </View>
-              </TouchableOpacity>
+
+                <View>
+                  <Text className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 ml-1">Email</Text>
+                  <Input
+                    placeholder="email@example.com"
+                    value={email}
+                    onChangeText={setEmail}
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                    className="h-14 rounded-2xl bg-secondary/40 border-0 px-5 font-semibold"
+                  />
+                </View>
+
+                <View>
+                  <Text className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 ml-1">Password</Text>
+                  <Input
+                    placeholder="••••••••"
+                    value={password}
+                    onChangeText={setPassword}
+                    secureTextEntry
+                    autoCapitalize="none"
+                    className="h-14 rounded-2xl bg-secondary/40 border-0 px-5 font-semibold"
+                  />
+                </View>
+
+                <TouchableOpacity
+                  onPress={signUpWithEmail}
+                  disabled={loading}
+                  className="mt-8 bg-primary h-14 rounded-2xl items-center justify-center shadow-lg shadow-primary/20 active:opacity-90"
+                >
+                  <View className="flex-row items-center">
+                    <Text className="text-base font-bold text-primary-foreground uppercase tracking-widest">Get Started</Text>
+                    <ChevronRight size={18} color={theme.primaryForeground} className="ml-2" />
+                  </View>
+                </TouchableOpacity>
+
 
               <View className="mt-12 flex-row justify-center items-center gap-2">
                 <Text className="text-sm font-bold text-muted-foreground uppercase tracking-widest">Already a member?</Text>
