@@ -29,9 +29,13 @@ interface Database {
           username: string | null;
           full_name: string | null;
           avatar_url: string | null;
-          last_latitude: number | null;
-          last_longitude: number | null;
-          last_seen_at: string | null;
+          latitude: number | null;
+          longitude: number | null;
+          last_seen: string | null;
+          bio: string | null;
+          website: string | null;
+          location_name: string | null;
+          occupation: string | null;
           created_at: string;
         };
         Insert: {
@@ -39,9 +43,13 @@ interface Database {
           username?: string | null;
           full_name?: string | null;
           avatar_url?: string | null;
-          last_latitude?: number | null;
-          last_longitude?: number | null;
-          last_seen_at?: string | null;
+          latitude?: number | null;
+          longitude?: number | null;
+          last_seen?: string | null;
+          bio?: string | null;
+          website?: string | null;
+          location_name?: string | null;
+          occupation?: string | null;
           created_at?: string;
         };
         Update: {
@@ -49,9 +57,39 @@ interface Database {
           username?: string | null;
           full_name?: string | null;
           avatar_url?: string | null;
-          last_latitude?: number | null;
-          last_longitude?: number | null;
-          last_seen_at?: string | null;
+          latitude?: number | null;
+          longitude?: number | null;
+          last_seen?: string | null;
+          bio?: string | null;
+          website?: string | null;
+          location_name?: string | null;
+          occupation?: string | null;
+          created_at?: string;
+        };
+      };
+      messages: {
+        Row: {
+          id: string;
+          room_id: string;
+          sender_id: string;
+          content: string;
+          type: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          room_id: string;
+          sender_id: string;
+          content: string;
+          type?: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          room_id?: string;
+          sender_id?: string;
+          content?: string;
+          type?: string;
           created_at?: string;
         };
       };
@@ -372,9 +410,9 @@ app.post(
       await supabase
         .from('profiles')
         .update({
-          last_latitude: latitude,
-          last_longitude: longitude,
-          last_seen_at: new Date().toISOString(),
+          latitude: latitude,
+          longitude: longitude,
+          last_seen: new Date().toISOString(),
         })
         .eq('id', userId);
 
@@ -382,6 +420,61 @@ app.post(
     } catch (err) {
       const error = err as Error;
       console.error('Error in /rooms/sync:', error);
+      return c.json({ error: error.message }, 500);
+    }
+  }
+);
+
+// GET /messages/:roomId - Get message history
+app.get('/messages/:roomId', async (c) => {
+  const roomId = c.req.param('roomId');
+  try {
+    const { data, error } = await supabase
+      .from('messages')
+      .select(`
+        *,
+        sender:profiles(id, username, full_name, avatar_url)
+      `)
+      .eq('room_id', roomId)
+      .order('created_at', { ascending: true });
+
+    if (error) throw error;
+    return c.json(data || []);
+  } catch (err) {
+    const error = err as Error;
+    return c.json({ error: error.message }, 500);
+  }
+});
+
+// POST /messages - Send a message
+app.post(
+  '/messages',
+  zValidator(
+    'json',
+    z.object({
+      room_id: z.string(),
+      sender_id: z.string(),
+      content: z.string(),
+      type: z.string().default('text'),
+    })
+  ),
+  async (c) => {
+    const payload = c.req.valid('json');
+
+    try {
+      const { data, error } = await supabase
+        .from('messages')
+        .insert(payload)
+        .select(`
+          *,
+          sender:profiles(id, username, full_name, avatar_url)
+        `)
+        .single();
+
+      if (error) throw error;
+      return c.json(data);
+    } catch (err) {
+      const error = err as Error;
       return c.json({ error: error.message }, 500);
     }
   }

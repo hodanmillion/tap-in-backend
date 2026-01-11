@@ -19,16 +19,9 @@ export default function FriendsScreen() {
     queryKey: ['friends', user?.id],
     queryFn: async () => {
       if (!user?.id) return [];
-      const { data, error } = await supabase
-        .from('friendships')
-        .select(`
-          id,
-          friend:profiles!friendships_friend_id_fkey(id, username, full_name, avatar_url)
-        `)
-        .eq('user_id', user.id)
-        .eq('status', 'accepted');
-      if (error) throw error;
-      return data.map((f: any) => f.friend);
+      const response = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/friends/${user.id}`);
+      if (!response.ok) throw new Error('Failed to fetch friends');
+      return response.json();
     },
     enabled: !!user?.id,
   });

@@ -142,13 +142,14 @@ export default function ChatScreen() {
 
   const fetchMessages = useCallback(async () => {
     if (!id) return;
-    const { data } = await supabase
-      .from('messages')
-      .select('*, profiles(full_name, avatar_url)')
-      .eq('room_id', id)
-      .order('created_at', { ascending: false })
-      .limit(50);
-    if (data) setMessages(data);
+    try {
+      const response = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/messages/${id}`);
+      if (!response.ok) throw new Error('Failed to fetch messages');
+      const data = await response.json();
+      if (data) setMessages([...data].reverse());
+    } catch (error) {
+      console.error('Error fetching messages:', error);
+    }
   }, [id]);
 
   useEffect(() => {
@@ -160,8 +161,19 @@ export default function ChatScreen() {
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${id}` },
-        (payload) => {
-          setMessages((current) => [payload.new, ...current]);
+        async (payload) => {
+          // Fetch the profile for the new message
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('id, username, full_name, avatar_url')
+            .eq('id', payload.new.sender_id)
+            .single();
+          
+          const newMessage = {
+            ...payload.new,
+            sender: profile
+          };
+          setMessages((current) => [newMessage, ...current]);
         }
       )
       .subscribe();
@@ -378,13 +390,13 @@ export default function ChatScreen() {
               const isMine = item.sender_id === user?.id;
               return (
                 <View className={`mb-4 flex-row ${isMine ? 'justify-end' : 'justify-start'}`}>
-                  <View
-                    className={`max-w-[80%] rounded-2xl px-4 py-2 ${isMine ? 'rounded-br-none bg-blue-600' : 'rounded-bl-none bg-zinc-800'}`}>
-                    {!isMine && (
-                      <Text className="mb-1 text-xs font-bold text-zinc-400">
-                        {item.profiles?.full_name || 'User'}
-                      </Text>
-                    )}
+                    <View
+                      className={`max-w-[80%] rounded-2xl px-4 py-2 ${isMine ? 'rounded-br-none bg-blue-600' : 'rounded-bl-none bg-zinc-800'}`}>
+                      {!isMine && (
+                        <Text className="mb-1 text-xs font-bold text-zinc-400">
+                          {item.sender?.full_name || item.sender?.username || 'User'}
+                        </Text>
+                      )}
                     {item.type === 'image' || item.type === 'gif' ? (
                       <TouchableOpacity
                         activeOpacity={0.9}
