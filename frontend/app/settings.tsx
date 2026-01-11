@@ -94,7 +94,7 @@ function SettingsContent() {
       onPress={onPress}
       disabled={isSwitch}
       className={`flex-row items-center justify-between p-4 border-b border-border/50 active:bg-secondary/50`}>
-      <div className="flex-row items-center flex-1">
+      <View className="flex-row items-center flex-1">
         <View className={`h-10 w-10 items-center justify-center rounded-xl ${destructive ? 'bg-destructive/10' : 'bg-secondary/50'}`}>
           {icon}
         </View>
