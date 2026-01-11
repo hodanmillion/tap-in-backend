@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "TapIn",
-    "slug": "bc9693db-f378-4750-b50b-d518eea4468c",
+    "slug": "tap-in",
     "version": "1.4.8",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -63,9 +63,7 @@
     },
     "extra": {
       "router": {},
-      "eas": {
-        "projectId": "bc9693db-f378-4750-b50b-d518eea4468c"
-      }
+      "eas": {}
     },
     "owner": "hodanmo15"
   }
