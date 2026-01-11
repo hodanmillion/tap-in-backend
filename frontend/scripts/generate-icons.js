@@ -67,16 +67,16 @@ async function generateSplash(width, height, outputPath, isDark = false) {
   const pinX = logoX + (logoSize - pinSize) / 2;
   const pinY = logoY + (logoSize - pinSize) / 2;
 
-  const bgColor = isDark ? BG_DARK : BG_LIGHT;
-  const textColor = isDark ? '#ffffff' : '#1a1a2e';
+  const bgColor = isDark ? BG_DARK : PRIMARY_COLOR;
+  const textColor = '#ffffff';
 
   const svg = `
     <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
       <rect width="${width}" height="${height}" fill="${bgColor}"/>
       <defs>
         <linearGradient id="logoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" style="stop-color:${PRIMARY_COLOR};stop-opacity:1" />
-          <stop offset="100%" style="stop-color:${PRIMARY_DARK};stop-opacity:1" />
+          <stop offset="0%" style="stop-color:#ffffff;stop-opacity:1" />
+          <stop offset="100%" style="stop-color:#e0e7ff;stop-opacity:1" />
         </linearGradient>
         <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
           <feGaussianBlur stdDeviation="${logoSize * 0.1}" result="coloredBlur"/>
@@ -87,7 +87,7 @@ async function generateSplash(width, height, outputPath, isDark = false) {
         </filter>
       </defs>
       <g filter="url(#glow)">
-        <circle cx="${width / 2}" cy="${height / 2 - height * 0.05}" r="${logoSize * 0.45}" fill="url(#logoGrad)" opacity="0.15"/>
+        <circle cx="${width / 2}" cy="${height / 2 - height * 0.05}" r="${logoSize * 0.45}" fill="#ffffff" opacity="0.15"/>
       </g>
       <g>
         <path d="M${pinX + pinSize / 2},${pinY + pinSize * 0.1} 
@@ -117,7 +117,7 @@ async function generateSplash(width, height, outputPath, isDark = false) {
             font-family="system-ui, -apple-system, BlinkMacSystemFont, sans-serif" 
             font-size="${logoSize * 0.1}" 
             font-weight="600" 
-            fill="${isDark ? '#6b7280' : '#9ca3af'}" 
+            fill="rgba(255, 255, 255, 0.7)" 
             text-anchor="middle"
             letter-spacing="${logoSize * 0.015}">DISCOVER NEARBY</text>
     </svg>
