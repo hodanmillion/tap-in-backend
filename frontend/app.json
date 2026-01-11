@@ -6,9 +6,9 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "tapin",
-      "userInterfaceStyle": "automatic",
-        "newArchEnabled": true,
-      "splash": {
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": false,
+    "splash": {
         "image": "./assets/images/splash.png",
         "resizeMode": "contain",
         "backgroundColor": "#ffffff"
@@ -27,9 +27,8 @@
           "ITSAppUsesNonExemptEncryption": false
         }
       },
-      "android": {
-        "edgeToEdgeEnabled": true,
-        "adaptiveIcon": {
+    "android": {
+      "adaptiveIcon": {
           "foregroundImage": "./assets/images/adaptive-icon.png",
           "backgroundColor": "#ffffff"
         },
