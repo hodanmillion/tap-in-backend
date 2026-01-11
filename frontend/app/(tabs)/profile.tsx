@@ -9,9 +9,21 @@ import {
   ActivityIndicator,
   Modal,
   TextInput,
+  Platform,
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
+import * as ImagePicker from 'expo-image-picker';
+
+const decodeBase64 = (base64: string) => {
+  const binaryString = atob(base64);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes.buffer;
+};
+
 import { 
   User, 
   LogOut, 
@@ -31,7 +43,9 @@ import {
   Camera,
   MessageSquare,
   Image as ImageIcon,
-  Edit2
+  Edit2,
+  Clock,
+  Map as MapIcon
 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -49,6 +63,7 @@ export default function ProfileScreen() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<Tab>('About');
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   // Edit form state
   const [formData, setFormData] = useState({
@@ -60,28 +75,48 @@ export default function ProfileScreen() {
     website: '',
   });
 
-  const { data: profile, isLoading: profileLoading } = useQuery({
-    queryKey: ['profile', user?.id],
+  const { data: activity, isLoading: activityLoading } = useQuery({
+    queryKey: ['profile-activity', user?.id],
     queryFn: async () => {
-      if (!user?.id) return null;
+      if (!user?.id) return [];
       const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
+        .from('room_participants')
+        .select(`
+          joined_at,
+          chat_rooms (
+            id,
+            name,
+            type
+          )
+        `)
+        .eq('user_id', user.id)
+        .order('joined_at', { ascending: false })
+        .limit(5);
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user?.id,
+  });
+
+  const { data: userPhotos, isLoading: photosLoading } = useQuery({
+    queryKey: ['profile-photos', user?.id],
+    queryFn: async () => {
+      if (!user?.id) return [];
+      const { data, error } = await supabase.storage
+        .from('avatars')
+        .list(user.id, {
+          limit: 10,
+          offset: 0,
+          sortBy: { column: 'name', order: 'desc' },
+        });
       if (error) throw error;
       
-      // Initialize form data when profile is loaded
-      setFormData({
-        full_name: data.full_name || '',
-        username: data.username || '',
-        bio: data.bio || '',
-        occupation: data.occupation || '',
-        location_name: data.location_name || '',
-        website: data.website || '',
+      return data.map(file => {
+        const { data: { publicUrl } } = supabase.storage
+          .from('avatars')
+          .getPublicUrl(`${user.id}/${file.name}`);
+        return publicUrl;
       });
-      
-      return data;
     },
     enabled: !!user?.id,
   });
@@ -105,6 +140,51 @@ export default function ProfileScreen() {
       Alert.alert('Error', error.message);
     },
   });
+
+  const pickImage = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.5,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets[0].base64) {
+        uploadAvatar(result.assets[0].base64);
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to pick image');
+    }
+  };
+
+  const uploadAvatar = async (base64: string) => {
+    if (!user?.id) return;
+    
+    setUploading(true);
+    try {
+      const filePath = `${user.id}/${Date.now()}.jpg`;
+      const { data, error } = await supabase.storage
+        .from('avatars')
+        .upload(filePath, decodeBase64(base64), {
+          contentType: 'image/jpeg',
+          upsert: true,
+        });
+
+      if (error) throw error;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(filePath);
+
+      await updateProfileMutation.mutateAsync({ avatar_url: publicUrl });
+    } catch (error: any) {
+      Alert.alert('Error', error.message);
+    } finally {
+      setUploading(false);
+    }
+  };
 
   async function handleSignOut() {
     const { error } = await supabase.auth.signOut();
@@ -221,27 +301,89 @@ export default function ProfileScreen() {
           </View>
         );
       case 'Activity':
-        return (
-          <View className="px-6 items-center justify-center py-20">
-            <View className="h-20 w-20 items-center justify-center rounded-[30px] bg-secondary/50 mb-6">
-              <Compass size={32} color={theme.mutedForeground} opacity={0.3} />
+        if (activityLoading) {
+          return (
+            <View className="px-6 py-20 items-center">
+              <ActivityIndicator color={theme.primary} />
             </View>
-            <Text className="text-xl font-black text-foreground uppercase tracking-widest">No Activity Yet</Text>
-            <Text className="mt-2 text-center text-muted-foreground px-10">
-              When you join chats or make friends, your activity will show up here.
-            </Text>
+          );
+        }
+        return (
+          <View className="px-6 space-y-4">
+            {activity && activity.length > 0 ? (
+              activity.map((item: any, index: number) => (
+                <View key={index} className="flex-row items-center bg-card border border-border p-4 rounded-3xl">
+                  <View className="h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 mr-4">
+                    <MessageSquare size={24} color={theme.primary} />
+                  </View>
+                  <View className="flex-1">
+                    <Text className="text-base font-bold text-foreground">
+                      Joined {item.chat_rooms?.name || 'a chat room'}
+                    </Text>
+                    <View className="flex-row items-center mt-1">
+                      <Clock size={12} color={theme.mutedForeground} />
+                      <Text className="ml-1 text-xs text-muted-foreground">
+                        {new Date(item.joined_at).toLocaleDateString()}
+                      </Text>
+                    </View>
+                  </View>
+                  <ChevronRight size={18} color={theme.mutedForeground} opacity={0.3} />
+                </View>
+              ))
+            ) : (
+              <View className="items-center justify-center py-20">
+                <View className="h-20 w-20 items-center justify-center rounded-[30px] bg-secondary/50 mb-6">
+                  <Compass size={32} color={theme.mutedForeground} opacity={0.3} />
+                </View>
+                <Text className="text-xl font-black text-foreground uppercase tracking-widest">No Activity Yet</Text>
+                <Text className="mt-2 text-center text-muted-foreground px-10">
+                  When you join chats or make friends, your activity will show up here.
+                </Text>
+              </View>
+            )}
+            <View className="h-10" />
           </View>
         );
       case 'Photos':
-        return (
-          <View className="px-6 items-center justify-center py-20">
-            <View className="h-20 w-20 items-center justify-center rounded-[30px] bg-secondary/50 mb-6">
-              <ImageIcon size={32} color={theme.mutedForeground} opacity={0.3} />
+        if (photosLoading) {
+          return (
+            <View className="px-6 py-20 items-center">
+              <ActivityIndicator color={theme.primary} />
             </View>
-            <Text className="text-xl font-black text-foreground uppercase tracking-widest">No Photos Yet</Text>
-            <Text className="mt-2 text-center text-muted-foreground px-10">
-              Upload photos to show off your experiences and style!
-            </Text>
+          );
+        }
+        return (
+          <View className="px-6">
+            <TouchableOpacity 
+              onPress={pickImage}
+              className="mb-6 flex-row items-center justify-center bg-primary/10 border-2 border-dashed border-primary/30 p-8 rounded-[32px]"
+            >
+              <Camera size={24} color={theme.primary} />
+              <Text className="ml-3 text-base font-black text-primary uppercase tracking-widest">Add New Photo</Text>
+            </TouchableOpacity>
+
+            {userPhotos && userPhotos.length > 0 ? (
+              <View className="flex-row flex-wrap -mx-2">
+                {userPhotos.map((url: string, index: number) => (
+                  <View key={index} className="w-1/2 p-2">
+                    <View className="aspect-square rounded-[24px] overflow-hidden bg-card border border-border shadow-sm">
+                      <Image source={{ uri: url }} className="h-full w-full" />
+                    </View>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <View className="items-center justify-center py-10">
+                <View className="h-20 w-20 items-center justify-center rounded-[30px] bg-secondary/50 mb-6">
+                  <ImageIcon size={32} color={theme.mutedForeground} opacity={0.3} />
+                </View>
+                <Text className="text-xl font-black text-foreground uppercase tracking-widest">No Photos Yet</Text>
+                <Text className="mt-2 text-center text-muted-foreground px-10">
+                  Upload photos to show off your experiences and style!
+                </Text>
+              </View>
+            )}
+            <View className="h-10" />
           </View>
         );
     }
@@ -252,18 +394,28 @@ export default function ProfileScreen() {
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
         <View className="items-center px-6 pt-12 pb-6">
           <View className="relative shadow-2xl shadow-primary/20">
-            <View className="h-36 w-36 items-center justify-center rounded-[40px] bg-card border-4 border-background overflow-hidden">
-              {profile?.avatar_url ? (
+            <TouchableOpacity 
+              onPress={pickImage}
+              disabled={uploading}
+              className="h-36 w-36 items-center justify-center rounded-[40px] bg-card border-4 border-background overflow-hidden"
+            >
+              {uploading ? (
+                <ActivityIndicator color={theme.primary} />
+              ) : profile?.avatar_url ? (
                 <Image source={{ uri: profile.avatar_url }} className="h-full w-full" />
               ) : (
                 <User size={64} color={theme.mutedForeground} opacity={0.3} />
               )}
-            </View>
+              <View className="absolute inset-0 bg-black/20 items-center justify-center opacity-0 hover:opacity-100">
+                <Camera size={24} color="white" />
+              </View>
+            </TouchableOpacity>
             <TouchableOpacity 
-              onPress={() => setIsEditModalVisible(true)}
+              onPress={pickImage}
+              disabled={uploading}
               className="absolute -bottom-2 -right-2 h-12 w-12 items-center justify-center rounded-[18px] bg-primary border-4 border-background shadow-lg"
             >
-              <Edit2 size={20} color={theme.primaryForeground} />
+              <Camera size={20} color={theme.primaryForeground} />
             </TouchableOpacity>
           </View>
           
