@@ -98,15 +98,30 @@ export default function ChatScreen() {
     return () => clearTimeout(timer);
   }, [resolveRoomId, user]);
 
-  const fetchRoomAndUser = useCallback(async () => {
-    if (!id) return;
-    const { data } = await supabase.from('chat_rooms').select('*').eq('id', id).single();
-    if (!data) {
-      setRoomNotFound(true);
-      setLoading(false);
-      return;
-    }
-    if (data.type === 'private') {
+    const fetchRoomAndUser = useCallback(async () => {
+      if (!id || !user?.id) return;
+      const { data } = await supabase.from('chat_rooms').select('*').eq('id', id).single();
+      if (!data) {
+        setRoomNotFound(true);
+        setLoading(false);
+        return;
+      }
+
+      // Join the room if it's an auto-generated one to make it persistent in "Chats"
+      if (data.type === 'auto_generated') {
+        try {
+          await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/rooms/${id}/join`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: user.id }),
+          });
+        } catch (error) {
+          console.error('Error joining room:', error);
+        }
+      }
+
+      if (data.type === 'private') {
+
       const { data: participants } = await supabase
         .from('room_participants')
         .select('profiles(full_name, username)')

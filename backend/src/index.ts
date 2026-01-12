@@ -259,7 +259,16 @@ app.use(
 // 4. Endpoints
 
 // Health Check
-app.get('/health', (c) => {
+app.get('/health', async (c) => {
+  // Try to run cleanup occasionally on health checks
+  try {
+    if (Math.random() < 0.1) { // 10% of health checks trigger cleanup
+      await supabase.rpc('cleanup_expired_rooms');
+    }
+  } catch (e) {
+    console.error('Cleanup failed:', e);
+  }
+
   return c.json({
     status: 'ok',
     uptime: process.uptime(),
@@ -552,13 +561,60 @@ app.get('/rooms/nearby', async (c) => {
 
     if (error) throw error;
 
-    return c.json(rooms || []);
+    // Filter out expired rooms
+    const now = new Date();
+    const activeRooms = (rooms || []).filter((r: any) => {
+      if (!r.expires_at) return true;
+      return new Date(r.expires_at) > now;
+    });
+
+    return c.json(activeRooms);
   } catch (err) {
     const error = err as Error;
     console.error('Error in /rooms/nearby:', error);
     return c.json({ error: error.message }, 500);
   }
 });
+
+// POST /rooms/:roomId/join - Join a chat room
+app.post(
+  '/rooms/:roomId/join',
+  zValidator(
+    'json',
+    z.object({
+      userId: z.string(),
+    })
+  ),
+  async (c) => {
+    const roomId = c.req.param('roomId');
+    const { userId } = c.req.valid('json');
+
+    try {
+      // Check if already a participant
+      const { data: existing } = await supabase
+        .from('room_participants')
+        .select('id')
+        .eq('room_id', roomId)
+        .eq('user_id', userId)
+        .single();
+
+      if (existing) {
+        return c.json({ success: true, message: 'Already a participant' });
+      }
+
+      const { error } = await supabase.from('room_participants').insert({
+        room_id: roomId,
+        user_id: userId,
+      });
+
+      if (error) throw error;
+      return c.json({ success: true });
+    } catch (err) {
+      const error = err as Error;
+      return c.json({ error: error.message }, 500);
+    }
+  }
+);
 
 // GET /notifications/:userId - List notifications
 app.get('/notifications/:userId', async (c) => {

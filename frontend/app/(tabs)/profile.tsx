@@ -66,7 +66,7 @@ export default function ProfileScreen() {
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
   const [uploading, setUploading] = useState(false);
 
-    const { data: profile, isLoading: profileIsLoading } = useQuery({
+    const { data: profile, isLoading: profileIsLoading, refetch: refetchProfile } = useQuery({
       queryKey: ['profile', user?.id],
       queryFn: async () => {
         if (!user?.id) return null;
@@ -79,6 +79,7 @@ export default function ProfileScreen() {
         return data;
       },
       enabled: !!user?.id,
+      staleTime: 0,
     });
 
     const { data: friendCount = 0 } = useQuery({
@@ -180,25 +181,28 @@ export default function ProfileScreen() {
     enabled: !!user?.id,
   });
 
-  const updateProfileMutation = useMutation({
-    mutationFn: async (updates: any) => {
-      const response = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/profiles/${user?.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates),
-      });
-      if (!response.ok) throw new Error('Failed to update profile');
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['profile', user?.id] });
-      setIsEditModalVisible(false);
-      Alert.alert('Success', 'Profile updated successfully!');
-    },
-    onError: (error) => {
-      Alert.alert('Error', error.message);
-    },
-  });
+    const updateProfileMutation = useMutation({
+      mutationFn: async (updates: any) => {
+        const response = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/profiles/${user?.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updates),
+        });
+        if (!response.ok) throw new Error('Failed to update profile');
+        return response.json();
+      },
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ['profile', user?.id] });
+        queryClient.invalidateQueries({ queryKey: ['profile-photos', user?.id] });
+        refetchProfile();
+        setIsEditModalVisible(false);
+        Alert.alert('Success', 'Profile updated successfully!');
+      },
+      onError: (error) => {
+        Alert.alert('Error', error.message);
+      },
+    });
+
 
   const pickImage = async () => {
     try {

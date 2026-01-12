@@ -1,8 +1,8 @@
 import { Tabs, useRouter } from 'expo-router';
-import { Home, Compass, User, Heart, MessageSquare, Settings } from 'lucide-react-native';
+import { Home, Compass, User, Heart, MessageSquare, Settings, Zap } from 'lucide-react-native';
 import { useColorScheme } from 'nativewind';
 import { NAV_THEME, THEME } from '@/lib/theme';
-import { View, TouchableOpacity } from 'react-native';
+import { View, TouchableOpacity, Text } from 'react-native';
 
 export default function TabsLayout() {
   const { colorScheme } = useColorScheme();
@@ -11,12 +11,17 @@ export default function TabsLayout() {
   const router = useRouter();
 
   const headerRight = () => (
-    <TouchableOpacity 
-      onPress={() => router.push('/settings')}
-      className="mr-5 h-10 w-10 items-center justify-center rounded-xl bg-secondary/50"
-    >
-      <Settings size={22} color={theme.foreground} />
-    </TouchableOpacity>
+    <View className="flex-row items-center mr-5">
+      <View className="mr-3 bg-primary/20 px-2 py-1 rounded-md border border-primary/30">
+        <Text className="text-[10px] font-black text-primary uppercase">Pro</Text>
+      </View>
+      <TouchableOpacity 
+        onPress={() => router.push('/settings')}
+        className="h-10 w-10 items-center justify-center rounded-xl bg-secondary/50"
+      >
+        <Settings size={22} color={theme.foreground} />
+      </TouchableOpacity>
+    </View>
   );
 
   return (
@@ -59,10 +64,10 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="home"
         options={{
-          title: 'Nearby',
+          title: 'Tap In Pro',
           tabBarIcon: ({ color, focused }) => (
             <View className={`p-2 rounded-xl ${focused ? 'bg-primary/10' : ''}`}>
-              <Home color={color} size={24} strokeWidth={focused ? 2.5 : 2} />
+              <Zap color={color} size={24} strokeWidth={focused ? 2.5 : 2} />
             </View>
           ),
         }}

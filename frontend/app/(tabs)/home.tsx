@@ -158,10 +158,16 @@ export default function HomeScreen() {
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top']}>
       <View className="flex-1 px-5">
-        <View className="mb-8 mt-6 flex-row items-center justify-between">
-          <View>
-            <Text className="text-3xl font-black tracking-tight text-foreground">Nearby</Text>
-            <View className="mt-1 flex-row items-center gap-2">
+          <View className="mb-8 mt-6 flex-row items-center justify-between">
+            <View>
+              <View className="flex-row items-center">
+                <Text className="text-3xl font-black tracking-tight text-foreground">Nearby</Text>
+                <View className="ml-3 bg-primary px-2 py-0.5 rounded-md">
+                  <Text className="text-[10px] font-black text-primary-foreground uppercase">Pro</Text>
+                </View>
+              </View>
+              <View className="mt-1 flex-row items-center gap-2">
+
               <View className={`h-2 w-2 rounded-full ${location ? 'bg-green-500' : 'bg-amber-500 shadow-sm'}`} />
               <Text className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
                 {location ? 'Live Discovery' : errorMsg || 'Locating...'}
