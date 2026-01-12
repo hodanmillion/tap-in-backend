@@ -1,17 +1,17 @@
 import {
   View,
   Text,
-  FlatList,
   TextInput,
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-  Image,
   Modal,
   ScrollView,
   Pressable,
 } from 'react-native';
+import { Image } from 'expo-image';
+import { FlashList } from '@shopify/flash-list';
 import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
@@ -54,7 +54,6 @@ export default function ChatScreen() {
   const [gifs, setGifs] = useState<any[]>([]);
   const [gifLoading, setGifLoading] = useState(false);
   const [gifError, setGifError] = useState<string | null>(null);
-  const flatListRef = useRef<FlatList>(null);
 
   const { location } = useLocation(user?.id);
 
@@ -370,6 +369,49 @@ export default function ChatScreen() {
     [room?.name, headerLeftComponent]
   );
 
+  const renderMessage = useCallback(({ item }: { item: any }) => {
+    const isMine = item.sender_id === user?.id;
+    return (
+      <View className={`mb-4 flex-row ${isMine ? 'justify-end' : 'justify-start'}`}>
+        <View
+          className={`max-w-[80%] rounded-2xl px-4 py-2 ${isMine ? 'rounded-br-none bg-blue-600' : 'rounded-bl-none bg-zinc-800'}`}>
+          {!isMine && (
+            <Text className="mb-1 text-xs font-bold text-zinc-400">
+              {item.sender?.full_name || item.sender?.username || 'User'}
+            </Text>
+          )}
+          {item.type === 'image' || item.type === 'gif' ? (
+            <TouchableOpacity
+              activeOpacity={0.9}
+              onPress={() => setSelectedImage(item.content)}
+              className="overflow-hidden rounded-lg">
+              <Image
+                source={{ uri: item.content }}
+                className="h-48 w-64"
+                contentFit="cover"
+                transition={200}
+              />
+            </TouchableOpacity>
+          ) : (
+            <Text
+              className={`text-[16px] leading-5 ${isMine ? 'text-white' : 'text-zinc-100'}`}>
+              {item.content}
+            </Text>
+          )}
+          <View className="mt-1 flex-row items-center justify-end">
+            <Text
+              className={`text-[10px] opacity-60 ${isMine ? 'text-blue-100' : 'text-zinc-400'}`}>
+              {new Date(item.created_at).toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit',
+              })}
+            </Text>
+          </View>
+        </View>
+      </View>
+    );
+  }, [user?.id]);
+
   if (initialLoading) {
     return (
       <View className="flex-1 bg-zinc-950">
@@ -395,53 +437,13 @@ export default function ChatScreen() {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           className="flex-1"
           keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
-          <FlatList
-            ref={flatListRef}
+          <FlashList
             data={messages}
             inverted
             keyExtractor={(item) => item.id}
             contentContainerStyle={{ padding: 16 }}
-            renderItem={({ item }) => {
-              const isMine = item.sender_id === user?.id;
-              return (
-                <View className={`mb-4 flex-row ${isMine ? 'justify-end' : 'justify-start'}`}>
-                    <View
-                      className={`max-w-[80%] rounded-2xl px-4 py-2 ${isMine ? 'rounded-br-none bg-blue-600' : 'rounded-bl-none bg-zinc-800'}`}>
-                      {!isMine && (
-                        <Text className="mb-1 text-xs font-bold text-zinc-400">
-                          {item.sender?.full_name || item.sender?.username || 'User'}
-                        </Text>
-                      )}
-                    {item.type === 'image' || item.type === 'gif' ? (
-                      <TouchableOpacity
-                        activeOpacity={0.9}
-                        onPress={() => setSelectedImage(item.content)}
-                        className="overflow-hidden rounded-lg">
-                        <Image
-                          source={{ uri: item.content }}
-                          className="h-48 w-64"
-                          resizeMode="cover"
-                        />
-                      </TouchableOpacity>
-                    ) : (
-                      <Text
-                        className={`text-[16px] leading-5 ${isMine ? 'text-white' : 'text-zinc-100'}`}>
-                        {item.content}
-                      </Text>
-                    )}
-                    <View className="mt-1 flex-row items-center justify-end">
-                      <Text
-                        className={`text-[10px] opacity-60 ${isMine ? 'text-blue-100' : 'text-zinc-400'}`}>
-                        {new Date(item.created_at).toLocaleTimeString([], {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-              );
-            }}
+            estimatedItemSize={100}
+            renderItem={renderMessage}
           />
 
           {(isOutOfRange || isExpired || roomNotFound) && room?.type !== 'private' ? (
@@ -554,7 +556,7 @@ export default function ChatScreen() {
                         uri: gif.images.preview_gif?.url || gif.images.fixed_height_small.url,
                       }}
                       className="h-32 w-full rounded-lg bg-zinc-900"
-                      resizeMode="cover"
+                      contentFit="cover"
                     />
                   </TouchableOpacity>
                 ))
@@ -582,7 +584,7 @@ export default function ChatScreen() {
             <X size={24} color="white" />
           </TouchableOpacity>
           {selectedImage && (
-            <Image source={{ uri: selectedImage }} className="h-full w-full" resizeMode="contain" />
+            <Image source={{ uri: selectedImage }} className="h-full w-full" contentFit="contain" />
           )}
         </Pressable>
       </Modal>

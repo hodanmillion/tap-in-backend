@@ -1,5 +1,6 @@
 import React, { memo } from 'react';
-import { View, Text, FlatList, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocation } from '@/hooks/useLocation';
 import { MapPin, Users, ArrowRight, Clock, Bell, Plus, Compass } from 'lucide-react-native';
@@ -224,40 +225,41 @@ export default function HomeScreen() {
             )}
           </View>
           
-          {isLoading && rooms.length === 0 ? (
-            <View className="flex-1">
-              {[1, 2, 3, 4].map((i) => (
-                <RoomItemSkeleton key={i} />
-              ))}
-            </View>
-          ) : (
-            <FlatList
-              data={rooms as any[]}
-              keyExtractor={(item: any) => item.id}
-              renderItem={({ item }: { item: any }) => (
-                <RoomItem item={item} theme={theme} onPress={() => router.push(`/chat/${item.id}`)} />
-              )}
-              ListEmptyComponent={
-                !isFetching ? (
-                  <View className="mt-10 items-center justify-center p-12 rounded-[40px] border-2 border-dashed border-border/60 bg-secondary/50">
-                    <View className="h-20 w-20 items-center justify-center rounded-full bg-background border border-border mb-6">
-                      <Users size={40} color={theme.mutedForeground} opacity={0.4} />
+            {isLoading && rooms.length === 0 ? (
+              <View className="flex-1">
+                {[1, 2, 3, 4].map((i) => (
+                  <RoomItemSkeleton key={i} />
+                ))}
+              </View>
+            ) : (
+              <FlashList
+                data={rooms as any[]}
+                keyExtractor={(item: any) => item.id}
+                estimatedItemSize={88}
+                renderItem={({ item }: { item: any }) => (
+                  <RoomItem item={item} theme={theme} onPress={() => router.push(`/chat/${item.id}`)} />
+                )}
+                ListEmptyComponent={
+                  !isFetching ? (
+                    <View className="mt-10 items-center justify-center p-12 rounded-[40px] border-2 border-dashed border-border/60 bg-secondary/50">
+                      <View className="h-20 w-20 items-center justify-center rounded-full bg-background border border-border mb-6">
+                        <Users size={40} color={theme.mutedForeground} opacity={0.4} />
+                      </View>
+                      <Text className="text-2xl font-black text-foreground text-center">
+                        Quiet around here
+                      </Text>
+                      <Text className="mt-2 text-center text-base font-medium text-muted-foreground px-4">
+                        Be the pioneer! Start a conversation and see who's nearby.
+                      </Text>
                     </View>
-                    <Text className="text-2xl font-black text-foreground text-center">
-                      Quiet around here
-                    </Text>
-                    <Text className="mt-2 text-center text-base font-medium text-muted-foreground px-4">
-                      Be the pioneer! Start a conversation and see who's nearby.
-                    </Text>
-                  </View>
-                ) : null
-              }
-              onRefresh={refetch}
-              refreshing={false}
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingBottom: 120 }}
-            />
-          )}
+                  ) : null
+                }
+                onRefresh={refetch}
+                refreshing={false}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: 120 }}
+              />
+            )}
         </View>
       </View>
     </SafeAreaView>

@@ -2,16 +2,16 @@ import React, { useState } from 'react';
 import {
   View,
   Text,
-  Image,
   TouchableOpacity,
   Alert,
   ScrollView,
   ActivityIndicator,
   Modal,
   TextInput,
-    Share,
-    Platform,
-  } from 'react-native';
+  Share,
+  Platform,
+} from 'react-native';
+import { Image } from 'expo-image';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import * as ImagePicker from 'expo-image-picker';
@@ -84,7 +84,8 @@ export default function ProfileScreen() {
         return data;
       },
       enabled: !!user?.id,
-      staleTime: 0,
+      staleTime: 60000,
+      gcTime: 1000 * 60 * 30,
     });
 
     const { data: friendCount = 0 } = useQuery({
@@ -99,6 +100,7 @@ export default function ProfileScreen() {
         return count || 0;
       },
       enabled: !!user?.id,
+      staleTime: 30000,
     });
 
     const { data: messageCount = 0 } = useQuery({
@@ -113,6 +115,7 @@ export default function ProfileScreen() {
         return count || 0;
       },
       enabled: !!user?.id,
+      staleTime: 30000,
     });
 
   const { data: activity, isLoading: activityLoading } = useQuery({
