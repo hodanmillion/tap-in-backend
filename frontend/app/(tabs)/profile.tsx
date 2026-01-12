@@ -69,7 +69,6 @@ export default function ProfileScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<Tab>('About');
-  const [isEditModalVisible, setIsEditModalVisible] = useState(false);
   const [uploading, setUploading] = useState(false);
 
     const { data: profile, isLoading: profileIsLoading, refetch: refetchProfile } = useQuery({
@@ -115,31 +114,6 @@ export default function ProfileScreen() {
       },
       enabled: !!user?.id,
     });
-
-
-  // Edit form state
-  const [formData, setFormData] = useState({
-    full_name: '',
-    username: '',
-    bio: '',
-    occupation: '',
-    location_name: '',
-    website: '',
-  });
-
-  // Update form data when profile is loaded
-  React.useEffect(() => {
-    if (profile) {
-      setFormData({
-        full_name: profile.full_name || '',
-        username: profile.username || '',
-        bio: profile.bio || '',
-        occupation: profile.occupation || '',
-        location_name: profile.location_name || '',
-        website: profile.website || '',
-      });
-    }
-  }, [profile]);
 
   const { data: activity, isLoading: activityLoading } = useQuery({
     queryKey: ['profile-activity', user?.id],
@@ -298,30 +272,14 @@ export default function ProfileScreen() {
       title: 'Settings',
       items: [
         { icon: <Bell size={20} color={theme.mutedForeground} />, label: 'Notifications', route: '/notifications' },
-        { icon: <Shield size={20} color={theme.mutedForeground} />, label: 'Privacy & Security' },
-        { icon: <Settings size={20} color={theme.mutedForeground} />, label: 'Account Settings' },
+        { icon: <Shield size={20} color={theme.mutedForeground} />, label: 'Privacy & Security', route: '/settings' },
+        { icon: <Settings size={20} color={theme.mutedForeground} />, label: 'Account Settings', route: '/settings' },
       ],
     },
   ];
 
   const handleUpdateProfile = () => {
-    if (!profile) return;
-    
-    // Only send fields that have actually changed
-    const updates: any = {};
-    if (formData.full_name !== (profile.full_name || '')) updates.full_name = formData.full_name;
-    if (formData.username !== (profile.username || '')) updates.username = formData.username;
-    if (formData.bio !== (profile.bio || '')) updates.bio = formData.bio;
-    if (formData.occupation !== (profile.occupation || '')) updates.occupation = formData.occupation;
-    if (formData.location_name !== (profile.location_name || '')) updates.location_name = formData.location_name;
-    if (formData.website !== (profile.website || '')) updates.website = formData.website;
-
-    if (Object.keys(updates).length === 0) {
-      setIsEditModalVisible(false);
-      return;
-    }
-
-    updateProfileMutation.mutate(updates);
+    router.push('/edit-profile');
   };
 
   if (authLoading || (user?.id && profileIsLoading)) {
@@ -617,116 +575,6 @@ export default function ProfileScreen() {
           </View>
         </View>
       </ScrollView>
-
-      {/* Edit Profile Modal */}
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={isEditModalVisible}
-        onRequestClose={() => setIsEditModalVisible(false)}
-      >
-        <View className="flex-1 justify-end bg-black/60">
-          <View className="bg-background rounded-t-[40px] p-8 max-h-[90%]">
-            <View className="flex-row justify-between items-center mb-8">
-              <Text className="text-3xl font-black text-foreground">Edit Profile</Text>
-              <TouchableOpacity 
-                onPress={() => setIsEditModalVisible(false)}
-                className="h-10 w-10 items-center justify-center rounded-full bg-secondary"
-              >
-                <ChevronRight size={24} color={theme.foreground} style={{ transform: [{ rotate: '90deg' }] }} />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <View className="space-y-6">
-                <View>
-                  <Text className="text-xs font-black text-muted-foreground uppercase tracking-widest mb-2 ml-1">Full Name</Text>
-                  <TextInput
-                    className="bg-card border border-border rounded-2xl px-5 py-4 text-foreground font-bold text-lg"
-                    value={formData.full_name}
-                    onChangeText={(text) => setFormData({ ...formData, full_name: text })}
-                    placeholder="Enter your full name"
-                    placeholderTextColor={theme.mutedForeground}
-                  />
-                </View>
-
-                <View>
-                  <Text className="text-xs font-black text-muted-foreground uppercase tracking-widest mb-2 ml-1">Username</Text>
-                  <TextInput
-                    className="bg-card border border-border rounded-2xl px-5 py-4 text-foreground font-bold text-lg"
-                    value={formData.username}
-                    onChangeText={(text) => setFormData({ ...formData, username: text })}
-                    placeholder="Enter username"
-                    placeholderTextColor={theme.mutedForeground}
-                    autoCapitalize="none"
-                  />
-                </View>
-
-                <View>
-                  <Text className="text-xs font-black text-muted-foreground uppercase tracking-widest mb-2 ml-1">Bio</Text>
-                  <TextInput
-                    className="bg-card border border-border rounded-2xl px-5 py-4 text-foreground font-medium text-base h-32"
-                    value={formData.bio}
-                    onChangeText={(text) => setFormData({ ...formData, bio: text })}
-                    placeholder="Tell the world about yourself..."
-                    placeholderTextColor={theme.mutedForeground}
-                    multiline
-                    textAlignVertical="top"
-                  />
-                </View>
-
-                <View>
-                  <Text className="text-xs font-black text-muted-foreground uppercase tracking-widest mb-2 ml-1">Occupation</Text>
-                  <TextInput
-                    className="bg-card border border-border rounded-2xl px-5 py-4 text-foreground font-bold text-lg"
-                    value={formData.occupation}
-                    onChangeText={(text) => setFormData({ ...formData, occupation: text })}
-                    placeholder="What do you do?"
-                    placeholderTextColor={theme.mutedForeground}
-                  />
-                </View>
-
-                <View>
-                  <Text className="text-xs font-black text-muted-foreground uppercase tracking-widest mb-2 ml-1">Location</Text>
-                  <TextInput
-                    className="bg-card border border-border rounded-2xl px-5 py-4 text-foreground font-bold text-lg"
-                    value={formData.location_name}
-                    onChangeText={(text) => setFormData({ ...formData, location_name: text })}
-                    placeholder="e.g. London, UK"
-                    placeholderTextColor={theme.mutedForeground}
-                  />
-                </View>
-
-                <View>
-                  <Text className="text-xs font-black text-muted-foreground uppercase tracking-widest mb-2 ml-1">Website</Text>
-                  <TextInput
-                    className="bg-card border border-border rounded-2xl px-5 py-4 text-foreground font-bold text-lg"
-                    value={formData.website}
-                    onChangeText={(text) => setFormData({ ...formData, website: text })}
-                    placeholder="https://..."
-                    placeholderTextColor={theme.mutedForeground}
-                    autoCapitalize="none"
-                  />
-                </View>
-              </View>
-
-              <TouchableOpacity
-                onPress={handleUpdateProfile}
-                disabled={updateProfileMutation.isPending}
-                className="mt-10 bg-primary py-6 rounded-[32px] items-center shadow-xl shadow-primary/30"
-              >
-                {updateProfileMutation.isPending ? (
-                  <ActivityIndicator color={theme.primaryForeground} />
-                ) : (
-                  <Text className="text-lg font-black text-primary-foreground uppercase tracking-widest">Save Changes</Text>
-                )}
-              </TouchableOpacity>
-              
-              <View className="h-10" />
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 }

@@ -1,13 +1,16 @@
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  ScrollView,
-  Switch,
-  Alert,
-  ActivityIndicator,
-} from 'react-native';
+  import {
+    View,
+    Text,
+    TouchableOpacity,
+    ScrollView,
+    Switch,
+    Alert,
+    ActivityIndicator,
+    Modal,
+    TextInput,
+  } from 'react-native';
+
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { 
@@ -38,10 +41,30 @@ function SettingsContent() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
 
-  const [notifications, setNotifications] = useState(true);
-  const [incognito, setIncognito] = useState(false);
+    const [notifications, setNotifications] = useState(true);
+    const [incognito, setIncognito] = useState(false);
+    const [isPasswordModalVisible, setIsPasswordModalVisible] = useState(false);
+    const [passwords, setPasswords] = useState({ newPassword: '', confirmPassword: '' });
+    const [updatingPassword, setUpdatingPassword] = useState(false);
 
-  async function handleSignOut() {
+    async function handleUpdatePassword() {
+      if (!passwords.newPassword || passwords.newPassword !== passwords.confirmPassword) {
+        Alert.alert('Error', 'Passwords do not match');
+        return;
+      }
+      setUpdatingPassword(true);
+      const { error } = await supabase.auth.updateUser({ password: passwords.newPassword });
+      setUpdatingPassword(false);
+      if (error) {
+        Alert.alert('Error', error.message);
+      } else {
+        Alert.alert('Success', 'Password updated successfully');
+        setIsPasswordModalVisible(false);
+        setPasswords({ newPassword: '', confirmPassword: '' });
+      }
+    }
+
+    async function handleSignOut() {
     setLoading(true);
     const { error } = await supabase.auth.signOut();
     if (error) Alert.alert('Error', error.message);
@@ -134,23 +157,25 @@ function SettingsContent() {
         <View className="p-6">
           <View className="mb-8">
             <Text className="mb-4 ml-2 text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground/50">Account</Text>
-            <View className="overflow-hidden rounded-[28px] bg-card border border-border shadow-sm">
-              <SettingItem 
-                icon={<User size={20} color={theme.primary} />} 
-                label="Edit Profile" 
-                onPress={() => router.push('/profile')} 
-              />
-              <SettingItem 
-                icon={<Mail size={20} color={theme.primary} />} 
-                label="Email" 
-                value={user?.email} 
-              />
-              <SettingItem 
-                icon={<Lock size={20} color={theme.primary} />} 
-                label="Change Password" 
-              />
+              <View className="overflow-hidden rounded-[28px] bg-card border border-border shadow-sm">
+                <SettingItem 
+                  icon={<User size={20} color={theme.primary} />} 
+                  label="Edit Profile" 
+                  onPress={() => router.push('/edit-profile')} 
+                />
+                <SettingItem 
+                  icon={<Mail size={20} color={theme.primary} />} 
+                  label="Email" 
+                  value={user?.email} 
+                />
+                <SettingItem 
+                  icon={<Lock size={20} color={theme.primary} />} 
+                  label="Change Password" 
+                  onPress={() => setIsPasswordModalVisible(true)}
+                />
+              </View>
             </View>
-          </View>
+
 
           <View className="mb-8">
             <Text className="mb-4 ml-2 text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground/50">Preferences</Text>
@@ -184,24 +209,28 @@ function SettingsContent() {
             </View>
           </View>
 
-          <View className="mb-8">
-            <Text className="mb-4 ml-2 text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground/50">Security & Support</Text>
-            <View className="overflow-hidden rounded-[28px] bg-card border border-border shadow-sm">
-              <SettingItem 
-                icon={<Shield size={20} color={theme.mutedForeground} />} 
-                label="Privacy Policy" 
-              />
-              <SettingItem 
-                icon={<CircleHelp size={20} color={theme.mutedForeground} />} 
-                label="Help Center" 
-              />
-              <SettingItem 
-                icon={<CreditCard size={20} color={theme.mutedForeground} />} 
-                label="Subscription" 
-                value="Pro"
-              />
+            <View className="mb-8">
+              <Text className="mb-4 ml-2 text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground/50">Security & Support</Text>
+              <View className="overflow-hidden rounded-[28px] bg-card border border-border shadow-sm">
+                <SettingItem 
+                  icon={<Shield size={20} color={theme.mutedForeground} />} 
+                  label="Privacy Policy" 
+                  onPress={() => Alert.alert('Privacy Policy', 'Our privacy policy is coming soon.')}
+                />
+                <SettingItem 
+                  icon={<CircleHelp size={20} color={theme.mutedForeground} />} 
+                  label="Help Center" 
+                  onPress={() => Alert.alert('Help Center', 'Our help center is coming soon.')}
+                />
+                <SettingItem 
+                  icon={<CreditCard size={20} color={theme.mutedForeground} />} 
+                  label="Subscription" 
+                  value="Pro"
+                  onPress={() => Alert.alert('Subscription', 'Manage your subscription options here. Feature coming soon.')}
+                />
+              </View>
             </View>
-          </View>
+
 
           <View className="mb-12">
             <View className="overflow-hidden rounded-[28px] bg-card border border-border shadow-sm">
@@ -227,7 +256,69 @@ function SettingsContent() {
         </View>
       </ScrollView>
 
-      {loading && (
+      {/* Change Password Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={isPasswordModalVisible}
+        onRequestClose={() => setIsPasswordModalVisible(false)}
+      >
+        <View className="flex-1 justify-end bg-black/60">
+          <View className="bg-background rounded-t-[40px] p-8">
+            <View className="flex-row justify-between items-center mb-8">
+              <Text className="text-3xl font-black text-foreground uppercase tracking-widest">Update Password</Text>
+              <TouchableOpacity 
+                onPress={() => setIsPasswordModalVisible(false)}
+                className="h-10 w-10 items-center justify-center rounded-full bg-secondary"
+              >
+                <ChevronLeft size={24} color={theme.foreground} style={{ transform: [{ rotate: '-90deg' }] }} />
+              </TouchableOpacity>
+            </View>
+
+            <View className="space-y-6">
+              <View>
+                <Text className="text-xs font-black text-muted-foreground uppercase tracking-widest mb-2 ml-1">New Password</Text>
+                <TextInput
+                  className="bg-card border border-border rounded-2xl px-5 py-4 text-foreground font-bold text-lg"
+                  value={passwords.newPassword}
+                  onChangeText={(text) => setPasswords({ ...passwords, newPassword: text })}
+                  placeholder="Minimum 6 characters"
+                  placeholderTextColor={theme.mutedForeground}
+                  secureTextEntry
+                />
+              </View>
+
+              <View>
+                <Text className="text-xs font-black text-muted-foreground uppercase tracking-widest mb-2 ml-1">Confirm Password</Text>
+                <TextInput
+                  className="bg-card border border-border rounded-2xl px-5 py-4 text-foreground font-bold text-lg"
+                  value={passwords.confirmPassword}
+                  onChangeText={(text) => setPasswords({ ...passwords, confirmPassword: text })}
+                  placeholder="Repeat your password"
+                  placeholderTextColor={theme.mutedForeground}
+                  secureTextEntry
+                />
+              </View>
+
+              <TouchableOpacity
+                onPress={handleUpdatePassword}
+                disabled={updatingPassword}
+                className="mt-8 bg-primary py-6 rounded-[32px] items-center shadow-xl shadow-primary/30"
+              >
+                {updatingPassword ? (
+                  <ActivityIndicator color={theme.primaryForeground} />
+                ) : (
+                  <Text className="text-lg font-black text-primary-foreground uppercase tracking-widest">Update Password</Text>
+                )}
+              </TouchableOpacity>
+              
+              <View className="h-10" />
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {(loading || updatingPassword) && (
         <View className="absolute inset-0 bg-black/20 items-center justify-center">
           <ActivityIndicator size="large" color={theme.primary} />
         </View>
