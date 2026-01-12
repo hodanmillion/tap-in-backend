@@ -415,21 +415,27 @@ app.post(
       address: z.string().optional(),
     })
   ),
-  async (c) => {
-    const { userId, latitude, longitude, address } = c.req.valid('json');
+    async (c) => {
+      const { userId, latitude, longitude, address } = c.req.valid('json');
 
-    try {
-      await supabase
-        .from('profiles')
-        .update({
+      try {
+        const updateData: any = {
           latitude: latitude,
           longitude: longitude,
           location: `POINT(${longitude} ${latitude})`,
           last_seen: new Date().toISOString(),
-        })
-        .eq('id', userId);
+        };
 
-      return c.json({ success: true });
+        if (address) {
+          updateData.location_name = address;
+        }
+
+        await supabase
+          .from('profiles')
+          .update(updateData)
+          .eq('id', userId);
+
+        return c.json({ success: true });
     } catch (err) {
       const error = err as Error;
       console.error('Error in /rooms/sync:', error);
@@ -530,7 +536,7 @@ app.post(
             latitude,
             longitude,
             radius,
-            expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+            expires_at: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
           })
           .select()
           .single();
