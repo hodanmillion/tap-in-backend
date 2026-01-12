@@ -210,6 +210,17 @@ function SettingsContent() {
           </View>
 
             <View className="mb-8">
+              <Text className="mb-4 ml-2 text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground/50">Marketing</Text>
+              <View className="overflow-hidden rounded-[28px] bg-card border border-border shadow-sm">
+                <SettingItem 
+                  icon={<Smartphone size={20} color={theme.primary} />} 
+                  label="App Store Previews" 
+                  onPress={() => router.push('/previews')} 
+                />
+              </View>
+            </View>
+
+            <View className="mb-8">
               <Text className="mb-4 ml-2 text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground/50">Security & Support</Text>
               <View className="overflow-hidden rounded-[28px] bg-card border border-border shadow-sm">
                 <SettingItem 
