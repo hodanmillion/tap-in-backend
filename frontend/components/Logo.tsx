@@ -51,35 +51,37 @@ export function Logo({ size = 'md', variant = 'primary', className, ...props }: 
       ]}
       {...props}
     >
-      <Svg width="100%" height="100%" viewBox="0 0 100 100">
-        <Defs>
-          <LinearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-            <Stop offset="0%" stopColor="#6366f1" stopOpacity="1" />
-            <Stop offset="100%" stopColor="#4338ca" stopOpacity="1" />
-          </LinearGradient>
-          <LinearGradient id="iconGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-            <Stop offset="0%" stopColor="#FFFFFF" stopOpacity="1" />
-            <Stop offset="100%" stopColor="#E2E8F0" stopOpacity="1" />
-          </LinearGradient>
-          <LinearGradient id="accentGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-            <Stop offset="0%" stopColor="#818cf8" stopOpacity="1" />
-            <Stop offset="100%" stopColor="#6366f1" stopOpacity="1" />
-          </LinearGradient>
-        </Defs>
+        <Svg width="100%" height="100%" viewBox="0 0 100 100">
+          <Defs>
+            <LinearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+              <Stop offset="0%" stopColor="#4f46e5" stopOpacity="1" />
+              <Stop offset="100%" stopColor="#312e81" stopOpacity="1" />
+            </LinearGradient>
+            <LinearGradient id="iconGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+              <Stop offset="0%" stopColor="#FFFFFF" stopOpacity="1" />
+              <Stop offset="100%" stopColor="#E2E8F0" stopOpacity="1" />
+            </LinearGradient>
+          </Defs>
 
-        {/* Background Gradient */}
-        {variant === 'primary' && (
-          <Rect width="100%" height="100%" fill="url(#bgGradient)" />
-        )}
+          {/* Background Gradient */}
+          {variant === 'primary' && (
+            <Rect width="100%" height="100%" fill="url(#bgGradient)" />
+          )}
 
-        {/* Single Prominent Location Pin */}
-        <G transform="translate(10, 10) scale(0.8)">
-          <Path
-            d="M50 0C31.2 0 16 15.2 16 34C16 54.7 50 88 50 88C50 88 84 54.7 84 34C84 15.2 68.8 0 50 0ZM50 50C41.2 50 34 42.8 34 34C34 25.2 41.2 18 50 18C58.8 18 66 25.2 66 34C66 42.8 58.8 50 50 50Z"
-            fill="url(#iconGradient)"
-          />
-        </G>
-      </Svg>
+          {/* Bolt / Zap Icon */}
+          <G transform="translate(20, 15) scale(0.6)">
+            <Path
+              d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"
+              fill="url(#iconGradient)"
+              transform="scale(4)"
+            />
+          </G>
+          
+          {/* Pro Text */}
+          <G transform="translate(50, 80)">
+             <Rect x="-20" y="-10" width="40" height="20" rx="4" fill="white" opacity="0.2" />
+          </G>
+        </Svg>
     </View>
   );
 }
