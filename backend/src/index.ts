@@ -866,25 +866,33 @@ app.patch(
       occupation: z.string().optional(),
     })
   ),
-  async (c) => {
-    const userId = c.req.param('userId');
-    const updates = c.req.valid('json');
+    async (c) => {
+      const userId = c.req.param('userId');
+      const updates = c.req.valid('json');
 
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .update(updates)
-        .eq('id', userId)
-        .select()
-        .single();
+      console.log(`Updating profile for user ${userId}:`, updates);
 
-      if (error) throw error;
-      return c.json(data);
-    } catch (err) {
-      const error = err as Error;
-      return c.json({ error: error.message }, 500);
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .update(updates)
+          .eq('id', userId)
+          .select()
+          .single();
+
+        if (error) {
+          console.error('Supabase update error:', error);
+          throw error;
+        }
+        
+        console.log('Profile updated successfully');
+        return c.json(data);
+      } catch (err) {
+        const error = err as Error;
+        console.error('Profile update failed:', error.message);
+        return c.json({ error: error.message }, 500);
+      }
     }
-  }
 );
 
 export default app;

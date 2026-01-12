@@ -305,7 +305,23 @@ export default function ProfileScreen() {
   ];
 
   const handleUpdateProfile = () => {
-    updateProfileMutation.mutate(formData);
+    if (!profile) return;
+    
+    // Only send fields that have actually changed
+    const updates: any = {};
+    if (formData.full_name !== (profile.full_name || '')) updates.full_name = formData.full_name;
+    if (formData.username !== (profile.username || '')) updates.username = formData.username;
+    if (formData.bio !== (profile.bio || '')) updates.bio = formData.bio;
+    if (formData.occupation !== (profile.occupation || '')) updates.occupation = formData.occupation;
+    if (formData.location_name !== (profile.location_name || '')) updates.location_name = formData.location_name;
+    if (formData.website !== (profile.website || '')) updates.website = formData.website;
+
+    if (Object.keys(updates).length === 0) {
+      setIsEditModalVisible(false);
+      return;
+    }
+
+    updateProfileMutation.mutate(updates);
   };
 
   if (authLoading || (user?.id && profileIsLoading)) {
