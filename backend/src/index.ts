@@ -29,23 +29,25 @@ interface Database {
           username: string | null;
           full_name: string | null;
           avatar_url: string | null;
-          latitude: number | null;
-          longitude: number | null;
-          last_seen: string | null;
-          bio: string | null;
-          website: string | null;
-          location_name: string | null;
-          occupation: string | null;
-          created_at: string;
-        };
-        Insert: {
-          id: string;
-          username?: string | null;
-          full_name?: string | null;
-          avatar_url?: string | null;
-          latitude?: number | null;
-          longitude?: number | null;
-          last_seen?: string | null;
+  latitude: number | null;
+            longitude: number | null;
+            location: any | null;
+            last_seen: string | null;
+            bio: string | null;
+            website: string | null;
+            location_name: string | null;
+            occupation: string | null;
+            created_at: string;
+          };
+          Insert: {
+            id: string;
+            username?: string | null;
+            full_name?: string | null;
+            avatar_url?: string | null;
+            latitude?: number | null;
+            longitude?: number | null;
+            location?: any | null;
+            last_seen?: string | null;
           bio?: string | null;
           website?: string | null;
           location_name?: string | null;
@@ -401,10 +403,11 @@ app.post(
       userId: z.string(),
       latitude: z.number(),
       longitude: z.number(),
+      address: z.string().optional(),
     })
   ),
   async (c) => {
-    const { userId, latitude, longitude } = c.req.valid('json');
+    const { userId, latitude, longitude, address } = c.req.valid('json');
 
     try {
       await supabase
@@ -412,6 +415,8 @@ app.post(
         .update({
           latitude: latitude,
           longitude: longitude,
+          location: `POINT(${longitude} ${latitude})`,
+          location_name: address || null,
           last_seen: new Date().toISOString(),
         })
         .eq('id', userId);

@@ -72,77 +72,12 @@ export function Logo({ size = 'md', variant = 'primary', className, ...props }: 
           <Rect width="100%" height="100%" fill="url(#bgGradient)" />
         )}
 
-        {/* Bento Grid Design */}
-        <G transform="translate(15, 15) scale(0.7)">
-          {/* Top Left: Pin Container */}
-          <Rect
-            x="0"
-            y="0"
-            width="45"
-            height="45"
-            rx="12"
-            fill={variant === 'primary' ? 'rgba(255,255,255,0.15)' : theme.primary}
-          />
-          {/* Pin Icon */}
+        {/* Single Prominent Location Pin */}
+        <G transform="translate(10, 10) scale(0.8)">
           <Path
-            d="M22.5 10C17.2 10 13 14.2 13 19.5C13 25.3 22.5 35 22.5 35C22.5 35 32 25.3 32 19.5C32 14.2 27.8 10 22.5 10ZM22.5 24C20.1 24 18.1 22 18.1 19.6C18.1 17.2 20.1 15.2 22.5 15.2C24.9 15.2 26.9 17.2 26.9 19.6C26.9 22 24.9 24 22.5 24Z"
+            d="M50 0C31.2 0 16 15.2 16 34C16 54.7 50 88 50 88C50 88 84 54.7 84 34C84 15.2 68.8 0 50 0ZM50 50C41.2 50 34 42.8 34 34C34 25.2 41.2 18 50 18C58.8 18 66 25.2 66 34C66 42.8 58.8 50 50 50Z"
             fill="url(#iconGradient)"
           />
-
-          {/* Top Right: Accent Square */}
-          <Rect
-            x="55"
-            y="0"
-            width="45"
-            height="20"
-            rx="8"
-            fill="url(#accentGradient)"
-            opacity={0.8}
-          />
-          <Rect
-            x="55"
-            y="28"
-            width="45"
-            height="17"
-            rx="8"
-            fill={variant === 'primary' ? 'rgba(255,255,255,0.1)' : theme.primary}
-            opacity={0.6}
-          />
-
-          {/* Bottom Left: Info Square */}
-          <Rect
-            x="0"
-            y="55"
-            width="45"
-            height="45"
-            rx="12"
-            fill={variant === 'primary' ? 'rgba(255,255,255,0.1)' : theme.primary}
-            opacity={0.5}
-          />
-          <G transform="translate(10, 65)">
-             <Rect width="25" height="4" rx="2" fill="white" opacity={0.8} />
-             <Rect y="10" width="15" height="4" rx="2" fill="white" opacity={0.6} />
-             <Rect y="20" width="20" height="4" rx="2" fill="white" opacity={0.4} />
-          </G>
-
-          {/* Bottom Right: Connection Dots */}
-          <Rect
-            x="55"
-            y="55"
-            width="45"
-            height="45"
-            rx="12"
-            fill="url(#accentGradient)"
-          />
-          <G transform="translate(62, 62)">
-             <Path 
-               d="M5 5C5 5 10 10 15 5M5 15C5 15 10 10 15 15M5 25C5 25 10 20 15 25" 
-               stroke="white" 
-               strokeWidth="3" 
-               strokeLinecap="round" 
-               opacity={0.9}
-             />
-          </G>
         </G>
       </Svg>
     </View>
