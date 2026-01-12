@@ -30,6 +30,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useLocation } from '@/hooks/useLocation';
 import * as Location from 'expo-location';
 import { useAuth } from '@/context/AuthContext';
+import { useChat } from '@/context/ChatContext';
 
 const CHAT_RADIUS_METERS = 100;
 const GIPHY_API_KEY = process.env.EXPO_PUBLIC_GIPHY_API_KEY || 'l1WfAFgqA5WupWoMaCaWKB12G54J6LtZ';
@@ -38,6 +39,7 @@ export default function ChatScreen() {
   const { id: initialId } = useLocalSearchParams();
   const router = useRouter();
   const { user } = useAuth();
+  const { drafts, setDraft, clearDraft } = useChat();
   const [id, setId] = useState<string | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
@@ -226,6 +228,18 @@ export default function ChatScreen() {
     }
   }, [room, location]);
 
+  useEffect(() => {
+    if (id && drafts[id]) {
+      setNewMessage(drafts[id]);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    if (id && newMessage !== (drafts[id] || '')) {
+      setDraft(id, newMessage);
+    }
+  }, [id, newMessage]);
+
   const sendMessage = useCallback(
     async (content?: string, type: 'text' | 'image' | 'gif' = 'text') => {
       if (roomNotFound || isExpired) {
@@ -248,7 +262,10 @@ export default function ChatScreen() {
       }
 
       const message = { room_id: id, sender_id: user.id, content: finalContent, type: type };
-      if (type === 'text') setNewMessage('');
+      if (type === 'text') {
+        setNewMessage('');
+        clearDraft(id);
+      }
       
       const { error } = await supabase.from('messages').insert(message);
       if (error) {

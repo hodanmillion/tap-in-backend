@@ -2,6 +2,7 @@ import '@/global.css';
 import { Stack } from 'expo-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { ChatProvider } from '@/context/ChatContext';
 import { useEffect } from 'react';
 import { useRouter, useSegments } from 'expo-router';
 import { View, ActivityIndicator } from 'react-native';
@@ -68,7 +69,9 @@ export default function RootLayout() {
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <RootLayoutContent />
+          <ChatProvider>
+            <RootLayoutContent />
+          </ChatProvider>
         </AuthProvider>
       </QueryClientProvider>
     </ErrorBoundary>

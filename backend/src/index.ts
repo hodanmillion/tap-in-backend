@@ -522,18 +522,18 @@ app.post(
         return c.json({ error: 'A chat already exists in this exact location (20m radius).' }, 400);
       }
 
-      const { data: newRoom, error } = await supabase
-        .from('chat_rooms')
-        .insert({
-          name,
-          type: 'auto_generated',
-          latitude,
-          longitude,
-          radius,
-          // Default expires_at is now() + 48 hours set in DB
-        })
-        .select()
-        .single();
+        const { data: newRoom, error } = await supabase
+          .from('chat_rooms')
+          .insert({
+            name,
+            type: 'auto_generated',
+            latitude,
+            longitude,
+            radius,
+            expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+          })
+          .select()
+          .single();
 
       if (error) throw error;
       return c.json({ success: true, room: newRoom });
