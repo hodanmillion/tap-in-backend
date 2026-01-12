@@ -1,6 +1,6 @@
-import React, { memo } from 'react';
-// Refreshed bundle to remove stale FlashList error
-import { View, Text, TouchableOpacity, Alert, ActivityIndicator, FlatList } from 'react-native';
+import React, { memo, useMemo } from 'react';
+import { View, Text, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocation } from '@/hooks/useLocation';
 import { MapPin, Users, ArrowRight, Clock, Bell, Plus, Compass } from 'lucide-react-native';
@@ -85,8 +85,8 @@ export default function HomeScreen() {
   } = useQuery({
     queryKey: [
       'nearbyRooms',
-      location?.coords.latitude.toFixed(4),
-      location?.coords.longitude.toFixed(4),
+      location?.coords.latitude.toFixed(3),
+      location?.coords.longitude.toFixed(3),
     ],
     queryFn: async () => {
       if (!location) return [];
@@ -94,12 +94,15 @@ export default function HomeScreen() {
       return apiRequest(`/rooms/nearby?lat=${latitude}&lng=${longitude}`);
     },
     enabled: !!location,
-    staleTime: 15000,
-    gcTime: 1000 * 60 * 5,
+    staleTime: 30000,
+    gcTime: 1000 * 60 * 10,
     placeholderData: (previousData) => previousData,
   });
 
-  const rooms = Array.from(new Map((nearbyRooms || []).map((item: any) => [item.id, item])).values());
+  const rooms = useMemo(() => 
+    Array.from(new Map((nearbyRooms || []).map((item: any) => [item.id, item])).values()),
+    [nearbyRooms]
+  );
 
   const createRoomMutation = useMutation({
     mutationFn: async () => {
@@ -232,32 +235,35 @@ export default function HomeScreen() {
                 ))}
               </View>
               ) : (
-                <FlatList
-                  data={rooms as any[]}
-                  keyExtractor={(item: any) => item.id}
-                  renderItem={({ item }: { item: any }) => (
-                    <RoomItem item={item} theme={theme} onPress={() => router.push(`/chat/${item.id}`)} />
-                  )}
-                ListEmptyComponent={
-                  !isFetching ? (
-                    <View className="mt-10 items-center justify-center p-12 rounded-[40px] border-2 border-dashed border-border/60 bg-secondary/50">
-                      <View className="h-20 w-20 items-center justify-center rounded-full bg-background border border-border mb-6">
-                        <Users size={40} color={theme.mutedForeground} opacity={0.4} />
-                      </View>
-                      <Text className="text-2xl font-black text-foreground text-center">
-                        Quiet around here
-                      </Text>
-                      <Text className="mt-2 text-center text-base font-medium text-muted-foreground px-4">
-                        Be the pioneer! Start a conversation and see who's nearby.
-                      </Text>
-                    </View>
-                  ) : null
-                }
-                onRefresh={refetch}
-                refreshing={false}
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingBottom: 120 }}
-              />
+                <View className="flex-1">
+                  <FlashList
+                    data={rooms as any[]}
+                    keyExtractor={(item: any) => item.id}
+                    renderItem={({ item }: { item: any }) => (
+                      <RoomItem item={item} theme={theme} onPress={() => router.push(`/chat/${item.id}`)} />
+                    )}
+                    estimatedItemSize={88}
+                    ListEmptyComponent={
+                      !isFetching ? (
+                        <View className="mt-10 items-center justify-center p-12 rounded-[40px] border-2 border-dashed border-border/60 bg-secondary/50">
+                          <View className="h-20 w-20 items-center justify-center rounded-full bg-background border border-border mb-6">
+                            <Users size={40} color={theme.mutedForeground} opacity={0.4} />
+                          </View>
+                          <Text className="text-2xl font-black text-foreground text-center">
+                            Quiet around here
+                          </Text>
+                          <Text className="mt-2 text-center text-base font-medium text-muted-foreground px-4">
+                            Be the pioneer! Start a conversation and see who's nearby.
+                          </Text>
+                        </View>
+                      ) : null
+                    }
+                    onRefresh={refetch}
+                    refreshing={false}
+                    showsVerticalScrollIndicator={false}
+                    contentContainerStyle={{ paddingBottom: 120 }}
+                  />
+                </View>
             )}
         </View>
       </View>

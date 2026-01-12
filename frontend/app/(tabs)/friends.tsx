@@ -1,13 +1,15 @@
-import React from 'react';
-import { View, Text, FlatList, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
+import React, { useMemo } from 'react';
+import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase';
-import { User, MessageCircle, Heart, ChevronRight, UserPlus, Compass } from 'lucide-react-native';
+import { Image } from 'expo-image';
+import { User, MessageCircle, Heart, UserPlus, Compass } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/context/AuthContext';
 import { useColorScheme } from 'nativewind';
 import { THEME } from '@/lib/theme';
+import { apiRequest } from '@/lib/api';
 
 export default function FriendsScreen() {
   const { user } = useAuth();
@@ -15,16 +17,17 @@ export default function FriendsScreen() {
   const theme = THEME[colorScheme ?? 'light'];
   const router = useRouter();
 
-  const { data: friends, isLoading } = useQuery({
+  const { data: friendsData, isLoading, refetch } = useQuery({
     queryKey: ['friends', user?.id],
     queryFn: async () => {
       if (!user?.id) return [];
-      const response = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/friends/${user.id}`);
-      if (!response.ok) throw new Error('Failed to fetch friends');
-      return response.json();
+      return apiRequest(`/friends/${user.id}`);
     },
     enabled: !!user?.id,
+    staleTime: 60000,
   });
+
+  const friends = useMemo(() => friendsData || [], [friendsData]);
 
   const renderFriend = ({ item }: { item: any }) => (
     <TouchableOpacity
@@ -33,13 +36,18 @@ export default function FriendsScreen() {
       className="mb-4 flex-row items-center rounded-3xl border border-border bg-card p-4 shadow-sm active:bg-secondary/10">
       <View className="h-14 w-14 items-center justify-center overflow-hidden rounded-2xl bg-primary/5">
         {item.avatar_url ? (
-          <Image source={{ uri: item.avatar_url }} className="h-14 w-14" />
+          <Image 
+            source={{ uri: item.avatar_url }} 
+            style={{ width: 56, height: 56 }}
+            contentFit="cover"
+            transition={200}
+          />
         ) : (
           <User size={24} color={theme.primary} />
         )}
       </View>
       <View className="ml-4 flex-1">
-        <Text className="text-lg font-bold text-foreground leading-tight">
+        <Text className="text-lg font-bold text-foreground leading-tight" numberOfLines={1}>
           {item.full_name || item.username}
         </Text>
         <Text className="text-xs font-semibold text-muted-foreground mt-1">@{item.username}</Text>
@@ -73,33 +81,38 @@ export default function FriendsScreen() {
             <ActivityIndicator size="large" color={theme.primary} />
           </View>
         ) : (
-          <FlatList
-            data={friends}
-            keyExtractor={(item) => item.id}
-            renderItem={renderFriend}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: 120 }}
-            ListEmptyComponent={
-              <View className="mt-10 items-center justify-center rounded-[40px] border-2 border-dashed border-border/60 bg-secondary/50 p-12">
-                <View className="h-24 w-24 items-center justify-center rounded-full bg-background border border-border mb-8 shadow-sm">
-                  <Heart size={40} color={theme.mutedForeground} opacity={0.4} />
+          <View className="flex-1">
+            <FlashList
+              data={friends}
+              keyExtractor={(item: any) => item.id}
+              renderItem={renderFriend}
+              estimatedItemSize={88}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: 120 }}
+              onRefresh={refetch}
+              refreshing={false}
+              ListEmptyComponent={
+                <View className="mt-10 items-center justify-center rounded-[40px] border-2 border-dashed border-border/60 bg-secondary/50 p-12">
+                  <View className="h-24 w-24 items-center justify-center rounded-full bg-background border border-border mb-8 shadow-sm">
+                    <Heart size={40} color={theme.mutedForeground} opacity={0.4} />
+                  </View>
+                  <Text className="text-center text-2xl font-black text-foreground">
+                    No friends yet
+                  </Text>
+                  <Text className="mt-3 text-center text-base font-medium text-muted-foreground px-4">
+                    Find interesting people nearby and start building your circle!
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => router.push('/users')}
+                    activeOpacity={0.8}
+                    className="mt-8 flex-row items-center gap-2 rounded-2xl bg-primary px-8 py-4">
+                    <Compass size={20} color={theme.primaryForeground} />
+                    <Text className="font-black text-primary-foreground uppercase tracking-widest">Explore</Text>
+                  </TouchableOpacity>
                 </View>
-                <Text className="text-center text-2xl font-black text-foreground">
-                  No friends yet
-                </Text>
-                <Text className="mt-3 text-center text-base font-medium text-muted-foreground px-4">
-                  Find interesting people nearby and start building your circle!
-                </Text>
-                <TouchableOpacity
-                  onPress={() => router.push('/users')}
-                  activeOpacity={0.8}
-                  className="mt-8 flex-row items-center gap-2 rounded-2xl bg-primary px-8 py-4">
-                  <Compass size={20} color={theme.primaryForeground} />
-                  <Text className="font-black text-primary-foreground uppercase tracking-widest">Explore</Text>
-                </TouchableOpacity>
-              </View>
-            }
-          />
+              }
+            />
+          </View>
         )}
       </View>
     </SafeAreaView>
