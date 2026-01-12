@@ -78,22 +78,28 @@ export default function EditProfileScreen() {
     }
   }, [profile]);
 
-  const updateProfileMutation = useMutation({
-    mutationFn: async (updates: any) => {
-      return apiRequest(`/profiles/${user?.id}`, {
-        method: 'PATCH',
-        body: JSON.stringify(updates),
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['profile', user?.id] });
-      Alert.alert('Success', 'Profile updated successfully!');
-      router.back();
-    },
-    onError: (error: any) => {
-      Alert.alert('Error', error.message);
-    },
-  });
+    const updateProfileMutation = useMutation({
+      mutationFn: async (updates: any) => {
+        if (!user?.id) throw new Error('User not logged in');
+        const { data, error } = await supabase
+          .from('profiles')
+          .update(updates)
+          .eq('id', user.id)
+          .select()
+          .single();
+        
+        if (error) throw error;
+        return data;
+      },
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ['profile', user?.id] });
+        Alert.alert('Success', 'Profile updated successfully!');
+        router.back();
+      },
+      onError: (error: any) => {
+        Alert.alert('Error', error.message);
+      },
+    });
 
   const pickImage = async () => {
     try {

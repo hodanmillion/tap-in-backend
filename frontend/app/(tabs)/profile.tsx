@@ -163,19 +163,24 @@ export default function ProfileScreen() {
 
     const updateProfileMutation = useMutation({
       mutationFn: async (updates: any) => {
-        return apiRequest(`/profiles/${user?.id}`, {
-          method: 'PATCH',
-          body: JSON.stringify(updates),
-        });
+        if (!user?.id) throw new Error('User not logged in');
+        const { data, error } = await supabase
+          .from('profiles')
+          .update(updates)
+          .eq('id', user.id)
+          .select()
+          .single();
+        
+        if (error) throw error;
+        return data;
       },
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ['profile', user?.id] });
         queryClient.invalidateQueries({ queryKey: ['profile-photos', user?.id] });
         refetchProfile();
-        setIsEditModalVisible(false);
         Alert.alert('Success', 'Profile updated successfully!');
       },
-      onError: (error) => {
+      onError: (error: any) => {
         Alert.alert('Error', error.message);
       },
     });
@@ -498,7 +503,7 @@ export default function ProfileScreen() {
           </View>
 
           <TouchableOpacity 
-            onPress={() => setIsEditModalVisible(true)}
+            onPress={handleUpdateProfile}
             className="mt-6 bg-primary/10 px-6 py-3 rounded-2xl border border-primary/20"
           >
             <Text className="text-sm font-black text-primary uppercase tracking-widest">Edit Profile</Text>
