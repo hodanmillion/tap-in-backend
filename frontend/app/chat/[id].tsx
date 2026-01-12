@@ -43,6 +43,22 @@ export default function ChatScreen() {
   const [id, setId] = useState<string | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
+
+  // Restore draft on mount
+  useEffect(() => {
+    if (id && drafts[id]) {
+      setNewMessage(drafts[id]);
+    }
+  }, [id]);
+
+  // Save draft on change
+  const handleMessageChange = (text: string) => {
+    setNewMessage(text);
+    if (id) {
+      setDraft(id, text);
+    }
+  };
+
   const [room, setRoom] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [initialLoading, setInitialLoading] = useState(true);
