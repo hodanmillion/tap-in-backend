@@ -9,10 +9,9 @@ import {
   Modal,
   ScrollView,
   Pressable,
-  FlatList,
 } from 'react-native';
 import { Image } from 'expo-image';
-// import { FlashList } from '@shopify/flash-list';
+import { FlashList } from '@shopify/flash-list';
 import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';

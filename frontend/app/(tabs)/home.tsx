@@ -1,6 +1,6 @@
 import React, { memo } from 'react';
-import { View, Text, TouchableOpacity, Alert, ActivityIndicator, FlatList } from 'react-native';
-// import { FlashList } from '@shopify/flash-list';
+import { View, Text, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocation } from '@/hooks/useLocation';
 import { MapPin, Users, ArrowRight, Clock, Bell, Plus, Compass } from 'lucide-react-native';
@@ -232,9 +232,10 @@ export default function HomeScreen() {
                 ))}
               </View>
             ) : (
-              <FlatList
+              <FlashList
                 data={rooms as any[]}
                 keyExtractor={(item: any) => item.id}
+                estimatedItemSize={88}
                 renderItem={({ item }: { item: any }) => (
                   <RoomItem item={item} theme={theme} onPress={() => router.push(`/chat/${item.id}`)} />
                 )}
