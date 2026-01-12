@@ -25,12 +25,14 @@
         "supportsTablet": true,
         "bundleIdentifier": "com.TapIn.myapp",
         "buildNumber": "35",
-        "infoPlist": {
-          "NSLocationWhenInUseUsageDescription": "Allow Tap In to access your location to find nearby users and chat rooms.",
-          "NSLocationAlwaysAndWhenInUseUsageDescription": "Allow Tap In to access your location even when the app is in the background.",
-          "NSLocationAlwaysUsageDescription": "Allow Tap In to access your location even when the app is in the background.",
-          "ITSAppUsesNonExemptEncryption": false
-        }
+          "infoPlist": {
+            "NSLocationWhenInUseUsageDescription": "Allow Tap In to access your location to find nearby users and chat rooms.",
+            "NSLocationAlwaysAndWhenInUseUsageDescription": "Allow Tap In to access your location even when the app is in the background.",
+            "NSLocationAlwaysUsageDescription": "Allow Tap In to access your location even when the app is in the background.",
+            "NSPhotoLibraryUsageDescription": "Allow Tap In to access your photos to update your profile picture.",
+            "NSCameraUsageDescription": "Allow Tap In to use your camera to take a profile picture.",
+            "ITSAppUsesNonExemptEncryption": false
+          }
       },
     "android": {
 "adaptiveIcon": {

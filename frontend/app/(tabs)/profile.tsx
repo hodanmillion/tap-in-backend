@@ -15,14 +15,20 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import * as ImagePicker from 'expo-image-picker';
+import { apiRequest } from '@/lib/api';
 
 const decodeBase64 = (base64: string) => {
-  const binaryString = atob(base64);
-  const bytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
+  try {
+    const binaryString = atob(base64);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    return bytes.buffer;
+  } catch (e) {
+    console.error('Base64 decode error:', e);
+    throw new Error('Failed to process image data');
   }
-  return bytes.buffer;
 };
 
 import { 
@@ -183,13 +189,10 @@ export default function ProfileScreen() {
 
     const updateProfileMutation = useMutation({
       mutationFn: async (updates: any) => {
-        const response = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/profiles/${user?.id}`, {
+        return apiRequest(`/profiles/${user?.id}`, {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(updates),
         });
-        if (!response.ok) throw new Error('Failed to update profile');
-        return response.json();
       },
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ['profile', user?.id] });
