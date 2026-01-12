@@ -271,7 +271,15 @@ export default function ProfileScreen() {
     }
   };
 
-  const menuGroups = [
+  const menuGroups: {
+    title: string;
+    items: {
+      icon: JSX.Element;
+      label: string;
+      route?: string;
+      onPress?: () => void;
+    }[];
+  }[] = [
     {
       title: 'Social',
       items: [
