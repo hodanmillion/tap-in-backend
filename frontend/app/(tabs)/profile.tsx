@@ -9,8 +9,9 @@ import {
   ActivityIndicator,
   Modal,
   TextInput,
-  Platform,
-} from 'react-native';
+    Share,
+    Platform,
+  } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import * as ImagePicker from 'expo-image-picker';
@@ -250,12 +251,32 @@ export default function ProfileScreen() {
     else router.replace('/(auth)/login');
   }
 
+  const handleInvite = async () => {
+    try {
+      const result = await Share.share({
+        message: `Check out Tap In! Connect with people and discover what's happening right where you are. Download it now: https://tapin.app`,
+        title: 'Join Tap In',
+      });
+      if (result.action === Share.sharedAction) {
+        if (result.activityType) {
+          // shared with activity type of result.activityType
+        } else {
+          // shared
+        }
+      } else if (result.action === Share.dismissedAction) {
+        // dismissed
+      }
+    } catch (error: any) {
+      Alert.alert('Error', error.message);
+    }
+  };
+
   const menuGroups = [
     {
       title: 'Social',
       items: [
         { icon: <Heart size={20} color={theme.primary} />, label: 'Friends', route: '/friends' },
-        { icon: <Share2 size={20} color={theme.primary} />, label: 'Invite Friends' },
+        { icon: <Share2 size={20} color={theme.primary} />, label: 'Invite Friends', onPress: handleInvite },
       ],
     },
     {
@@ -526,13 +547,16 @@ export default function ProfileScreen() {
               </Text>
               <View className="overflow-hidden rounded-[32px] bg-card border border-border shadow-sm">
                 {group.items.map((item, index) => (
-                  <TouchableOpacity
-                    key={index}
-                    onPress={() => item.route && router.push(item.route as any)}
-                    activeOpacity={0.6}
-                    className={`flex-row items-center p-6 active:bg-secondary/50 ${
-                      index !== group.items.length - 1 ? 'border-b border-border' : ''
-                    }`}>
+                    <TouchableOpacity
+                      key={index}
+                      onPress={() => {
+                        if (item.onPress) item.onPress();
+                        else if (item.route) router.push(item.route as any);
+                      }}
+                      activeOpacity={0.6}
+                      className={`flex-row items-center p-6 active:bg-secondary/50 ${
+                        index !== group.items.length - 1 ? 'border-b border-border' : ''
+                      }`}>
                     <View className="h-11 w-11 items-center justify-center rounded-2xl bg-secondary/50">
                       {item.icon}
                     </View>
