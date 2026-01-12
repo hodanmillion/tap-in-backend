@@ -425,7 +425,6 @@ app.post(
           latitude: latitude,
           longitude: longitude,
           location: `POINT(${longitude} ${latitude})`,
-          location_name: address || null,
           last_seen: new Date().toISOString(),
         })
         .eq('id', userId);

@@ -31,7 +31,7 @@ import { useLocation } from '@/hooks/useLocation';
 import * as Location from 'expo-location';
 import { useAuth } from '@/context/AuthContext';
 
-const CHAT_RADIUS_METERS = 20;
+const CHAT_RADIUS_METERS = 100;
 const GIPHY_API_KEY = process.env.EXPO_PUBLIC_GIPHY_API_KEY || 'l1WfAFgqA5WupWoMaCaWKB12G54J6LtZ';
 
 export default function ChatScreen() {
@@ -228,14 +228,38 @@ export default function ChatScreen() {
 
   const sendMessage = useCallback(
     async (content?: string, type: 'text' | 'image' | 'gif' = 'text') => {
-      if (roomNotFound || isExpired) return;
-      if (isOutOfRange && room?.type !== 'private') return;
+      if (roomNotFound || isExpired) {
+        Alert.alert('Error', 'This room is no longer active.');
+        return;
+      }
+      if (isOutOfRange && room?.type !== 'private') {
+        Alert.alert('Out of Range', `You need to be within ${room?.radius || CHAT_RADIUS_METERS}m of the room to send messages.`);
+        return;
+      }
       const finalContent = content || newMessage;
-      if (!finalContent.trim() || !user || !id) return;
+      if (!finalContent.trim()) return;
+      if (!user) {
+        Alert.alert('Error', 'You must be logged in to send messages.');
+        return;
+      }
+      if (!id) {
+        Alert.alert('Error', 'Room ID not resolved. Please try again.');
+        return;
+      }
+
       const message = { room_id: id, sender_id: user.id, content: finalContent, type: type };
       if (type === 'text') setNewMessage('');
+      
       const { error } = await supabase.from('messages').insert(message);
-      if (error && error.code === '23503') setRoomNotFound(true);
+      if (error) {
+        console.error('Error sending message:', error);
+        if (error.code === '23503') {
+          setRoomNotFound(true);
+          Alert.alert('Error', 'This room no longer exists.');
+        } else {
+          Alert.alert('Error', 'Failed to send message. Please check your connection.');
+        }
+      }
     },
     [id, user?.id, newMessage, roomNotFound, isExpired, isOutOfRange, room?.type]
   );
