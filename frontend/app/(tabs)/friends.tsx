@@ -1,6 +1,5 @@
 import React, { useMemo } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { FlashList } from '@shopify/flash-list';
+import { View, Text, TouchableOpacity, ActivityIndicator, FlatList } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { Image } from 'expo-image';
 import { User, MessageCircle, Heart, UserPlus, Compass } from 'lucide-react-native';
@@ -82,11 +81,10 @@ export default function FriendsScreen() {
           </View>
         ) : (
           <View className="flex-1">
-            <FlashList
+            <FlatList
               data={friends}
               keyExtractor={(item: any) => item.id}
               renderItem={renderFriend}
-              estimatedItemSize={88}
               showsVerticalScrollIndicator={false}
               contentContainerStyle={{ paddingBottom: 120 }}
               onRefresh={refetch}

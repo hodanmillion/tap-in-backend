@@ -509,10 +509,11 @@ app.post(
       latitude: z.number(),
       longitude: z.number(),
       radius: z.number().default(20),
+      userId: z.string().optional(),
     })
   ),
   async (c) => {
-    const { name, latitude, longitude, radius } = c.req.valid('json');
+    const { name, latitude, longitude, radius, userId } = c.req.valid('json');
 
     try {
       // Check if a room already exists within 20m to prevent duplicates
@@ -528,20 +529,29 @@ app.post(
         return c.json({ error: 'A chat already exists in this exact location (20m radius).' }, 400);
       }
 
-        const { data: newRoom, error } = await supabase
-          .from('chat_rooms')
-          .insert({
-            name,
-            type: 'auto_generated',
-            latitude,
-            longitude,
-            radius,
-            expires_at: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
-          })
-          .select()
-          .single();
+      const { data: newRoom, error } = await supabase
+        .from('chat_rooms')
+        .insert({
+          name,
+          type: 'auto_generated',
+          latitude,
+          longitude,
+          radius,
+          expires_at: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
+        })
+        .select()
+        .single();
 
       if (error) throw error;
+
+      // Automatically join the creator if userId is provided
+      if (userId) {
+        await supabase.from('room_participants').insert({
+          room_id: newRoom.id,
+          user_id: userId,
+        });
+      }
+
       return c.json({ success: true, room: newRoom });
     } catch (err) {
       const error = err as Error;
