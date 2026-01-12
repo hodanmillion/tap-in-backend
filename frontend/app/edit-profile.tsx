@@ -20,6 +20,8 @@ import { THEME } from '@/lib/theme';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { Image } from 'expo-image';
+
+const decodeBase64 = (base64: string) => {
   try {
     const binaryString = atob(base64);
     const bytes = new Uint8Array(binaryString.length);
@@ -360,7 +362,6 @@ export default function EditProfileScreen() {
         </View>
       </ScrollView>
     </SafeAreaView>
-  );
+    );
 }
 
-import { Image } from 'react-native';
