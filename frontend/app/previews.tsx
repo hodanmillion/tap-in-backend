@@ -21,22 +21,22 @@ const MOCK_MESSAGES = [
 ];
 
 const DeviceFrame = ({ children, colorScheme, theme }: { children: React.ReactNode, colorScheme: string, theme: any }) => (
-  <View className="mx-auto h-[600px] w-[300px] overflow-hidden rounded-[40px] border-[8px] border-zinc-800 bg-background shadow-2xl">
+  <View className="mx-auto h-[550px] w-[280px] overflow-hidden rounded-[36px] border-[8px] border-zinc-800 bg-background shadow-2xl">
     {/* Notch */}
-    <View className="absolute top-0 z-50 h-6 w-32 self-center rounded-b-2xl bg-zinc-800" />
-    <View className="flex-1 pt-6">
+    <View className="absolute top-0 z-50 h-5 w-28 self-center rounded-b-2xl bg-zinc-800" />
+    <View className="flex-1 pt-5">
       {children}
     </View>
   </View>
 );
 
 const PreviewSlide = ({ title, subtitle, children, theme, colorScheme }: any) => (
-  <View style={{ width }} className="flex-1 items-center justify-center px-8">
-    <View className="mb-10 items-center">
-      <Text className="text-center text-4xl font-black tracking-tight text-white mb-2">
+  <View style={{ width }} className="flex-1 items-center justify-center px-8 pt-4">
+    <View className="mb-6 items-center">
+      <Text className="text-center text-3xl font-black tracking-tight text-white mb-2">
         {title}
       </Text>
-      <Text className="text-center text-xl font-medium text-white/80 px-4">
+      <Text className="text-center text-lg font-medium text-white/80 px-4">
         {subtitle}
       </Text>
     </View>
