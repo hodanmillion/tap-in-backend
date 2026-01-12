@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, ViewProps } from 'react-native';
-import Svg, { Rect, Path, Defs, LinearGradient, Stop, G } from 'react-native-svg';
+import Svg, { Rect, Path, Defs, LinearGradient, Stop, G, Text } from 'react-native-svg';
 import { useColorScheme } from 'nativewind';
 import { THEME } from '@/lib/theme';
 
@@ -77,10 +77,22 @@ export function Logo({ size = 'md', variant = 'primary', className, ...props }: 
             />
           </G>
           
-          {/* Pro Text */}
-          <G transform="translate(50, 80)">
-             <Rect x="-20" y="-10" width="40" height="20" rx="4" fill="white" opacity="0.2" />
-          </G>
+            {/* Pro Text */}
+            <G transform="translate(50, 80)">
+               <Rect x="-22" y="-8" width="44" height="16" rx="4" fill="white" opacity="0.2" />
+               <Text
+                 x="0"
+                 y="4"
+                 fill="white"
+                 fontSize="10"
+                 fontWeight="900"
+                 textAnchor="middle"
+                 letterSpacing="1"
+               >
+                 PRO
+               </Text>
+            </G>
+
         </Svg>
     </View>
   );
