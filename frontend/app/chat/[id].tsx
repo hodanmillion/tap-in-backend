@@ -503,15 +503,17 @@ export default function ChatScreen() {
             />
 
           {(isOutOfRange || isExpired || roomNotFound) && room?.type !== 'private' ? (
-            <View className="flex-row items-center border-t border-zinc-800 bg-red-950/20 p-4 pb-8">
-              <Lock size={20} color="#ef4444" className="mr-3" />
-              <Text className="flex-1 text-sm font-semibold text-red-400">
-                {roomNotFound
-                  ? 'This chat room is no longer active.'
-                  : isExpired
-                    ? 'This chat has expired.'
-                    : `You've left the ${room?.radius || 20}m area.`}
-              </Text>
+            <View className="border-t border-zinc-900 bg-zinc-950 px-4 py-3 pb-10">
+              <View className="flex-row items-center rounded-2xl bg-zinc-900/50 px-4 py-3 border border-zinc-800/50">
+                <Lock size={18} color="#71717a" className="mr-3" />
+                <Text className="flex-1 text-[14px] font-medium text-zinc-500">
+                  {roomNotFound
+                    ? 'This chat room is no longer active.'
+                    : isExpired
+                      ? 'This chat has expired.'
+                      : `Read only - You've left the ${room?.radius || 20}m area.`}
+                </Text>
+              </View>
             </View>
           ) : (
             <View className="flex-row items-center border-t border-zinc-900 bg-zinc-950 px-4 py-3 pb-10">

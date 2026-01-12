@@ -1,10 +1,11 @@
 import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, Image } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import { MessageCircle, Clock, ChevronRight, Hash, MessageSquare, Compass } from 'lucide-react-native';
+import { MessageCircle, Clock, ChevronRight, Hash, MessageSquare, Compass, Lock } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/context/AuthContext';
+import { useLocation } from '@/hooks/useLocation';
 import { useColorScheme } from 'nativewind';
 import { THEME } from '@/lib/theme';
 
@@ -13,6 +14,20 @@ export default function ChatsScreen() {
   const { colorScheme } = useColorScheme();
   const theme = THEME[colorScheme ?? 'light'];
   const router = useRouter();
+  const { location } = useLocation(user?.id);
+
+  function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
+    const R = 6371000;
+    const dLat = (lat2 - lat1) * (Math.PI / 180);
+    const dLon = (lon2 - lon1) * (Math.PI / 180);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * (Math.PI / 180)) *
+        Math.cos(lat2 * (Math.PI / 180)) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+  }
 
   const {
     data: rooms,
@@ -71,48 +86,70 @@ export default function ChatsScreen() {
     enabled: !!user?.id,
   });
 
-  const renderRoom = ({ item }: { item: any }) => (
-    <TouchableOpacity
-      activeOpacity={0.7}
-      onPress={() => router.push(`/chat/${item.id}`)}
-      className="mb-5 flex-row items-center rounded-[28px] border border-border bg-card p-5 shadow-sm">
-      <View
-        className={`h-16 w-16 items-center justify-center rounded-[20px] overflow-hidden ${
-          item.type === 'private' ? 'bg-primary/10' : 'bg-secondary/50'
-        }`}>
-        {item.type === 'private' ? (
-          item.other_user_avatar ? (
-            <Image source={{ uri: item.other_user_avatar }} className="h-full w-full" />
+  const renderRoom = ({ item }: { item: any }) => {
+    const isOutOfRange = 
+      item.type === 'auto_generated' && 
+      location && 
+      calculateDistance(
+        location.coords.latitude,
+        location.coords.longitude,
+        item.latitude,
+        item.longitude
+      ) > (item.radius || 20);
+
+    const isExpired = item.expires_at && new Date() > new Date(item.expires_at);
+
+    return (
+      <TouchableOpacity
+        activeOpacity={0.7}
+        onPress={() => router.push(`/chat/${item.id}`)}
+        className="mb-5 flex-row items-center rounded-[28px] border border-border bg-card p-5 shadow-sm">
+        <View
+          className={`h-16 w-16 items-center justify-center rounded-[20px] overflow-hidden ${
+            item.type === 'private' ? 'bg-primary/10' : 'bg-secondary/50'
+          }`}>
+          {item.type === 'private' ? (
+            item.other_user_avatar ? (
+              <Image source={{ uri: item.other_user_avatar }} className="h-full w-full" />
+            ) : (
+              <MessageCircle size={30} color={theme.primary} />
+            )
           ) : (
-            <MessageCircle size={30} color={theme.primary} />
-          )
-        ) : (
-          <Hash size={30} color={theme.mutedForeground} />
-        )}
-      </View>
-      <View className="ml-4 flex-1">
-        <Text className="text-xl font-bold text-foreground" numberOfLines={1}>
-          {item.name}
-        </Text>
-        <View className="mt-1 flex-row items-center justify-between">
-           <View className="flex-row items-center">
-             <Clock size={12} color={theme.mutedForeground} />
-             <Text className="ml-1.5 text-xs font-semibold text-muted-foreground">
-               {item.created_at ? new Date(item.created_at).toLocaleDateString() : 'Active'}
-             </Text>
-           </View>
-           <View className={`px-2.5 py-1 rounded-full ${item.type === 'private' ? 'bg-primary/10' : 'bg-secondary'}`}>
-             <Text className={`text-[10px] font-black uppercase tracking-widest ${item.type === 'private' ? 'text-primary' : 'text-muted-foreground'}`}>
-               {item.type}
-             </Text>
-           </View>
+            <Hash size={30} color={theme.mutedForeground} />
+          )}
         </View>
-      </View>
-      <View className="ml-3 h-11 w-11 items-center justify-center rounded-full bg-secondary">
-        <ChevronRight size={18} color={theme.mutedForeground} opacity={0.5} />
-      </View>
-    </TouchableOpacity>
-  );
+        <View className="ml-4 flex-1">
+          <View className="flex-row items-center justify-between">
+            <Text className="text-xl font-bold text-foreground flex-1 mr-2" numberOfLines={1}>
+              {item.name}
+            </Text>
+            {(isOutOfRange || isExpired) && item.type !== 'private' && (
+              <View className="flex-row items-center bg-zinc-900 px-2 py-0.5 rounded-md border border-zinc-800">
+                <Lock size={10} color={theme.mutedForeground} className="mr-1" />
+                <Text className="text-[10px] font-bold text-muted-foreground uppercase">Read Only</Text>
+              </View>
+            )}
+          </View>
+          <View className="mt-1 flex-row items-center justify-between">
+             <View className="flex-row items-center">
+               <Clock size={12} color={theme.mutedForeground} />
+               <Text className="ml-1.5 text-xs font-semibold text-muted-foreground">
+                 {item.created_at ? new Date(item.created_at).toLocaleDateString() : 'Active'}
+               </Text>
+             </View>
+             <View className={`px-2.5 py-1 rounded-full ${item.type === 'private' ? 'bg-primary/10' : 'bg-secondary'}`}>
+               <Text className={`text-[10px] font-black uppercase tracking-widest ${item.type === 'private' ? 'text-primary' : 'text-muted-foreground'}`}>
+                 {item.type}
+               </Text>
+             </View>
+          </View>
+        </View>
+        <View className="ml-3 h-11 w-11 items-center justify-center rounded-full bg-secondary">
+          <ChevronRight size={18} color={theme.mutedForeground} opacity={0.5} />
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top']}>
