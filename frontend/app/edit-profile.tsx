@@ -145,23 +145,44 @@ export default function EditProfileScreen() {
     }
   };
 
-  const handleUpdateProfile = () => {
-    if (!profile) return;
-    const updates: any = {};
-    if (formData.full_name !== (profile.full_name || '')) updates.full_name = formData.full_name;
-    if (formData.username !== (profile.username || '')) updates.username = formData.username;
-    if (formData.bio !== (profile.bio || '')) updates.bio = formData.bio;
-    if (formData.occupation !== (profile.occupation || '')) updates.occupation = formData.occupation;
-    if (formData.location_name !== (profile.location_name || '')) updates.location_name = formData.location_name;
-    if (formData.website !== (profile.website || '')) updates.website = formData.website;
+    const handleUpdateProfile = async () => {
+      if (!profile) return;
+      setUploading(true);
+      try {
+        const updates: any = {};
+        if (formData.full_name !== (profile.full_name || '')) updates.full_name = formData.full_name;
+        if (formData.username !== (profile.username || '')) updates.username = formData.username;
+        if (formData.bio !== (profile.bio || '')) updates.bio = formData.bio;
+        if (formData.occupation !== (profile.occupation || '')) updates.occupation = formData.occupation;
+        if (formData.location_name !== (profile.location_name || '')) updates.location_name = formData.location_name;
+        if (formData.website !== (profile.website || '')) updates.website = formData.website;
 
-    if (Object.keys(updates).length === 0) {
-      router.back();
-      return;
-    }
+        // If location name changed, try to geocode it to update coordinates
+        if (updates.location_name) {
+          try {
+            const geocoded = await Location.geocodeAsync(updates.location_name);
+            if (geocoded && geocoded.length > 0) {
+              updates.latitude = geocoded[0].latitude;
+              updates.longitude = geocoded[0].longitude;
+              updates.location = `POINT(${geocoded[0].longitude} ${geocoded[0].latitude})`;
+            }
+          } catch (geoErr) {
+            console.warn('Geocoding failed for manual address:', geoErr);
+          }
+        }
 
-    updateProfileMutation.mutate(updates);
-  };
+        if (Object.keys(updates).length === 0) {
+          router.back();
+          return;
+        }
+
+        await updateProfileMutation.mutateAsync(updates);
+      } catch (err: any) {
+        Alert.alert('Error', err.message);
+      } finally {
+        setUploading(false);
+      }
+    };
 
   if (profileIsLoading) {
     return (
