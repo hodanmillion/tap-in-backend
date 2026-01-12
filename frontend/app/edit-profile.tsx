@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ChevronLeft, Camera, User } from 'lucide-react-native';
+import { ChevronLeft, Camera, User, MapPin } from 'lucide-react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { apiRequest } from '@/lib/api';
@@ -18,8 +18,8 @@ import { useAuth } from '@/context/AuthContext';
 import { useColorScheme } from 'nativewind';
 import { THEME } from '@/lib/theme';
 import * as ImagePicker from 'expo-image-picker';
-
-const decodeBase64 = (base64: string) => {
+import * as Location from 'expo-location';
+import { Image } from 'expo-image';
   try {
     const binaryString = atob(base64);
     const bytes = new Uint8Array(binaryString.length);
@@ -40,6 +40,7 @@ export default function EditProfileScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [uploading, setUploading] = useState(false);
+  const [fetchingLocation, setFetchingLocation] = useState(false);
 
   const { data: profile, isLoading: profileIsLoading } = useQuery({
     queryKey: ['profile', user?.id],
@@ -64,6 +65,34 @@ export default function EditProfileScreen() {
     location_name: '',
     website: '',
   });
+
+  const getCurrentLocation = async () => {
+    setFetchingLocation(true);
+    try {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Allow location access to use this feature.');
+        return;
+      }
+
+      const loc = await Location.getCurrentPositionAsync({});
+      const reverse = await Location.reverseGeocodeAsync({
+        latitude: loc.coords.latitude,
+        longitude: loc.coords.longitude,
+      });
+
+      if (reverse && reverse.length > 0) {
+        const address = reverse[0];
+        const parts = [address.street, address.name, address.city].filter(Boolean);
+        const locationName = parts.length > 0 ? parts.join(', ') : 'Unknown Location';
+        setFormData((prev) => ({ ...prev, location_name: locationName }));
+      }
+    } catch (err) {
+      Alert.alert('Error', 'Failed to get current location.');
+    } finally {
+      setFetchingLocation(false);
+    }
+  };
 
   useEffect(() => {
     if (profile) {
@@ -276,16 +305,31 @@ export default function EditProfileScreen() {
               />
             </View>
 
-            <View>
-              <Text className="text-xs font-black text-muted-foreground uppercase tracking-widest mb-2 ml-1">Location</Text>
-              <TextInput
-                className="bg-card border border-border rounded-2xl px-5 py-4 text-foreground font-bold text-lg"
-                value={formData.location_name}
-                onChangeText={(text) => setFormData({ ...formData, location_name: text })}
-                placeholder="e.g. London, UK"
-                placeholderTextColor={theme.mutedForeground}
-              />
-            </View>
+              <View>
+                <View className="flex-row items-center justify-between mb-2 ml-1">
+                  <Text className="text-xs font-black text-muted-foreground uppercase tracking-widest">Location</Text>
+                  <TouchableOpacity 
+                    onPress={getCurrentLocation}
+                    disabled={fetchingLocation}
+                    className="flex-row items-center"
+                  >
+                    {fetchingLocation ? (
+                      <ActivityIndicator size="small" color={theme.primary} className="mr-1" />
+                    ) : (
+                      <MapPin size={14} color={theme.primary} className="mr-1" />
+                    )}
+                    <Text className="text-xs font-bold text-primary">Use Current Location</Text>
+                  </TouchableOpacity>
+                </View>
+                <TextInput
+                  className="bg-card border border-border rounded-2xl px-5 py-4 text-foreground font-bold text-lg"
+                  value={formData.location_name}
+                  onChangeText={(text) => setFormData({ ...formData, location_name: text })}
+                  placeholder="e.g. London, UK"
+                  placeholderTextColor={theme.mutedForeground}
+                />
+              </View>
+
 
             <View>
               <Text className="text-xs font-black text-muted-foreground uppercase tracking-widest mb-2 ml-1">Website</Text>

@@ -7,6 +7,7 @@ import { useEffect } from 'react';
 import { useRouter, useSegments } from 'expo-router';
 import { View, ActivityIndicator } from 'react-native';
 import { ErrorBoundary } from './error-boundary';
+import { useLocation } from '@/hooks/useLocation';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -20,9 +21,12 @@ const queryClient = new QueryClient({
 });
 
 function RootLayoutContent() {
-  const { session, loading } = useAuth();
+  const { session, loading, user } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+  
+  // Initialize location sync globally
+  useLocation(user?.id);
 
   useEffect(() => {
     if (loading) return;
