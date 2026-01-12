@@ -277,12 +277,6 @@ export default function ProfileScreen() {
       ],
     },
     {
-      title: 'Marketing',
-      items: [
-        { icon: <ImageIcon size={20} color={theme.primary} />, label: 'App Store Previews', route: '/previews' },
-      ],
-    },
-    {
       title: 'Settings',
       items: [
         { icon: <Bell size={20} color={theme.mutedForeground} />, label: 'Notifications', route: '/notifications' },
