@@ -1,6 +1,5 @@
 import React, { memo } from 'react';
-import { View, Text, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
-import { FlashList } from '@shopify/flash-list';
+import { View, Text, TouchableOpacity, Alert, ActivityIndicator, FlatList } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocation } from '@/hooks/useLocation';
 import { MapPin, Users, ArrowRight, Clock, Bell, Plus, Compass } from 'lucide-react-native';
@@ -231,14 +230,13 @@ export default function HomeScreen() {
                   <RoomItemSkeleton key={i} />
                 ))}
               </View>
-            ) : (
-              <FlashList
-                data={rooms as any[]}
-                keyExtractor={(item: any) => item.id}
-                estimatedItemSize={88}
-                renderItem={({ item }: { item: any }) => (
-                  <RoomItem item={item} theme={theme} onPress={() => router.push(`/chat/${item.id}`)} />
-                )}
+              ) : (
+                <FlatList
+                  data={rooms as any[]}
+                  keyExtractor={(item: any) => item.id}
+                  renderItem={({ item }: { item: any }) => (
+                    <RoomItem item={item} theme={theme} onPress={() => router.push(`/chat/${item.id}`)} />
+                  )}
                 ListEmptyComponent={
                   !isFetching ? (
                     <View className="mt-10 items-center justify-center p-12 rounded-[40px] border-2 border-dashed border-border/60 bg-secondary/50">

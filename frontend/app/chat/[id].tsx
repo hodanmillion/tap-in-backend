@@ -5,13 +5,13 @@ import {
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
-  ActivityIndicator,
-  Modal,
-  ScrollView,
-  Pressable,
-} from 'react-native';
+    ActivityIndicator,
+    Modal,
+    ScrollView,
+    Pressable,
+    FlatList,
+  } from 'react-native';
 import { Image } from 'expo-image';
-import { FlashList } from '@shopify/flash-list';
 import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
@@ -433,18 +433,17 @@ export default function ChatScreen() {
     <View className="flex-1 bg-background">
       <Stack.Screen options={headerOptions} />
       <SafeAreaView className="flex-1" edges={['bottom']}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          className="flex-1"
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
-          <FlashList
-            data={messages}
-            inverted
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={{ padding: 16 }}
-            estimatedItemSize={100}
-            renderItem={renderMessage}
-          />
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            className="flex-1"
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
+            <FlatList
+              data={messages}
+              inverted
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={{ padding: 16 }}
+              renderItem={renderMessage}
+            />
 
           {(isOutOfRange || isExpired || roomNotFound) && room?.type !== 'private' ? (
             <View className="flex-row items-center border-t border-zinc-800 bg-red-950/20 p-4 pb-8">
