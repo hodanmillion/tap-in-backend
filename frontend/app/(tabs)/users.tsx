@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/context/AuthContext';
 import { useColorScheme } from 'nativewind';
 import { THEME } from '@/lib/theme';
+import { apiRequest } from '@/lib/api';
 
 const UserItemSkeleton = () => (
   <View className="mb-4 flex-row items-center rounded-3xl border border-border bg-card p-4 opacity-50">

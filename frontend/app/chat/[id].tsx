@@ -10,6 +10,7 @@ import {
   ScrollView,
   Pressable,
   FlatList,
+  Alert,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, Stack, useRouter } from 'expo-router';

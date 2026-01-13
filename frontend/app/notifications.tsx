@@ -7,6 +7,7 @@ import { router, Stack } from 'expo-router';
 import { useEffect } from 'react';
 import { useColorScheme } from 'nativewind';
 import { THEME } from '@/lib/theme';
+import { apiRequest } from '@/lib/api';
 
 export default function NotificationsScreen() {
   const { user } = useAuth();

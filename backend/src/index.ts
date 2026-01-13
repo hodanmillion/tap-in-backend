@@ -31,7 +31,7 @@ interface Database {
           avatar_url: string | null;
   latitude: number | null;
             longitude: number | null;
-            location: any | null;
+              location: unknown | null;
             last_seen: string | null;
             bio: string | null;
             website: string | null;
@@ -418,13 +418,13 @@ app.post(
     async (c) => {
       const { userId, latitude, longitude, address } = c.req.valid('json');
 
-      try {
-        const updateData: any = {
-          latitude: latitude,
-          longitude: longitude,
-          location: `POINT(${longitude} ${latitude})`,
-          last_seen: new Date().toISOString(),
-        };
+        try {
+          const updateData: Record<string, unknown> = {
+            latitude: latitude,
+            longitude: longitude,
+            location: `POINT(${longitude} ${latitude})`,
+            last_seen: new Date().toISOString(),
+          };
 
         if (address) {
           updateData.location_name = address;
