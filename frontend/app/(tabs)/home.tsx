@@ -62,39 +62,41 @@ export default function HomeScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
 
-  const { data: notifications } = useQuery({
-    queryKey: ['notifications', user?.id],
-    queryFn: async () => {
-      return apiRequest(`/notifications/${user?.id}`);
-    },
-    enabled: !!user?.id,
-    refetchInterval: 60000,
-    staleTime: 30000,
-  });
+    const { data: notifications } = useQuery({
+      queryKey: ['notifications', user?.id],
+      queryFn: async () => {
+        return apiRequest(`/notifications/${user?.id}`);
+      },
+      enabled: !!user?.id,
+      refetchInterval: 60000,
+      staleTime: 60000, // Increase to 1 minute
+      gcTime: 1000 * 60 * 15,
+    });
+  
+    const unreadCount = notifications?.filter((n: any) => !n.is_read).length || 0;
+  
+    const {
+      data: nearbyRooms,
+      isLoading,
+      isFetching,
+      refetch,
+    } = useQuery({
+      queryKey: [
+        'nearbyRooms',
+        location?.coords.latitude.toFixed(2), // More stable cache key (approx 1.1km)
+        location?.coords.longitude.toFixed(2),
+      ],
+      queryFn: async () => {
+        if (!location) return [];
+        const { latitude, longitude } = location.coords;
+        return apiRequest(`/rooms/nearby?lat=${latitude}&lng=${longitude}`);
+      },
+      enabled: !!location,
+      staleTime: 60000 * 2, // 2 minutes stale time for nearby rooms
+      gcTime: 1000 * 60 * 15,
+      placeholderData: (previousData) => previousData,
+    });
 
-  const unreadCount = notifications?.filter((n: any) => !n.is_read).length || 0;
-
-  const {
-    data: nearbyRooms,
-    isLoading,
-    isFetching,
-    refetch,
-  } = useQuery({
-    queryKey: [
-      'nearbyRooms',
-      location?.coords.latitude.toFixed(3),
-      location?.coords.longitude.toFixed(3),
-    ],
-    queryFn: async () => {
-      if (!location) return [];
-      const { latitude, longitude } = location.coords;
-      return apiRequest(`/rooms/nearby?lat=${latitude}&lng=${longitude}`);
-    },
-    enabled: !!location,
-    staleTime: 30000,
-    gcTime: 1000 * 60 * 10,
-    placeholderData: (previousData) => previousData,
-  });
 
   const rooms = useMemo(() => 
     Array.from(new Map((nearbyRooms || []).map((item: any) => [item.id, item])).values()),

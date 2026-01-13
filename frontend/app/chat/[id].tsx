@@ -43,6 +43,7 @@ export default function ChatScreen() {
   const [id, setId] = useState<string | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
+  const [isResolvingId, setIsResolvingId] = useState(true);
 
   // Restore draft on mount
   useEffect(() => {
@@ -86,6 +87,7 @@ export default function ChatScreen() {
 
     const resolveRoomId = useCallback(async () => {
       if (!user) return;
+      setIsResolvingId(true);
 
       if (typeof initialId === 'string' && initialId.startsWith('private_')) {
         const friendId = initialId.replace('private_', '');
@@ -103,6 +105,7 @@ export default function ChatScreen() {
       } else {
         setId(initialId as string);
       }
+      setIsResolvingId(false);
     }, [initialId, user]);
 
 
@@ -190,25 +193,62 @@ export default function ChatScreen() {
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${id}` },
         async (payload) => {
-          // Fetch the profile for the new message
+          // Check if we already have this message (optimistic or otherwise)
+          setMessages((current) => {
+            if (current.some((m) => m.id === payload.new.id)) return current;
+            
+            // Try to find if there's an optimistic version of this message to replace
+            // We check for matching content, sender, and recent timestamp
+            const isMyMessage = payload.new.sender_id === user?.id;
+            const optimisticIndex = isMyMessage 
+              ? current.findIndex(m => m.isOptimistic && m.content === payload.new.content)
+              : -1;
+
+            if (optimisticIndex > -1) {
+              const updated = [...current];
+              updated[optimisticIndex] = { ...payload.new, sender: { id: user?.id, username: user?.user_metadata?.username, full_name: user?.user_metadata?.full_name, avatar_url: user?.user_metadata?.avatar_url } };
+              return updated;
+            }
+
+            // If not found, fetch profile and add (actually we should fetch profile for non-mine messages)
+            return current;
+          });
+
+          // If it's not my message or not found optimistically, we need the profile
           const { data: profile } = await supabase
             .from('profiles')
             .select('id, username, full_name, avatar_url')
             .eq('id', payload.new.sender_id)
             .single();
           
-          const newMessage = {
-            ...payload.new,
-            sender: profile
-          };
-          setMessages((current) => [newMessage, ...current]);
+          setMessages((current) => {
+            if (current.some((m) => m.id === payload.new.id)) {
+              // Just update the profile if it was already there
+              return current.map(m => m.id === payload.new.id ? { ...m, sender: profile } : m);
+            }
+            const newMessage = { ...payload.new, sender: profile };
+            
+            // Check again for optimistic match to replace
+            const isMyMessage = payload.new.sender_id === user?.id;
+            const optimisticIndex = isMyMessage 
+              ? current.findIndex(m => m.isOptimistic && m.content === payload.new.content)
+              : -1;
+
+            if (optimisticIndex > -1) {
+              const updated = [...current];
+              updated[optimisticIndex] = newMessage;
+              return updated;
+            }
+
+            return [newMessage, ...current];
+          });
         }
       )
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [id, fetchRoomAndUser, fetchMessages]);
+  }, [id, user?.id, fetchRoomAndUser, fetchMessages]);
 
   function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
     const R = 6371000;
@@ -269,19 +309,64 @@ export default function ChatScreen() {
         return;
       }
       if (!id) {
-        Alert.alert('Error', 'Room ID not resolved. Please try again.');
+        if (isResolvingId) {
+          // If still resolving, we wait a bit or show an alert
+          Alert.alert('Please Wait', 'Connecting to chat room...');
+        } else {
+          Alert.alert('Error', 'Room ID not resolved. Please try again.');
+        }
         return;
       }
 
-      const message = { room_id: id, sender_id: user.id, content: finalContent, type: type };
+      // 1. Create optimistic message
+      const tempId = `temp-${Date.now()}`;
+      const optimisticMessage = {
+        id: tempId,
+        room_id: id,
+        sender_id: user.id,
+        content: finalContent,
+        type: type,
+        created_at: new Date().toISOString(),
+        isOptimistic: true,
+        sender: {
+          id: user.id,
+          username: user.user_metadata?.username,
+          full_name: user.user_metadata?.full_name,
+          avatar_url: user.user_metadata?.avatar_url,
+        }
+      };
+
+      // 2. Add to local state immediately
+      setMessages((current) => [optimisticMessage, ...current]);
+
+      // 3. Clear input and draft immediately for responsiveness
       if (type === 'text') {
         setNewMessage('');
         clearDraft(id);
       }
       
-      const { error } = await supabase.from('messages').insert(message);
-      if (error) {
+      try {
+        const { error } = await supabase.from('messages').insert({
+          room_id: id,
+          sender_id: user.id,
+          content: finalContent,
+          type: type,
+        });
+
+        if (error) {
+          throw error;
+        }
+      } catch (error: any) {
         console.error('Error sending message:', error);
+        
+        // 4. On error, remove optimistic message and restore input
+        setMessages((current) => current.filter((m) => m.id !== tempId));
+        
+        if (type === 'text') {
+          setNewMessage(finalContent);
+          setDraft(id, finalContent);
+        }
+
         if (error.code === '23503') {
           setRoomNotFound(true);
           Alert.alert('Error', 'This room no longer exists.');
@@ -290,7 +375,7 @@ export default function ChatScreen() {
         }
       }
     },
-    [id, user?.id, newMessage, roomNotFound, isExpired, isOutOfRange, room?.type]
+    [id, user, newMessage, roomNotFound, isExpired, isOutOfRange, room?.type, isResolvingId]
   );
 
   const pickImage = useCallback(async () => {

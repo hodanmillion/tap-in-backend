@@ -29,62 +29,66 @@ export default function ChatsScreen() {
     return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
   }
 
-  const {
-    data: rooms,
-    isLoading,
-    isFetching,
-    refetch,
-  } = useQuery({
-    queryKey: ['myChatRooms', user?.id],
-    queryFn: async () => {
-      if (!user?.id) return [];
+    const {
+      data: rooms,
+      isLoading,
+      isFetching,
+      refetch,
+    } = useQuery({
+      queryKey: ['myChatRooms', user?.id],
+      queryFn: async () => {
+        if (!user?.id) return [];
+  
+        // 1. Get all rooms I'm a participant in
+        const { data: myParticipations, error: partError } = await supabase
+          .from('room_participants')
+          .select('room_id')
+          .eq('user_id', user.id);
+  
+        if (partError) throw partError;
+        if (!myParticipations || myParticipations.length === 0) return [];
+  
+        const roomIds = myParticipations.map(p => p.room_id);
+  
+        // 2. Get the room details and ALL participants for those rooms (to find the other person in private chats)
+        const { data: roomsData, error: roomsError } = await supabase
+          .from('chat_rooms')
+          .select(`
+            *,
+            room_participants(
+              user_id,
+              profiles(full_name, username, avatar_url)
+            )
+          `)
+          .in('id', roomIds);
+  
+        if (roomsError) throw roomsError;
+  
+        return (roomsData || [])
+          .map((room: any) => {
+            if (room.type === 'private') {
+              const otherParticipant = room.room_participants?.find(
+                (p: any) => p.user_id !== user.id
+              );
+              const profile = otherParticipant?.profiles;
+              return {
+                ...room,
+                name: profile?.full_name || `@${profile?.username}` || 'Private Chat',
+                other_user_avatar: profile?.avatar_url,
+              };
+            }
+            return room;
+          })
+          .sort(
+            (a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
+          );
+      },
+      enabled: !!user?.id,
+      staleTime: 60000 * 5, // 5 minutes stale time for my chat rooms
+      gcTime: 1000 * 60 * 20,
+      placeholderData: (previousData) => previousData,
+    });
 
-      // 1. Get all rooms I'm a participant in
-      const { data: myParticipations, error: partError } = await supabase
-        .from('room_participants')
-        .select('room_id')
-        .eq('user_id', user.id);
-
-      if (partError) throw partError;
-      if (!myParticipations || myParticipations.length === 0) return [];
-
-      const roomIds = myParticipations.map(p => p.room_id);
-
-      // 2. Get the room details and ALL participants for those rooms (to find the other person in private chats)
-      const { data: roomsData, error: roomsError } = await supabase
-        .from('chat_rooms')
-        .select(`
-          *,
-          room_participants(
-            user_id,
-            profiles(full_name, username, avatar_url)
-          )
-        `)
-        .in('id', roomIds);
-
-      if (roomsError) throw roomsError;
-
-      return (roomsData || [])
-        .map((room: any) => {
-          if (room.type === 'private') {
-            const otherParticipant = room.room_participants?.find(
-              (p: any) => p.user_id !== user.id
-            );
-            const profile = otherParticipant?.profiles;
-            return {
-              ...room,
-              name: profile?.full_name || `@${profile?.username}` || 'Private Chat',
-              other_user_avatar: profile?.avatar_url,
-            };
-          }
-          return room;
-        })
-        .sort(
-          (a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
-        );
-    },
-    enabled: !!user?.id,
-  });
 
   const renderRoom = ({ item }: { item: any }) => {
     const isOutOfRange = 

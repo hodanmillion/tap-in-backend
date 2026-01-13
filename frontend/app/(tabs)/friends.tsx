@@ -16,15 +16,18 @@ export default function FriendsScreen() {
   const theme = THEME[colorScheme ?? 'light'];
   const router = useRouter();
 
-  const { data: friendsData, isLoading, refetch } = useQuery({
-    queryKey: ['friends', user?.id],
-    queryFn: async () => {
-      if (!user?.id) return [];
-      return apiRequest(`/friends/${user.id}`);
-    },
-    enabled: !!user?.id,
-    staleTime: 60000,
-  });
+    const { data: friendsData, isLoading, refetch } = useQuery({
+      queryKey: ['friends', user?.id],
+      queryFn: async () => {
+        if (!user?.id) return [];
+        return apiRequest(`/friends/${user.id}`);
+      },
+      enabled: !!user?.id,
+      staleTime: 60000 * 5, // 5 minutes stale time for friends list
+      gcTime: 1000 * 60 * 30,
+      placeholderData: (prev) => prev,
+    });
+
 
   const friends = useMemo(() => friendsData || [], [friendsData]);
 

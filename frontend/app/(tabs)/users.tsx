@@ -33,32 +33,42 @@ export default function UsersScreen() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  const {
-    data: nearbyUsers,
-    isLoading: loadingNearby,
-    refetch: refetchNearby,
-  } = useQuery({
-    queryKey: ['nearbyUsers', location?.coords.latitude, location?.coords.longitude],
-    queryFn: async () => {
-      if (!location || !user?.id) return [];
-      const { latitude, longitude } = location.coords;
-      return apiRequest(
-        `/profiles/nearby?lat=${latitude}&lng=${longitude}&radius=5000&userId=${user.id}`
-      );
-    },
-    enabled: !!location && !!user?.id && !debouncedQuery,
-  });
+    const {
+      data: nearbyUsers,
+      isLoading: loadingNearby,
+      refetch: refetchNearby,
+    } = useQuery({
+      queryKey: [
+        'nearbyUsers',
+        location?.coords.latitude.toFixed(2),
+        location?.coords.longitude.toFixed(2),
+      ],
+      queryFn: async () => {
+        if (!location || !user?.id) return [];
+        const { latitude, longitude } = location.coords;
+        return apiRequest(
+          `/profiles/nearby?lat=${latitude}&lng=${longitude}&radius=5000&userId=${user.id}`
+        );
+      },
+      enabled: !!location && !!user?.id && !debouncedQuery,
+      staleTime: 60000 * 2, // 2 minutes stale time for nearby users
+      gcTime: 1000 * 60 * 15,
+      placeholderData: (prev) => prev,
+    });
+  
+    const { data: searchResults, isLoading: loadingSearch } = useQuery({
+      queryKey: ['userSearch', debouncedQuery],
+      queryFn: async () => {
+        if (!debouncedQuery || !user?.id) return [];
+        return apiRequest(
+          `/profiles/search?q=${encodeURIComponent(debouncedQuery)}&userId=${user.id}`
+        );
+      },
+      enabled: !!debouncedQuery && !!user?.id,
+      staleTime: 60000 * 1, // 1 minute stale time for search results
+      gcTime: 1000 * 60 * 5,
+    });
 
-  const { data: searchResults, isLoading: loadingSearch } = useQuery({
-    queryKey: ['userSearch', debouncedQuery],
-    queryFn: async () => {
-      if (!debouncedQuery || !user?.id) return [];
-      return apiRequest(
-        `/profiles/search?q=${encodeURIComponent(debouncedQuery)}&userId=${user.id}`
-      );
-    },
-    enabled: !!debouncedQuery && !!user?.id,
-  });
 
   const sendRequestMutation = useMutation({
     mutationFn: async (receiverId: string) => {
