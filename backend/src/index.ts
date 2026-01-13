@@ -640,7 +640,7 @@ app.get('/notifications/:userId', async (c) => {
       .select('*')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
-      .limit(20);
+      .limit(50);
 
     if (error) throw error;
     return c.json(data || []);
@@ -649,6 +649,32 @@ app.get('/notifications/:userId', async (c) => {
     return c.json({ error: error.message }, 500);
   }
 });
+
+// POST /notifications/read - Mark notifications as read
+app.post(
+  '/notifications/read',
+  zValidator(
+    'json',
+    z.object({
+      notificationIds: z.array(z.string()),
+    })
+  ),
+  async (c) => {
+    const { notificationIds } = c.req.valid('json');
+    try {
+      const { error } = await supabase
+        .from('notifications')
+        .update({ is_read: true })
+        .in('id', notificationIds);
+
+      if (error) throw error;
+      return c.json({ success: true });
+    } catch (err) {
+      const error = err as Error;
+      return c.json({ error: error.message }, 500);
+    }
+  }
+);
 
 // GET /profiles/search - Search for users
 app.get('/profiles/search', async (c) => {

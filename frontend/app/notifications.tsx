@@ -22,19 +22,15 @@ export default function NotificationsScreen() {
   } = useQuery({
     queryKey: ['notifications', user?.id],
     queryFn: async () => {
-      const response = await fetch(
-        `${process.env.EXPO_PUBLIC_BACKEND_URL}/notifications/${user?.id}`
-      );
-      return response.json();
+      return apiRequest(`/notifications/${user?.id}`);
     },
     enabled: !!user?.id,
   });
 
   const markReadMutation = useMutation({
     mutationFn: async (ids: string[]) => {
-      await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/notifications/read`, {
+      await apiRequest('/notifications/read', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ notificationIds: ids }),
       });
     },

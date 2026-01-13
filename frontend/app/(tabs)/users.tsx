@@ -42,11 +42,9 @@ export default function UsersScreen() {
     queryFn: async () => {
       if (!location || !user?.id) return [];
       const { latitude, longitude } = location.coords;
-      const response = await fetch(
-        `${process.env.EXPO_PUBLIC_BACKEND_URL}/profiles/nearby?lat=${latitude}&lng=${longitude}&radius=5000&userId=${user.id}`
+      return apiRequest(
+        `/profiles/nearby?lat=${latitude}&lng=${longitude}&radius=5000&userId=${user.id}`
       );
-      if (!response.ok) return [];
-      return response.json();
     },
     enabled: !!location && !!user?.id && !debouncedQuery,
   });
@@ -55,28 +53,19 @@ export default function UsersScreen() {
     queryKey: ['userSearch', debouncedQuery],
     queryFn: async () => {
       if (!debouncedQuery || !user?.id) return [];
-      const response = await fetch(
-        `${process.env.EXPO_PUBLIC_BACKEND_URL}/profiles/search?q=${encodeURIComponent(
-          debouncedQuery
-        )}&userId=${user.id}`
+      return apiRequest(
+        `/profiles/search?q=${encodeURIComponent(debouncedQuery)}&userId=${user.id}`
       );
-      if (!response.ok) return [];
-      return response.json();
     },
     enabled: !!debouncedQuery && !!user?.id,
   });
 
   const sendRequestMutation = useMutation({
     mutationFn: async (receiverId: string) => {
-      const response = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/friends/request`, {
+      await apiRequest('/friends/request', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sender_id: user?.id, receiver_id: receiverId }),
       });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to send request');
-      }
       return receiverId;
     },
     onSuccess: (receiverId) => {

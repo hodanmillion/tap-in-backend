@@ -84,28 +84,27 @@ export default function ChatScreen() {
     [router]
   );
 
-  const resolveRoomId = useCallback(async () => {
-    if (!user) return;
+    const resolveRoomId = useCallback(async () => {
+      if (!user) return;
 
-    if (typeof initialId === 'string' && initialId.startsWith('private_')) {
-      const friendId = initialId.replace('private_', '');
-      try {
-        const response = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/rooms/private`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ user1_id: user.id, user2_id: friendId }),
-        });
-        const data = await response.json();
-        if (data.room_id) {
-          setId(data.room_id);
+      if (typeof initialId === 'string' && initialId.startsWith('private_')) {
+        const friendId = initialId.replace('private_', '');
+        try {
+          const data = await apiRequest('/rooms/private', {
+            method: 'POST',
+            body: JSON.stringify({ user1_id: user.id, user2_id: friendId }),
+          });
+          if (data.room_id) {
+            setId(data.room_id);
+          }
+        } catch (error) {
+          console.error('Error resolving private room:', error);
         }
-      } catch (error) {
-        console.error('Error resolving private room:', error);
+      } else {
+        setId(initialId as string);
       }
-    } else {
-      setId(initialId as string);
-    }
-  }, [initialId, user]);
+    }, [initialId, user]);
+
 
   useEffect(() => {
     if (user) {
@@ -127,9 +126,8 @@ export default function ChatScreen() {
       // Join the room if it's an auto-generated one to make it persistent in "Chats"
       if (data.type === 'auto_generated') {
         try {
-          await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/rooms/${id}/join`, {
+          await apiRequest(`/rooms/${id}/join`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ userId: user.id }),
           });
         } catch (error) {
@@ -175,9 +173,7 @@ export default function ChatScreen() {
   const fetchMessages = useCallback(async () => {
     if (!id) return;
     try {
-      const response = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/messages/${id}`);
-      if (!response.ok) throw new Error('Failed to fetch messages');
-      const data = await response.json();
+      const data = await apiRequest(`/messages/${id}`);
       if (data) setMessages([...data].reverse());
     } catch (error) {
       console.error('Error fetching messages:', error);
