@@ -92,14 +92,14 @@ export default function ChatsScreen() {
 
   const renderRoom = ({ item }: { item: any }) => {
     const isOutOfRange = 
-      item.type === 'auto_generated' && 
+      item.type !== 'private' && 
       location && 
       calculateDistance(
         location.coords.latitude,
         location.coords.longitude,
         item.latitude,
         item.longitude
-      ) > (item.radius || 20);
+      ) > (item.radius || 100);
 
     const isExpired = item.expires_at && new Date() > new Date(item.expires_at);
 

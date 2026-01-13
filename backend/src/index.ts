@@ -481,6 +481,49 @@ app.post(
     const payload = c.req.valid('json');
 
     try {
+      // 1. Fetch room and user profile to check proximity
+      const { data: room, error: roomError } = await supabase
+        .from('chat_rooms')
+        .select('*')
+        .eq('id', payload.room_id)
+        .single();
+
+      if (roomError || !room) throw new Error('Room not found');
+
+      // 2. Proximity check for non-private rooms
+      if (room.type !== 'private') {
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('latitude, longitude')
+          .eq('id', payload.sender_id)
+          .single();
+
+        if (profileError || !profile || profile.latitude === null) {
+          throw new Error('User location unknown. Please enable location services.');
+        }
+
+        // Calculate distance using Haversine formula
+        const R = 6371000; // meters
+        const lat1 = profile.latitude * (Math.PI / 180);
+        const lat2 = room.latitude! * (Math.PI / 180);
+        const dLat = (room.latitude! - profile.latitude) * (Math.PI / 180);
+        const dLon = (room.longitude! - profile.longitude) * (Math.PI / 180);
+
+        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                  Math.cos(lat1) * Math.cos(lat2) *
+                  Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        const dist = R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+
+        const radius = room.radius || 100;
+        if (dist > radius) {
+          return c.json({ 
+            error: 'Out of range', 
+            message: `You must be within ${radius}m to send messages. Current distance: ${Math.round(dist)}m` 
+          }, 403);
+        }
+      }
+
+      // 3. Insert message
       const { data, error } = await supabase
         .from('messages')
         .insert(payload)
@@ -491,6 +534,13 @@ app.post(
         .single();
 
       if (error) throw error;
+
+      // 4. Ensure sender is a participant (for persistence in "Chats" tab)
+      await supabase.from('room_participants').upsert({
+        room_id: payload.room_id,
+        user_id: payload.sender_id,
+      }, { onConflict: 'room_id,user_id' });
+
       return c.json(data);
     } catch (err) {
       const error = err as Error;

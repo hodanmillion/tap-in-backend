@@ -250,6 +250,8 @@ export default function ChatScreen() {
     };
   }, [id, user?.id, fetchRoomAndUser, fetchMessages]);
 
+  const CHAT_RADIUS_METERS = 100;
+
   function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
     const R = 6371000;
     const dLat = (lat2 - lat1) * (Math.PI / 180);
@@ -271,7 +273,8 @@ export default function ChatScreen() {
         room.latitude,
         room.longitude
       );
-      setIsOutOfRange(distance > (room.radius || CHAT_RADIUS_METERS));
+      const radius = room.radius || CHAT_RADIUS_METERS;
+      setIsOutOfRange(distance > radius);
       if (room.expires_at) {
         const now = new Date();
         const expires = new Date(room.expires_at);
@@ -346,15 +349,18 @@ export default function ChatScreen() {
       }
       
       try {
-        const { error } = await supabase.from('messages').insert({
-          room_id: id,
-          sender_id: user.id,
-          content: finalContent,
-          type: type,
+        const data = await apiRequest('/messages', {
+          method: 'POST',
+          body: JSON.stringify({
+            room_id: id,
+            sender_id: user.id,
+            content: finalContent,
+            type: type,
+          }),
         });
 
-        if (error) {
-          throw error;
+        if (!data || data.error) {
+          throw new Error(data?.message || data?.error || 'Failed to send');
         }
       } catch (error: any) {
         console.error('Error sending message:', error);
@@ -367,11 +373,13 @@ export default function ChatScreen() {
           setDraft(id, finalContent);
         }
 
-        if (error.code === '23503') {
+        if (error.message?.includes('Out of range') || error.error === 'Out of range') {
+          Alert.alert('Out of Range', error.message || 'You are too far from this location.');
+        } else if (error.code === '23503') {
           setRoomNotFound(true);
           Alert.alert('Error', 'This room no longer exists.');
         } else {
-          Alert.alert('Error', 'Failed to send message. Please check your connection.');
+          Alert.alert('Error', error.message || 'Failed to send message. Please check your connection.');
         }
       }
     },
