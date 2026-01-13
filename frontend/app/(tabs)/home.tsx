@@ -164,12 +164,12 @@ export default function HomeScreen() {
       <View className="flex-1 px-5">
           <View className="mb-8 mt-6 flex-row items-center justify-between">
             <View>
-              <View className="flex-row items-center">
-                <Text className="text-3xl font-black tracking-tight text-foreground">Nearby</Text>
-                <View className="ml-3 bg-primary px-2 py-0.5 rounded-md">
-                  <Text className="text-[10px] font-black text-primary-foreground uppercase">Pro</Text>
+                <View className="flex-row items-center">
+                  <Text className="text-3xl font-black tracking-tight text-foreground">Nearby</Text>
+                  <View className="ml-3 bg-brand-pink px-2 py-0.5 rounded-md">
+                    <Text className="text-[10px] font-black text-white uppercase">Pro</Text>
+                  </View>
                 </View>
-              </View>
               <View className="mt-1 flex-row items-center gap-2">
 
               <View className={`h-2 w-2 rounded-full ${location ? 'bg-green-500' : 'bg-amber-500 shadow-sm'}`} />

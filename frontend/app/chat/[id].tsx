@@ -79,7 +79,7 @@ export default function ChatScreen() {
   const headerLeftComponent = useMemo(
     () => (
       <TouchableOpacity onPress={() => router.back()} className="mr-4">
-        <ChevronLeft size={28} color="#3b82f6" />
+        <ChevronLeft size={28} color="hsl(var(--primary))" />
       </TouchableOpacity>
     ),
     [router]
@@ -511,41 +511,41 @@ export default function ChatScreen() {
     const isMine = item.sender_id === user?.id;
     return (
       <View className={`mb-4 flex-row ${isMine ? 'justify-end' : 'justify-start'}`}>
-        <View
-          className={`max-w-[80%] rounded-2xl px-4 py-2 ${isMine ? 'rounded-br-none bg-blue-600' : 'rounded-bl-none bg-zinc-800'}`}>
-          {!isMine && (
-            <Text className="mb-1 text-xs font-bold text-zinc-400">
-              {item.sender?.full_name || item.sender?.username || 'User'}
-            </Text>
-          )}
-          {item.type === 'image' || item.type === 'gif' ? (
-            <TouchableOpacity
-              activeOpacity={0.9}
-              onPress={() => setSelectedImage(item.content)}
-              className="overflow-hidden rounded-lg">
-              <Image
-                source={{ uri: item.content }}
-                className="h-48 w-64"
-                contentFit="cover"
-                transition={200}
-              />
-            </TouchableOpacity>
-          ) : (
-            <Text
-              className={`text-[16px] leading-5 ${isMine ? 'text-white' : 'text-zinc-100'}`}>
-              {item.content}
-            </Text>
-          )}
-          <View className="mt-1 flex-row items-center justify-end">
-            <Text
-              className={`text-[10px] opacity-60 ${isMine ? 'text-blue-100' : 'text-zinc-400'}`}>
-              {new Date(item.created_at).toLocaleTimeString([], {
-                hour: '2-digit',
-                minute: '2-digit',
-              })}
-            </Text>
+          <View
+            className={`max-w-[80%] rounded-2xl px-4 py-2 ${isMine ? 'rounded-br-none bg-primary' : 'rounded-bl-none bg-zinc-800'}`}>
+            {!isMine && (
+              <Text className="mb-1 text-xs font-bold text-zinc-400">
+                {item.sender?.full_name || item.sender?.username || 'User'}
+              </Text>
+            )}
+            {item.type === 'image' || item.type === 'gif' ? (
+              <TouchableOpacity
+                activeOpacity={0.9}
+                onPress={() => setSelectedImage(item.content)}
+                className="overflow-hidden rounded-lg">
+                <Image
+                  source={{ uri: item.content }}
+                  className="h-48 w-64"
+                  contentFit="cover"
+                  transition={200}
+                />
+              </TouchableOpacity>
+            ) : (
+              <Text
+                className={`text-[16px] leading-5 ${isMine ? 'text-primary-foreground' : 'text-zinc-100'}`}>
+                {item.content}
+              </Text>
+            )}
+            <View className="mt-1 flex-row items-center justify-end">
+              <Text
+                className={`text-[10px] opacity-60 ${isMine ? 'text-primary-foreground/80' : 'text-zinc-400'}`}>
+                {new Date(item.created_at).toLocaleTimeString([], {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </Text>
+            </View>
           </View>
-        </View>
       </View>
     );
   }, [user?.id]);
@@ -558,14 +558,14 @@ export default function ChatScreen() {
     );
   }
 
-  if (loading) {
-    return (
-      <View className="flex-1 items-center justify-center bg-zinc-950">
-        <Stack.Screen options={defaultHeaderOptions} />
-        <ActivityIndicator size="large" color="#3b82f6" />
-      </View>
-    );
-  }
+    if (loading) {
+      return (
+        <View className="flex-1 items-center justify-center bg-zinc-950">
+          <Stack.Screen options={defaultHeaderOptions} />
+          <ActivityIndicator size="large" color="hsl(var(--primary))" />
+        </View>
+      );
+    }
 
   return (
     <View className="flex-1 bg-background">
@@ -621,50 +621,50 @@ export default function ChatScreen() {
                   multiline
                 />
               </View>
-              <TouchableOpacity
-                onPress={() => sendMessage()}
-                className={`h-10 w-10 items-center justify-center rounded-full ${newMessage.trim() ? 'bg-blue-600' : 'bg-zinc-800'}`}
-                disabled={!newMessage.trim()}>
-                <Send size={20} color={newMessage.trim() ? 'white' : '#71717a'} />
-              </TouchableOpacity>
-            </View>
-          )}
-        </KeyboardAvoidingView>
-      </SafeAreaView>
-
-      <Modal
-        visible={gifModalVisible}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setGifModalVisible(false)}>
-        <View className="flex-1 bg-zinc-950 p-4">
-          <View className="mb-4 flex-row items-center justify-between">
-            <Text className="text-xl font-bold text-white">Search GIFs</Text>
-            <TouchableOpacity onPress={() => setGifModalVisible(false)}>
-              <X size={24} color="white" />
-            </TouchableOpacity>
-          </View>
-          <View className="mb-4 flex-row items-center rounded-xl bg-zinc-900 px-4 py-2">
-            <Search size={20} color="#71717a" />
-            <TextInput
-              placeholder="Search Giphy..."
-              placeholderTextColor="#71717a"
-              value={gifSearch}
-              onChangeText={setGifSearch}
-              className="ml-2 flex-1 text-white"
-              autoFocus
-            />
-            {gifSearch.length > 0 && (
-              <TouchableOpacity onPress={() => setGifSearch('')}>
-                <X size={18} color="#71717a" />
-              </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => sendMessage()}
+                  className={`h-10 w-10 items-center justify-center rounded-full ${newMessage.trim() ? 'bg-primary' : 'bg-zinc-800'}`}
+                  disabled={!newMessage.trim()}>
+                  <Send size={20} color={newMessage.trim() ? 'hsl(var(--primary-foreground))' : '#71717a'} />
+                </TouchableOpacity>
+              </View>
             )}
-          </View>
-          {gifLoading ? (
-            <View className="flex-1 items-center justify-center">
-              <ActivityIndicator size="large" color="#3b82f6" />
+          </KeyboardAvoidingView>
+        </SafeAreaView>
+  
+        <Modal
+          visible={gifModalVisible}
+          animationType="slide"
+          presentationStyle="pageSheet"
+          onRequestClose={() => setGifModalVisible(false)}>
+          <View className="flex-1 bg-zinc-950 p-4">
+            <View className="mb-4 flex-row items-center justify-between">
+              <Text className="text-xl font-bold text-white">Search GIFs</Text>
+              <TouchableOpacity onPress={() => setGifModalVisible(false)}>
+                <X size={24} color="white" />
+              </TouchableOpacity>
             </View>
-          ) : (
+            <View className="mb-4 flex-row items-center rounded-xl bg-zinc-900 px-4 py-2">
+              <Search size={20} color="#71717a" />
+              <TextInput
+                placeholder="Search Giphy..."
+                placeholderTextColor="#71717a"
+                value={gifSearch}
+                onChangeText={setGifSearch}
+                className="ml-2 flex-1 text-white"
+                autoFocus
+              />
+              {gifSearch.length > 0 && (
+                <TouchableOpacity onPress={() => setGifSearch('')}>
+                  <X size={18} color="#71717a" />
+                </TouchableOpacity>
+              )}
+            </View>
+            {gifLoading ? (
+              <View className="flex-1 items-center justify-center">
+                <ActivityIndicator size="large" color="hsl(var(--primary))" />
+              </View>
+            ) : (
             <ScrollView
               className="flex-1"
               contentContainerStyle={{

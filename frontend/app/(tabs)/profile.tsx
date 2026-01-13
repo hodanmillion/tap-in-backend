@@ -305,8 +305,10 @@ export default function ProfileScreen() {
           <View className="px-6 space-y-6">
             <View className="rounded-[32px] bg-card border border-border p-6 shadow-sm">
               <View className="flex-row items-center mb-4">
-                <Info size={20} color={theme.primary} />
-                <Text className="ml-3 text-lg font-black text-foreground uppercase tracking-widest">About Me</Text>
+                <View className="h-10 w-10 items-center justify-center rounded-xl bg-brand-purple/20 mr-3">
+                  <Info size={20} color="hsl(var(--brand-purple))" />
+                </View>
+                <Text className="text-lg font-black text-foreground uppercase tracking-widest">About Me</Text>
               </View>
               <Text className="text-base text-muted-foreground leading-6">
                 {profile?.bio || "No bio yet. Tap 'Edit Profile' to add one!"}
@@ -353,24 +355,24 @@ export default function ProfileScreen() {
 
             <View className="rounded-[32px] bg-card border border-border p-6 shadow-sm mb-6">
               <View className="flex-row items-center justify-between">
-                <View className="flex-row items-center">
-                  <View className="h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 mr-4">
-                    <Users size={24} color={theme.primary} />
-                  </View>
-                    <View>
-                      <Text className="text-xl font-black text-foreground">{friendCount}</Text>
-                      <Text className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Friends</Text>
-                    </View>
-                  </View>
-                  <View className="h-12 w-[1px] bg-border" />
                   <View className="flex-row items-center">
-                    <View className="h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 mr-4">
-                      <MessageSquare size={24} color={theme.primary} />
+                    <View className="h-12 w-12 items-center justify-center rounded-2xl bg-brand-pink/10 mr-4">
+                      <Users size={24} color="hsl(var(--brand-pink))" />
                     </View>
-                    <View>
-                      <Text className="text-xl font-black text-foreground">{messageCount}</Text>
-                      <Text className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Messages</Text>
+                      <View>
+                        <Text className="text-xl font-black text-foreground">{friendCount}</Text>
+                        <Text className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Friends</Text>
+                      </View>
                     </View>
+                    <View className="h-12 w-[1px] bg-border mx-2" />
+                    <View className="flex-row items-center">
+                      <View className="h-12 w-12 items-center justify-center rounded-2xl bg-brand-cyan/10 mr-4">
+                        <MessageSquare size={24} color="hsl(var(--brand-cyan))" />
+                      </View>
+                      <View>
+                        <Text className="text-xl font-black text-foreground">{messageCount}</Text>
+                        <Text className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Messages</Text>
+                      </View>
 
                 </View>
               </View>

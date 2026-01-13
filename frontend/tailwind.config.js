@@ -13,11 +13,16 @@ module.exports = {
         ring: 'hsl(var(--ring))',
         background: 'hsl(var(--background))',
         foreground: 'hsl(var(--foreground))',
-        primary: {
-          DEFAULT: 'hsl(var(--primary))',
-          foreground: 'hsl(var(--primary-foreground))',
-        },
-        secondary: {
+          primary: {
+            DEFAULT: 'hsl(var(--primary))',
+            foreground: 'hsl(var(--primary-foreground))',
+          },
+          brand: {
+            pink: 'hsl(var(--brand-pink))',
+            cyan: 'hsl(var(--brand-cyan))',
+            purple: 'hsl(var(--brand-purple))',
+          },
+          secondary: {
           DEFAULT: 'hsl(var(--secondary))',
           foreground: 'hsl(var(--secondary-foreground))',
         },
