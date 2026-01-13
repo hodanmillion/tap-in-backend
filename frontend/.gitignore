@@ -28,6 +28,9 @@ yarn-error.*
 .DS_Store
 *.pem
 
+dist-test/
+dist-test-2/
+
 # local env files
 .env*.local
 
