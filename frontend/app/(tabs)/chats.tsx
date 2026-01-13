@@ -9,6 +9,17 @@ import { useLocation } from '@/hooks/useLocation';
 import { useColorScheme } from 'nativewind';
 import { THEME } from '@/lib/theme';
 
+const ChatItemSkeleton = () => (
+  <View className="mb-5 flex-row items-center rounded-[28px] border border-border bg-card p-5 opacity-50">
+    <View className="h-16 w-16 rounded-[20px] bg-secondary/60" />
+    <View className="ml-4 flex-1 gap-2">
+      <View className="h-5 w-32 rounded bg-secondary/60" />
+      <View className="h-3 w-20 rounded bg-secondary/60" />
+    </View>
+    <View className="h-11 w-11 rounded-full bg-secondary/60" />
+  </View>
+);
+
 export default function ChatsScreen() {
   const { user } = useAuth();
   const { colorScheme } = useColorScheme();
@@ -164,10 +175,12 @@ export default function ChatsScreen() {
             Your active conversations.
           </Text>
         </View>
-
-        {isLoading && !isFetching ? (
-          <View className="flex-1 items-center justify-center">
-            <ActivityIndicator size="large" color={theme.primary} />
+  
+        {isLoading && !rooms ? (
+          <View className="flex-1">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <ChatItemSkeleton key={i} />
+            ))}
           </View>
         ) : (
           <FlatList
@@ -179,28 +192,33 @@ export default function ChatsScreen() {
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{ paddingBottom: 120 }}
             ListEmptyComponent={
-              <View className="mt-10 items-center justify-center rounded-[40px] border-2 border-dashed border-border/60 bg-secondary/50 p-12">
-                <View className="h-24 w-24 items-center justify-center rounded-full bg-background border border-border mb-8 shadow-sm">
-                  <MessageSquare size={40} color={theme.mutedForeground} opacity={0.4} />
+              !isFetching ? (
+                <View className="mt-10 items-center justify-center rounded-[40px] border-2 border-dashed border-border/60 bg-secondary/50 p-12">
+                  <View className="h-24 w-24 items-center justify-center rounded-full bg-background border border-border mb-8 shadow-sm">
+                    <MessageSquare size={40} color={theme.mutedForeground} opacity={0.4} />
+                  </View>
+                  <Text className="text-center text-2xl font-black text-foreground">
+                    Empty inbox
+                  </Text>
+                  <Text className="mt-3 text-center text-base font-medium text-muted-foreground px-4">
+                    Start a conversation by joining a nearby zone or connecting with friends!
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => router.push('/home')}
+                    activeOpacity={0.8}
+                    className="mt-8 flex-row items-center gap-2 rounded-2xl bg-primary px-8 py-4">
+                    <Compass size={20} color={theme.primaryForeground} />
+                    <Text className="font-black text-primary-foreground uppercase tracking-widest">
+                      Find Zones
+                    </Text>
+                  </TouchableOpacity>
                 </View>
-                <Text className="text-center text-2xl font-black text-foreground">
-                  Empty inbox
-                </Text>
-                <Text className="mt-3 text-center text-base font-medium text-muted-foreground px-4">
-                  Start a conversation by joining a nearby zone or connecting with friends!
-                </Text>
-                <TouchableOpacity
-                  onPress={() => router.push('/home')}
-                  activeOpacity={0.8}
-                  className="mt-8 flex-row items-center gap-2 rounded-2xl bg-primary px-8 py-4">
-                  <Compass size={20} color={theme.primaryForeground} />
-                  <Text className="font-black text-primary-foreground uppercase tracking-widest">Find Zones</Text>
-                </TouchableOpacity>
-              </View>
+              ) : null
             }
           />
         )}
       </View>
     </SafeAreaView>
+
   );
 }

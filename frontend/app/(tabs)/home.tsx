@@ -10,6 +10,8 @@ import { useAuth } from '@/context/AuthContext';
 import { useColorScheme } from 'nativewind';
 import { THEME } from '@/lib/theme';
 
+import * as Haptics from 'expo-haptics';
+
 function getTimeRemaining(expiresAt: string | null): string {
   if (!expiresAt) return 'Permanent';
   const now = new Date();
@@ -105,6 +107,9 @@ export default function HomeScreen() {
 
   const createRoomMutation = useMutation({
     mutationFn: async () => {
+      // Add haptic feedback
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
       if (!location) {
         Alert.alert('Location Required', 'We are still getting your location. Please wait a moment and try again.');
         return;

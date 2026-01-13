@@ -17,6 +17,17 @@ import { useAuth } from '@/context/AuthContext';
 import { useColorScheme } from 'nativewind';
 import { THEME } from '@/lib/theme';
 
+const UserItemSkeleton = () => (
+  <View className="mb-4 flex-row items-center rounded-3xl border border-border bg-card p-4 opacity-50">
+    <View className="h-14 w-14 rounded-2xl bg-secondary/60" />
+    <View className="ml-4 flex-1 gap-2">
+      <View className="h-4 w-32 rounded bg-secondary/60" />
+      <View className="h-3 w-20 rounded bg-secondary/60" />
+    </View>
+    <View className="h-10 w-24 rounded-xl bg-secondary/60" />
+  </View>
+);
+
 export default function UsersScreen() {
   const { user } = useAuth();
   const { colorScheme } = useColorScheme();
@@ -179,10 +190,12 @@ export default function UsersScreen() {
             </View>
           )}
         </View>
-
+  
         {isLoading ? (
-          <View className="flex-1 items-center justify-center">
-            <ActivityIndicator size="large" color={theme.primary} />
+          <View className="flex-1">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <UserItemSkeleton key={i} />
+            ))}
           </View>
         ) : (
           <FlatList
@@ -192,19 +205,21 @@ export default function UsersScreen() {
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{ paddingBottom: 120 }}
             ListEmptyComponent={
-              <View className="mt-10 items-center justify-center rounded-[40px] border-2 border-dashed border-border/60 bg-secondary/50 p-12">
-                <View className="h-24 w-24 items-center justify-center rounded-full bg-background border border-border mb-8 shadow-sm">
-                  <Compass size={40} color={theme.mutedForeground} opacity={0.4} />
+              !isLoading ? (
+                <View className="mt-10 items-center justify-center rounded-[40px] border-2 border-dashed border-border/60 bg-secondary/50 p-12">
+                  <View className="h-24 w-24 items-center justify-center rounded-full bg-background border border-border mb-8 shadow-sm">
+                    <Compass size={40} color={theme.mutedForeground} opacity={0.4} />
+                  </View>
+                  <Text className="text-center text-2xl font-black text-foreground">
+                    {debouncedQuery ? 'No users found' : 'Silence is golden'}
+                  </Text>
+                  <Text className="mt-3 text-center text-base font-medium text-muted-foreground px-4">
+                    {debouncedQuery 
+                      ? `We couldn't find anyone matching "${debouncedQuery}"`
+                      : "No one else is nearby right now. Be the first to start a conversation!"}
+                  </Text>
                 </View>
-                <Text className="text-center text-2xl font-black text-foreground">
-                  {debouncedQuery ? 'No users found' : 'Silence is golden'}
-                </Text>
-                <Text className="mt-3 text-center text-base font-medium text-muted-foreground px-4">
-                  {debouncedQuery 
-                    ? `We couldn't find anyone matching "${debouncedQuery}"`
-                    : "No one else is nearby right now. Be the first to start a conversation!"}
-                </Text>
-              </View>
+              ) : null
             }
             onRefresh={!debouncedQuery ? refetchNearby : undefined}
             refreshing={false}
@@ -212,5 +227,6 @@ export default function UsersScreen() {
         )}
       </View>
     </SafeAreaView>
+
   );
 }

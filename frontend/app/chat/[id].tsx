@@ -5,12 +5,12 @@ import {
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
-    ActivityIndicator,
-    Modal,
-    ScrollView,
-    Pressable,
-    FlatList,
-  } from 'react-native';
+  ActivityIndicator,
+  Modal,
+  ScrollView,
+  Pressable,
+  FlatList,
+} from 'react-native';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
@@ -31,11 +31,34 @@ import { useLocation } from '@/hooks/useLocation';
 import * as Location from 'expo-location';
 import { useAuth } from '@/context/AuthContext';
 import { useChat } from '@/context/ChatContext';
+import { useColorScheme } from 'nativewind';
+import { THEME } from '@/lib/theme';
+import * as Haptics from 'expo-haptics';
+import { apiRequest } from '@/lib/api';
 
 const CHAT_RADIUS_METERS = 100;
 const GIPHY_API_KEY = process.env.EXPO_PUBLIC_GIPHY_API_KEY || 'l1WfAFgqA5WupWoMaCaWKB12G54J6LtZ';
 
+function isSameDay(d1: Date, d2: Date) {
+  return (
+    d1.getFullYear() === d2.getFullYear() &&
+    d1.getMonth() === d2.getMonth() &&
+    d1.getDate() === d2.getDate()
+  );
+}
+
+function formatDateSeparator(date: Date) {
+  const now = new Date();
+  if (isSameDay(date, now)) return 'Today';
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (isSameDay(date, yesterday)) return 'Yesterday';
+  return date.toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' });
+}
+
 export default function ChatScreen() {
+  const { colorScheme } = useColorScheme();
+  const theme = THEME[colorScheme ?? 'light'];
   const { id: initialId } = useLocalSearchParams();
   const router = useRouter();
   const { user } = useAuth();
@@ -79,35 +102,34 @@ export default function ChatScreen() {
   const headerLeftComponent = useMemo(
     () => (
       <TouchableOpacity onPress={() => router.back()} className="mr-4">
-        <ChevronLeft size={28} color="hsl(var(--primary))" />
+        <ChevronLeft size={28} color={theme.primary} />
       </TouchableOpacity>
     ),
-    [router]
+    [router, theme.primary]
   );
 
-    const resolveRoomId = useCallback(async () => {
-      if (!user) return;
-      setIsResolvingId(true);
+  const resolveRoomId = useCallback(async () => {
+    if (!user) return;
+    setIsResolvingId(true);
 
-      if (typeof initialId === 'string' && initialId.startsWith('private_')) {
-        const friendId = initialId.replace('private_', '');
-        try {
-          const data = await apiRequest('/rooms/private', {
-            method: 'POST',
-            body: JSON.stringify({ user1_id: user.id, user2_id: friendId }),
-          });
-          if (data.room_id) {
-            setId(data.room_id);
-          }
-        } catch (error) {
-          console.error('Error resolving private room:', error);
+    if (typeof initialId === 'string' && initialId.startsWith('private_')) {
+      const friendId = initialId.replace('private_', '');
+      try {
+        const data = await apiRequest('/rooms/private', {
+          method: 'POST',
+          body: JSON.stringify({ user1_id: user.id, user2_id: friendId }),
+        });
+        if (data.room_id) {
+          setId(data.room_id);
         }
-      } else {
-        setId(initialId as string);
+      } catch (error) {
+        console.error('Error resolving private room:', error);
       }
-      setIsResolvingId(false);
-    }, [initialId, user]);
-
+    } else {
+      setId(initialId as string);
+    }
+    setIsResolvingId(false);
+  }, [initialId, user]);
 
   useEffect(() => {
     if (user) {
@@ -117,29 +139,28 @@ export default function ChatScreen() {
     return () => clearTimeout(timer);
   }, [resolveRoomId, user]);
 
-    const fetchRoomAndUser = useCallback(async () => {
-      if (!id || !user?.id) return;
-      const { data } = await supabase.from('chat_rooms').select('*').eq('id', id).single();
-      if (!data) {
-        setRoomNotFound(true);
-        setLoading(false);
-        return;
+  const fetchRoomAndUser = useCallback(async () => {
+    if (!id || !user?.id) return;
+    const { data } = await supabase.from('chat_rooms').select('*').eq('id', id).single();
+    if (!data) {
+      setRoomNotFound(true);
+      setLoading(false);
+      return;
+    }
+
+    // Join the room if it's an auto-generated one to make it persistent in "Chats"
+    if (data.type === 'auto_generated') {
+      try {
+        await apiRequest(`/rooms/${id}/join`, {
+          method: 'POST',
+          body: JSON.stringify({ userId: user.id }),
+        });
+      } catch (error) {
+        console.error('Error joining room:', error);
       }
+    }
 
-      // Join the room if it's an auto-generated one to make it persistent in "Chats"
-      if (data.type === 'auto_generated') {
-        try {
-          await apiRequest(`/rooms/${id}/join`, {
-            method: 'POST',
-            body: JSON.stringify({ userId: user.id }),
-          });
-        } catch (error) {
-          console.error('Error joining room:', error);
-        }
-      }
-
-      if (data.type === 'private') {
-
+    if (data.type === 'private') {
       const { data: participants } = await supabase
         .from('room_participants')
         .select('profiles(full_name, username)')
@@ -196,17 +217,25 @@ export default function ChatScreen() {
           // Check if we already have this message (optimistic or otherwise)
           setMessages((current) => {
             if (current.some((m) => m.id === payload.new.id)) return current;
-            
+
             // Try to find if there's an optimistic version of this message to replace
             // We check for matching content, sender, and recent timestamp
             const isMyMessage = payload.new.sender_id === user?.id;
-            const optimisticIndex = isMyMessage 
-              ? current.findIndex(m => m.isOptimistic && m.content === payload.new.content)
+            const optimisticIndex = isMyMessage
+              ? current.findIndex((m) => m.isOptimistic && m.content === payload.new.content)
               : -1;
 
             if (optimisticIndex > -1) {
               const updated = [...current];
-              updated[optimisticIndex] = { ...payload.new, sender: { id: user?.id, username: user?.user_metadata?.username, full_name: user?.user_metadata?.full_name, avatar_url: user?.user_metadata?.avatar_url } };
+              updated[optimisticIndex] = {
+                ...payload.new,
+                sender: {
+                  id: user?.id,
+                  username: user?.user_metadata?.username,
+                  full_name: user?.user_metadata?.full_name,
+                  avatar_url: user?.user_metadata?.avatar_url,
+                },
+              };
               return updated;
             }
 
@@ -220,18 +249,18 @@ export default function ChatScreen() {
             .select('id, username, full_name, avatar_url')
             .eq('id', payload.new.sender_id)
             .single();
-          
+
           setMessages((current) => {
             if (current.some((m) => m.id === payload.new.id)) {
               // Just update the profile if it was already there
-              return current.map(m => m.id === payload.new.id ? { ...m, sender: profile } : m);
+              return current.map((m) => (m.id === payload.new.id ? { ...m, sender: profile } : m));
             }
             const newMessage = { ...payload.new, sender: profile };
-            
+
             // Check again for optimistic match to replace
             const isMyMessage = payload.new.sender_id === user?.id;
-            const optimisticIndex = isMyMessage 
-              ? current.findIndex(m => m.isOptimistic && m.content === payload.new.content)
+            const optimisticIndex = isMyMessage
+              ? current.findIndex((m) => m.isOptimistic && m.content === payload.new.content)
               : -1;
 
             if (optimisticIndex > -1) {
@@ -249,8 +278,6 @@ export default function ChatScreen() {
       supabase.removeChannel(channel);
     };
   }, [id, user?.id, fetchRoomAndUser, fetchMessages]);
-
-  const CHAT_RADIUS_METERS = 100;
 
   function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
     const R = 6371000;
@@ -302,7 +329,10 @@ export default function ChatScreen() {
         return;
       }
       if (isOutOfRange && room?.type !== 'private') {
-        Alert.alert('Out of Range', `You need to be within ${room?.radius || CHAT_RADIUS_METERS}m of the room to send messages.`);
+        Alert.alert(
+          'Out of Range',
+          `You need to be within ${room?.radius || CHAT_RADIUS_METERS}m of the room to send messages.`
+        );
         return;
       }
       const finalContent = content || newMessage;
@@ -321,6 +351,9 @@ export default function ChatScreen() {
         return;
       }
 
+      // Add haptic feedback
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
       // 1. Create optimistic message
       const tempId = `temp-${Date.now()}`;
       const optimisticMessage = {
@@ -336,7 +369,7 @@ export default function ChatScreen() {
           username: user.user_metadata?.username,
           full_name: user.user_metadata?.full_name,
           avatar_url: user.user_metadata?.avatar_url,
-        }
+        },
       };
 
       // 2. Add to local state immediately
@@ -347,7 +380,7 @@ export default function ChatScreen() {
         setNewMessage('');
         clearDraft(id);
       }
-      
+
       try {
         const data = await apiRequest('/messages', {
           method: 'POST',
@@ -364,10 +397,10 @@ export default function ChatScreen() {
         }
       } catch (error: any) {
         console.error('Error sending message:', error);
-        
+
         // 4. On error, remove optimistic message and restore input
         setMessages((current) => current.filter((m) => m.id !== tempId));
-        
+
         if (type === 'text') {
           setNewMessage(finalContent);
           setDraft(id, finalContent);
@@ -496,11 +529,11 @@ export default function ChatScreen() {
       title: 'Loading...',
       headerShown: true,
       headerLeft: () => headerLeftComponent,
-      headerStyle: { backgroundColor: '#09090b' },
-      headerTitleStyle: { color: '#ffffff', fontSize: 17, fontWeight: '600' as any },
+      headerStyle: { backgroundColor: theme.background },
+      headerTitleStyle: { color: theme.foreground, fontSize: 17, fontWeight: '600' as any },
       headerShadowVisible: false,
     }),
-    [headerLeftComponent]
+    [headerLeftComponent, theme.background, theme.foreground]
   );
 
   const headerOptions = useMemo(
@@ -508,21 +541,58 @@ export default function ChatScreen() {
       title: room?.name || 'Chat',
       headerShown: true,
       headerLeft: () => headerLeftComponent,
-      headerStyle: { backgroundColor: '#09090b' },
-      headerTitleStyle: { color: '#ffffff', fontSize: 17, fontWeight: '600' as any },
+      headerStyle: { backgroundColor: theme.background },
+      headerTitleStyle: { color: theme.foreground, fontSize: 17, fontWeight: '600' as any },
       headerShadowVisible: false,
     }),
-    [room?.name, headerLeftComponent]
+    [room?.name, headerLeftComponent, theme.background, theme.foreground]
   );
 
-  const renderMessage = useCallback(({ item }: { item: any }) => {
-    const isMine = item.sender_id === user?.id;
-    return (
-      <View className={`mb-4 flex-row ${isMine ? 'justify-end' : 'justify-start'}`}>
+  const messagesWithSeparators = useMemo(() => {
+    if (messages.length === 0) return [];
+    const result: any[] = [];
+    for (let i = 0; i < messages.length; i++) {
+      const current = messages[i];
+      const next = messages[i + 1];
+      result.push(current);
+
+      const currentDate = new Date(current.created_at);
+      const nextDate = next ? new Date(next.created_at) : null;
+
+      if (!nextDate || !isSameDay(currentDate, nextDate)) {
+        result.push({
+          id: `sep-${current.id}`,
+          type: 'separator',
+          date: currentDate,
+        });
+      }
+    }
+    return result;
+  }, [messages]);
+
+  const renderMessage = useCallback(
+    ({ item }: { item: any }) => {
+      if (item.type === 'separator') {
+        return (
+          <View className="mb-6 mt-2 items-center justify-center">
+            <View className="bg-secondary/50 px-4 py-1.5 rounded-full border border-border/50">
+              <Text className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                {formatDateSeparator(item.date)}
+              </Text>
+            </View>
+          </View>
+        );
+      }
+
+      const isMine = item.sender_id === user?.id;
+      return (
+        <View className={`mb-4 flex-row ${isMine ? 'justify-end' : 'justify-start'}`}>
           <View
-            className={`max-w-[80%] rounded-2xl px-4 py-2 ${isMine ? 'rounded-br-none bg-primary' : 'rounded-bl-none bg-zinc-800'}`}>
+            className={`max-w-[80%] rounded-2xl px-4 py-2 ${
+              isMine ? 'rounded-br-none bg-primary' : 'rounded-bl-none bg-secondary/80'
+            }`}>
             {!isMine && (
-              <Text className="mb-1 text-xs font-bold text-zinc-400">
+              <Text className="mb-1 text-[11px] font-black text-primary uppercase tracking-wider">
                 {item.sender?.full_name || item.sender?.username || 'User'}
               </Text>
             )}
@@ -540,13 +610,17 @@ export default function ChatScreen() {
               </TouchableOpacity>
             ) : (
               <Text
-                className={`text-[16px] leading-5 ${isMine ? 'text-primary-foreground' : 'text-zinc-100'}`}>
+                className={`text-[16px] font-medium leading-5 ${
+                  isMine ? 'text-primary-foreground' : 'text-foreground'
+                }`}>
                 {item.content}
               </Text>
             )}
             <View className="mt-1 flex-row items-center justify-end">
               <Text
-                className={`text-[10px] opacity-60 ${isMine ? 'text-primary-foreground/80' : 'text-zinc-400'}`}>
+                className={`text-[9px] font-bold opacity-60 ${
+                  isMine ? 'text-primary-foreground/80' : 'text-muted-foreground'
+                }`}>
                 {new Date(item.created_at).toLocaleTimeString([], {
                   hour: '2-digit',
                   minute: '2-digit',
@@ -554,48 +628,51 @@ export default function ChatScreen() {
               </Text>
             </View>
           </View>
-      </View>
-    );
-  }, [user?.id]);
+        </View>
+      );
+    },
+    [user?.id, theme.primary]
+  );
 
   if (initialLoading) {
     return (
-      <View className="flex-1 bg-zinc-950">
+      <View className="flex-1 bg-background">
         <Stack.Screen options={defaultHeaderOptions} />
       </View>
     );
   }
 
-    if (loading) {
-      return (
-        <View className="flex-1 items-center justify-center bg-zinc-950">
-          <Stack.Screen options={defaultHeaderOptions} />
-          <ActivityIndicator size="large" color="hsl(var(--primary))" />
-        </View>
-      );
-    }
+  if (loading) {
+    return (
+      <View className="flex-1 items-center justify-center bg-background">
+        <Stack.Screen options={defaultHeaderOptions} />
+        <ActivityIndicator size="large" color={theme.primary} />
+      </View>
+    );
+  }
 
   return (
     <View className="flex-1 bg-background">
       <Stack.Screen options={headerOptions} />
       <SafeAreaView className="flex-1" edges={['bottom']}>
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            className="flex-1"
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
-            <FlatList
-              data={messages}
-              inverted
-              keyExtractor={(item) => item.id}
-              contentContainerStyle={{ padding: 16 }}
-              renderItem={renderMessage}
-            />
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          className="flex-1"
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
+          <FlatList
+            data={messagesWithSeparators}
+            inverted
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={{ padding: 16 }}
+            renderItem={renderMessage}
+            showsVerticalScrollIndicator={false}
+          />
 
           {(isOutOfRange || isExpired || roomNotFound) && room?.type !== 'private' ? (
-            <View className="border-t border-zinc-900 bg-zinc-950 px-4 py-3 pb-10">
-              <View className="flex-row items-center rounded-2xl bg-zinc-900/50 px-4 py-3 border border-zinc-800/50">
-                <Lock size={18} color="#71717a" className="mr-3" />
-                <Text className="flex-1 text-[14px] font-medium text-zinc-500">
+            <View className="border-t border-border bg-card px-4 py-3 pb-10">
+              <View className="flex-row items-center rounded-2xl bg-secondary/50 px-4 py-3 border border-border/50">
+                <Lock size={18} color={theme.mutedForeground} className="mr-3" />
+                <Text className="flex-1 text-[14px] font-bold text-muted-foreground tracking-tight">
                   {roomNotFound
                     ? 'This chat room is no longer active.'
                     : isExpired
@@ -605,87 +682,99 @@ export default function ChatScreen() {
               </View>
             </View>
           ) : (
-            <View className="flex-row items-center border-t border-zinc-900 bg-zinc-950 px-4 py-3 pb-10">
+            <View className="flex-row items-center border-t border-border bg-card px-4 py-3 pb-10">
               <TouchableOpacity onPress={() => setGifModalVisible(true)} className="mr-3 p-1">
-                <Smile size={24} color="#a1a1aa" />
+                <Smile size={24} color={theme.mutedForeground} />
               </TouchableOpacity>
               <TouchableOpacity onPress={takePicture} className="mr-3 p-1" disabled={uploading}>
-                <Camera size={24} color="#a1a1aa" />
+                <Camera size={24} color={theme.mutedForeground} />
               </TouchableOpacity>
               <TouchableOpacity onPress={pickImage} className="mr-3 p-1" disabled={uploading}>
                 {uploading ? (
-                  <ActivityIndicator size="small" color="#3b82f6" />
+                  <ActivityIndicator size="small" color={theme.primary} />
                 ) : (
-                  <ImageIcon size={24} color="#a1a1aa" />
+                  <ImageIcon size={24} color={theme.mutedForeground} />
                 )}
               </TouchableOpacity>
-              <View className="mr-3 flex-1 rounded-2xl bg-zinc-900 px-4 py-2">
+              <View className="mr-3 flex-1 rounded-2xl bg-secondary/50 px-4 py-2 border border-border/50">
                 <TextInput
                   placeholder="Type a message..."
-                  placeholderTextColor="#71717a"
+                  placeholderTextColor={theme.mutedForeground}
                   value={newMessage}
                   onChangeText={setNewMessage}
-                  className="max-h-24 text-[16px] text-zinc-100"
+                  className="max-h-24 text-[16px] text-foreground font-medium"
                   multiline
                 />
               </View>
-                <TouchableOpacity
-                  onPress={() => sendMessage()}
-                  className={`h-10 w-10 items-center justify-center rounded-full ${newMessage.trim() ? 'bg-primary' : 'bg-zinc-800'}`}
-                  disabled={!newMessage.trim()}>
-                  <Send size={20} color={newMessage.trim() ? 'hsl(var(--primary-foreground))' : '#71717a'} />
-                </TouchableOpacity>
-              </View>
-            )}
-          </KeyboardAvoidingView>
-        </SafeAreaView>
-  
-        <Modal
-          visible={gifModalVisible}
-          animationType="slide"
-          presentationStyle="pageSheet"
-          onRequestClose={() => setGifModalVisible(false)}>
-          <View className="flex-1 bg-zinc-950 p-4">
-            <View className="mb-4 flex-row items-center justify-between">
-              <Text className="text-xl font-bold text-white">Search GIFs</Text>
-              <TouchableOpacity onPress={() => setGifModalVisible(false)}>
-                <X size={24} color="white" />
+              <TouchableOpacity
+                onPress={() => sendMessage()}
+                className={`h-11 w-11 items-center justify-center rounded-full shadow-sm ${
+                  newMessage.trim() ? 'bg-primary' : 'bg-secondary/80'
+                }`}
+                disabled={!newMessage.trim()}>
+                <Send
+                  size={20}
+                  color={newMessage.trim() ? theme.primaryForeground : theme.mutedForeground}
+                />
               </TouchableOpacity>
             </View>
-            <View className="mb-4 flex-row items-center rounded-xl bg-zinc-900 px-4 py-2">
-              <Search size={20} color="#71717a" />
-              <TextInput
-                placeholder="Search Giphy..."
-                placeholderTextColor="#71717a"
-                value={gifSearch}
-                onChangeText={setGifSearch}
-                className="ml-2 flex-1 text-white"
-                autoFocus
-              />
-              {gifSearch.length > 0 && (
-                <TouchableOpacity onPress={() => setGifSearch('')}>
-                  <X size={18} color="#71717a" />
-                </TouchableOpacity>
-              )}
+          )}
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+
+      <Modal
+        visible={gifModalVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setGifModalVisible(false)}>
+        <View className="flex-1 bg-background p-4">
+          <View className="mb-6 flex-row items-center justify-between">
+            <Text className="text-2xl font-black text-foreground uppercase tracking-tighter">
+              GIF Search
+            </Text>
+            <TouchableOpacity
+              onPress={() => setGifModalVisible(false)}
+              className="h-10 w-10 items-center justify-center rounded-full bg-secondary">
+              <X size={24} color={theme.foreground} />
+            </TouchableOpacity>
+          </View>
+          <View className="mb-6 flex-row items-center rounded-2xl bg-secondary/50 px-4 py-3 border border-border/50">
+            <Search size={20} color={theme.mutedForeground} />
+            <TextInput
+              placeholder="Search Giphy..."
+              placeholderTextColor={theme.mutedForeground}
+              value={gifSearch}
+              onChangeText={setGifSearch}
+              className="ml-2 flex-1 text-foreground font-bold"
+              autoFocus
+            />
+            {gifSearch.length > 0 && (
+              <TouchableOpacity onPress={() => setGifSearch('')}>
+                <X size={18} color={theme.mutedForeground} />
+              </TouchableOpacity>
+            )}
+          </View>
+          {gifLoading ? (
+            <View className="flex-1 items-center justify-center">
+              <ActivityIndicator size="large" color={theme.primary} />
             </View>
-            {gifLoading ? (
-              <View className="flex-1 items-center justify-center">
-                <ActivityIndicator size="large" color="hsl(var(--primary))" />
-              </View>
-            ) : (
+          ) : (
             <ScrollView
               className="flex-1"
+              showsVerticalScrollIndicator={false}
               contentContainerStyle={{
                 flexDirection: 'row',
                 flexWrap: 'wrap',
                 justifyContent: 'space-between',
-                paddingBottom: 20,
+                paddingBottom: 40,
               }}>
               {gifError ? (
                 <View className="flex-1 items-center justify-center px-10 pt-20">
-                  <Text className="mb-2 text-center font-medium text-red-400">{gifError}</Text>
-                  <Text className="text-center text-sm text-zinc-500">
-                    Please make sure EXPO_PUBLIC_GIPHY_API_KEY is set correctly in your .env file.
+                  <Text className="mb-2 text-center font-bold text-red-500 uppercase tracking-widest">
+                    API Error
+                  </Text>
+                  <Text className="text-center text-sm font-medium text-muted-foreground px-4">
+                    Please ensure EXPO_PUBLIC_GIPHY_API_KEY is configured in your settings.
                   </Text>
                 </View>
               ) : gifs.length > 0 ? (
@@ -697,19 +786,22 @@ export default function ChatScreen() {
                       setGifModalVisible(false);
                       setGifSearch('');
                     }}
-                    className="mb-2 w-[48%]">
+                    activeOpacity={0.8}
+                    className="mb-3 w-[48%] overflow-hidden rounded-2xl border border-border/40">
                     <Image
                       source={{
                         uri: gif.images.preview_gif?.url || gif.images.fixed_height_small.url,
                       }}
-                      className="h-32 w-full rounded-lg bg-zinc-900"
+                      className="h-32 w-full bg-secondary/30"
                       contentFit="cover"
                     />
                   </TouchableOpacity>
                 ))
               ) : (
                 <View className="flex-1 items-center justify-center pt-20">
-                  <Text className="text-zinc-500">No GIFs found</Text>
+                  <Text className="text-base font-bold text-muted-foreground/60 uppercase tracking-widest">
+                    No results found
+                  </Text>
                 </View>
               )}
             </ScrollView>
@@ -726,9 +818,9 @@ export default function ChatScreen() {
           className="flex-1 items-center justify-center bg-black/95"
           onPress={() => setSelectedImage(null)}>
           <TouchableOpacity
-            className="absolute right-6 top-12 z-10 rounded-full bg-zinc-900/50 p-2"
+            className="absolute right-6 top-16 z-10 h-12 w-12 items-center justify-center rounded-full bg-zinc-900/80 border border-zinc-800"
             onPress={() => setSelectedImage(null)}>
-            <X size={24} color="white" />
+            <X size={28} color="white" />
           </TouchableOpacity>
           {selectedImage && (
             <Image source={{ uri: selectedImage }} className="h-full w-full" contentFit="contain" />
