@@ -37,22 +37,20 @@ const RoomItem = memo(({ item, onPress, theme }: { item: any; onPress: () => voi
   <TouchableOpacity
     onPress={onPress}
     activeOpacity={0.7}
-    className="mb-4 flex-row items-center rounded-3xl bg-card p-4 border border-border shadow-sm active:bg-secondary/10">
-    <View className="h-14 w-14 items-center justify-center rounded-2xl bg-primary/5">
-      <Users size={28} color={theme.primary} />
+    className="mb-3 flex-row items-center rounded-2xl bg-card p-5 border-[0.5px] border-border/40 active:bg-secondary/20">
+    <View className="h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
+      <Users size={24} color={theme.primary} />
     </View>
     <View className="ml-4 flex-1">
-      <Text className="text-lg font-bold text-foreground leading-tight" numberOfLines={1}>
+      <Text className="text-base font-bold text-foreground tracking-tight" numberOfLines={1}>
         {item.name}
       </Text>
-      <View className="flex-row items-center gap-1.5 mt-1">
-        <Clock size={12} color={theme.mutedForeground} />
-        <Text className="text-xs font-semibold text-muted-foreground">{getTimeRemaining(item.expires_at)}</Text>
+      <View className="flex-row items-center gap-1.5 mt-0.5">
+        <Clock size={10} color={theme.mutedForeground} />
+        <Text className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{getTimeRemaining(item.expires_at)}</Text>
       </View>
     </View>
-    <View className="h-9 w-9 items-center justify-center rounded-full bg-secondary/50">
-      <ArrowRight size={18} color={theme.secondaryForeground} />
-    </View>
+    <ArrowRight size={16} color={theme.mutedForeground} />
   </TouchableOpacity>
 ));
 

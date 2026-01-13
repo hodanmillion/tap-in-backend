@@ -47,9 +47,9 @@ function RootLayoutContent() {
           flex: 1,
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor: '#fff',
+          backgroundColor: '#000',
         }}>
-        <ActivityIndicator size="large" color="#000" />
+        <ActivityIndicator size="large" color="#fff" />
       </View>
     );
   }

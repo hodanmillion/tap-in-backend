@@ -11,13 +11,13 @@ export function Input({ label, error, containerClassName, className, ...props }:
   return (
     <View className={cn('mb-4 gap-1.5', containerClassName)}>
       {label && <Text className="text-sm font-medium text-foreground">{label}</Text>}
-      <TextInput
-        className={cn(
-          'h-12 w-full rounded-xl border border-input bg-background px-4 text-base text-foreground focus:border-primary',
-          error && 'border-destructive',
-          className
-        )}
-        placeholderTextColor="#9ca3af"
+        <TextInput
+          className={cn(
+            'h-14 w-full rounded-2xl border-[0.5px] border-border/50 bg-secondary/30 px-5 text-base text-foreground focus:border-primary',
+            error && 'border-destructive',
+            className
+          )}
+          placeholderTextColor="#666"
         {...props}
       />
       {error && <Text className="text-xs font-medium text-destructive">{error}</Text>}

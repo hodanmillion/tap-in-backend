@@ -52,16 +52,16 @@ export function Logo({ size = 'md', variant = 'primary', className, ...props }: 
       {...props}
     >
         <Svg width="100%" height="100%" viewBox="0 0 100 100">
-          <Defs>
-            <LinearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-              <Stop offset="0%" stopColor="#4f46e5" stopOpacity="1" />
-              <Stop offset="100%" stopColor="#312e81" stopOpacity="1" />
-            </LinearGradient>
-            <LinearGradient id="iconGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-              <Stop offset="0%" stopColor="#FFFFFF" stopOpacity="1" />
-              <Stop offset="100%" stopColor="#E2E8F0" stopOpacity="1" />
-            </LinearGradient>
-          </Defs>
+            <Defs>
+              <LinearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <Stop offset="0%" stopColor="#1a1a1a" stopOpacity="1" />
+                <Stop offset="100%" stopColor="#000000" stopOpacity="1" />
+              </LinearGradient>
+              <LinearGradient id="iconGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <Stop offset="0%" stopColor="#ffffff" stopOpacity="1" />
+                <Stop offset="100%" stopColor="#a1a1a1" stopOpacity="1" />
+              </LinearGradient>
+            </Defs>
 
           {/* Background Gradient */}
           {variant === 'primary' && (
