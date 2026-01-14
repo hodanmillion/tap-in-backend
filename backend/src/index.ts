@@ -29,25 +29,25 @@ interface Database {
           username: string | null;
           full_name: string | null;
           avatar_url: string | null;
-  latitude: number | null;
-            longitude: number | null;
-              location: unknown | null;
-            last_seen: string | null;
-            bio: string | null;
-            website: string | null;
-            location_name: string | null;
-            occupation: string | null;
-            created_at: string;
-          };
-          Insert: {
-            id: string;
-            username?: string | null;
-            full_name?: string | null;
-            avatar_url?: string | null;
-            latitude?: number | null;
-            longitude?: number | null;
-            location?: any | null;
-            last_seen?: string | null;
+          latitude: number | null;
+          longitude: number | null;
+          location: unknown | null;
+          last_seen: string | null;
+          bio: string | null;
+          website: string | null;
+          location_name: string | null;
+          occupation: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id: string;
+          username?: string | null;
+          full_name?: string | null;
+          avatar_url?: string | null;
+          latitude?: number | null;
+          longitude?: number | null;
+          location?: unknown | null;
+          last_seen?: string | null;
           bio?: string | null;
           website?: string | null;
           location_name?: string | null;
@@ -152,7 +152,9 @@ interface Database {
           id: string;
           user_id: string;
           type: string;
+          title: string | null;
           content: string;
+          data: unknown | null;
           is_read: boolean;
           created_at: string;
         };
@@ -160,7 +162,9 @@ interface Database {
           id?: string;
           user_id: string;
           type: string;
+          title?: string | null;
           content: string;
+          data?: unknown | null;
           is_read?: boolean;
           created_at?: string;
         };
@@ -168,7 +172,9 @@ interface Database {
           id?: string;
           user_id?: string;
           type?: string;
+          title?: string | null;
           content?: string;
+          data?: unknown | null;
           is_read?: boolean;
           created_at?: string;
         };
@@ -217,6 +223,55 @@ interface Database {
         };
       };
     };
+    Views: {
+      [_ in never]: never;
+    };
+    Functions: {
+      find_nearby_rooms: {
+        Args: {
+          lat: number;
+          lng: number;
+          max_dist_meters: number;
+        };
+        Returns: {
+          id: string;
+          name: string;
+          type: string;
+          latitude: number;
+          longitude: number;
+          radius: number;
+          expires_at: string | null;
+          created_at: string;
+          distance: number;
+        }[];
+      };
+      find_nearby_users: {
+        Args: {
+          lat: number;
+          lng: number;
+          max_dist_meters: number;
+        };
+        Returns: {
+          id: string;
+          username: string;
+          full_name: string;
+          avatar_url: string;
+          latitude: number;
+          longitude: number;
+          distance: number;
+        }[];
+      };
+      cleanup_expired_rooms: {
+        Args: Record<PropertyKey, never>;
+        Returns: void;
+      };
+    };
+    Enums: {
+      [_ in never]: never;
+    };
+    CompositeTypes: {
+      [_ in never]: never;
+    };
   };
 }
 
@@ -225,7 +280,9 @@ const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const resendApiKey = process.env.RESEND_API_KEY;
 
 if (!supabaseUrl || !supabaseKey) {
-  console.error('ERROR: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is missing from environment variables!');
+  console.error(
+    'ERROR: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is missing from environment variables!'
+  );
 }
 
 // Create Supabase client safely
@@ -254,7 +311,12 @@ app.use(
     origin: (origin) => origin || '*',
     credentials: true,
     allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowHeaders: ['Content-Type', 'Authorization', 'ngrok-skip-browser-warning', 'Bypass-Tunnel-Reminder'],
+    allowHeaders: [
+      'Content-Type',
+      'Authorization',
+      'ngrok-skip-browser-warning',
+      'Bypass-Tunnel-Reminder',
+    ],
     exposeHeaders: ['Content-Length', 'X-Kuma-Revision'],
     maxAge: 600,
   })
@@ -266,7 +328,8 @@ app.use(
 app.get('/health', async (c) => {
   // Try to run cleanup occasionally on health checks
   try {
-    if (Math.random() < 0.1) { // 10% of health checks trigger cleanup
+    if (Math.random() < 0.1) {
+      // 10% of health checks trigger cleanup
       await supabase.rpc('cleanup_expired_rooms');
     }
   } catch (e) {
@@ -419,27 +482,24 @@ app.post(
       address: z.string().optional(),
     })
   ),
-    async (c) => {
-      const { userId, latitude, longitude, address } = c.req.valid('json');
+  async (c) => {
+    const { userId, latitude, longitude, address } = c.req.valid('json');
 
-        try {
-          const updateData: Record<string, unknown> = {
-            latitude: latitude,
-            longitude: longitude,
-            location: `POINT(${longitude} ${latitude})`,
-            last_seen: new Date().toISOString(),
-          };
+    try {
+      const updateData: Record<string, unknown> = {
+        latitude: latitude,
+        longitude: longitude,
+        location: `POINT(${longitude} ${latitude})`,
+        last_seen: new Date().toISOString(),
+      };
 
-        if (address) {
-          updateData.location_name = address;
-        }
+      if (address) {
+        updateData.location_name = address;
+      }
 
-        await supabase
-          .from('profiles')
-          .update(updateData)
-          .eq('id', userId);
+      await supabase.from('profiles').update(updateData).eq('id', userId);
 
-        return c.json({ success: true });
+      return c.json({ success: true });
     } catch (err) {
       const error = err as Error;
       console.error('Error in /rooms/sync:', error);
@@ -454,10 +514,12 @@ app.get('/messages/:roomId', async (c) => {
   try {
     const { data, error } = await supabase
       .from('messages')
-      .select(`
+      .select(
+        `
         *,
         sender:profiles(id, username, full_name, avatar_url)
-      `)
+      `
+      )
       .eq('room_id', roomId)
       .order('created_at', { ascending: true });
 
@@ -513,17 +575,20 @@ app.post(
         const dLat = (room.latitude! - profile.latitude) * (Math.PI / 180);
         const dLon = (room.longitude! - profile.longitude) * (Math.PI / 180);
 
-        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                  Math.cos(lat1) * Math.cos(lat2) *
-                  Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        const a =
+          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
         const dist = R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
 
         const radius = room.radius || 100;
         if (dist > radius) {
-          return c.json({ 
-            error: 'Out of range', 
-            message: `You must be within ${radius}m to send messages. Current distance: ${Math.round(dist)}m` 
-          }, 403);
+          return c.json(
+            {
+              error: 'Out of range',
+              message: `You must be within ${radius}m to send messages. Current distance: ${Math.round(dist)}m`,
+            },
+            403
+          );
         }
       }
 
@@ -531,19 +596,24 @@ app.post(
       const { data, error } = await supabase
         .from('messages')
         .insert(payload)
-        .select(`
+        .select(
+          `
           *,
           sender:profiles(id, username, full_name, avatar_url)
-        `)
+        `
+        )
         .single();
 
       if (error) throw error;
 
       // 4. Ensure sender is a participant (for persistence in "Chats" tab)
-      await supabase.from('room_participants').upsert({
-        room_id: payload.room_id,
-        user_id: payload.sender_id,
-      }, { onConflict: 'room_id,user_id' });
+      await supabase.from('room_participants').upsert(
+        {
+          room_id: payload.room_id,
+          user_id: payload.sender_id,
+        },
+        { onConflict: 'room_id,user_id' }
+      );
 
       return c.json(data);
     } catch (err) {
@@ -632,7 +702,7 @@ app.get('/rooms/nearby', async (c) => {
 
     // Filter out expired rooms
     const now = new Date();
-    const activeRooms = (rooms || []).filter((r: any) => {
+    const activeRooms = (rooms || []).filter((r: { expires_at: string | null }) => {
       if (!r.expires_at) return true;
       return new Date(r.expires_at) > now;
     });
@@ -781,14 +851,14 @@ app.get('/profiles/nearby', async (c) => {
         .select('id, username, full_name, avatar_url, latitude, longitude')
         .neq('id', userId || '')
         .limit(50);
-      
+
       if (fallbackError) throw fallbackError;
       return c.json(fallbackData || []);
     }
 
     let results = data || [];
     if (userId) {
-      results = results.filter((u: any) => u.id !== userId);
+      results = results.filter((u: { id: string }) => u.id !== userId);
     }
 
     return c.json(results);
@@ -804,20 +874,24 @@ app.get('/friends/:userId', async (c) => {
   try {
     const { data, error } = await supabase
       .from('friends')
-      .select(`
+      .select(
+        `
         id,
         user_id_1,
         user_id_2,
         profiles!friends_user_id_1_fkey(id, username, full_name, avatar_url),
         profiles_2:profiles!friends_user_id_2_fkey(id, username, full_name, avatar_url)
-      `)
+      `
+      )
       .or(`user_id_1.eq.${userId},user_id_2.eq.${userId}`);
 
     if (error) throw error;
 
-    const friends = (data || []).map((f: any) => {
-      return f.user_id_1 === userId ? f.profiles_2 : f.profiles;
-    });
+    const friends = (data || []).map(
+      (f: { user_id_1: string; profiles: unknown; profiles_2: unknown }) => {
+        return f.user_id_1 === userId ? f.profiles_2 : f.profiles;
+      }
+    );
 
     return c.json(friends);
   } catch (err) {
@@ -832,7 +906,9 @@ app.get('/friends/requests/:userId', async (c) => {
   try {
     const { data, error } = await supabase
       .from('friend_requests')
-      .select('id, sender_id, status, created_at, sender:profiles!friend_requests_sender_id_fkey(id, username, full_name, avatar_url)')
+      .select(
+        'id, sender_id, status, created_at, sender:profiles!friend_requests_sender_id_fkey(id, username, full_name, avatar_url)'
+      )
       .eq('receiver_id', userId)
       .eq('status', 'pending');
 
@@ -862,7 +938,9 @@ app.post(
       const { data: existing } = await supabase
         .from('friend_requests')
         .select('id')
-        .or(`and(sender_id.eq.${sender_id},receiver_id.eq.${receiver_id}),and(sender_id.eq.${receiver_id},receiver_id.eq.${sender_id})`)
+        .or(
+          `and(sender_id.eq.${sender_id},receiver_id.eq.${receiver_id}),and(sender_id.eq.${receiver_id},receiver_id.eq.${sender_id})`
+        )
         .single();
 
       if (existing) {
@@ -918,10 +996,7 @@ app.post(
       if (fetchError || !request) throw new Error('Request not found');
 
       // Update request status
-      await supabase
-        .from('friend_requests')
-        .update({ status: 'accepted' })
-        .eq('id', request_id);
+      await supabase.from('friend_requests').update({ status: 'accepted' }).eq('id', request_id);
 
       // Add to friends table
       const { error: friendError } = await supabase.from('friends').insert({
@@ -961,33 +1036,33 @@ app.patch(
       occupation: z.string().optional(),
     })
   ),
-    async (c) => {
-      const userId = c.req.param('userId');
-      const updates = c.req.valid('json');
+  async (c) => {
+    const userId = c.req.param('userId');
+    const updates = c.req.valid('json');
 
-      console.log(`Updating profile for user ${userId}:`, updates);
+    console.log(`Updating profile for user ${userId}:`, updates);
 
-      try {
-        const { data, error } = await supabase
-          .from('profiles')
-          .update(updates)
-          .eq('id', userId)
-          .select()
-          .single();
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .update(updates)
+        .eq('id', userId)
+        .select()
+        .single();
 
-        if (error) {
-          console.error('Supabase update error:', error);
-          throw error;
-        }
-        
-        console.log('Profile updated successfully');
-        return c.json(data);
-      } catch (err) {
-        const error = err as Error;
-        console.error('Profile update failed:', error.message);
-        return c.json({ error: error.message }, 500);
+      if (error) {
+        console.error('Supabase update error:', error);
+        throw error;
       }
+
+      console.log('Profile updated successfully');
+      return c.json(data);
+    } catch (err) {
+      const error = err as Error;
+      console.error('Profile update failed:', error.message);
+      return c.json({ error: error.message }, 500);
     }
+  }
 );
 
 export default app;

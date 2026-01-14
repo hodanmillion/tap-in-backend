@@ -18,7 +18,7 @@ async function getNgrokUrl() {
     const data = await response.json();
     const httpsTunnel = data.tunnels?.find((t) => t.proto === 'https');
     return httpsTunnel?.public_url || null;
-  } catch (error) {
+  } catch (_error) {
     return null;
   }
 }
