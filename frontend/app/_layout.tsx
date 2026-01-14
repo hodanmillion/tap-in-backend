@@ -12,10 +12,17 @@ import { useLocation } from '@/hooks/useLocation';
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60 * 5, // 5 minutes
-      gcTime: 1000 * 60 * 30, // 30 minutes
+      staleTime: 1000 * 60 * 5,
+      gcTime: 1000 * 60 * 30,
       refetchOnWindowFocus: false,
+      retry: 2,
+      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
+      networkMode: 'offlineFirst',
+    },
+    mutations: {
       retry: 1,
+      retryDelay: 1000,
+      networkMode: 'offlineFirst',
     },
   },
 });

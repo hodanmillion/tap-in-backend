@@ -2,7 +2,7 @@ import React, { memo, useMemo } from 'react';
 import { View, Text, TouchableOpacity, Alert, ActivityIndicator, FlatList } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocation } from '@/hooks/useLocation';
-import { MapPin, Users, ArrowRight, Clock, Bell, Plus, Compass } from 'lucide-react-native';
+import { MapPin, Users, ArrowRight, Clock, Bell, Plus, Compass, WifiOff, RefreshCw } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiRequest } from '@/lib/api';
@@ -81,11 +81,13 @@ export default function HomeScreen() {
       data: nearbyRooms,
       isLoading,
       isFetching,
+      isError,
+      error,
       refetch,
     } = useQuery({
       queryKey: [
         'nearbyRooms',
-        location?.coords.latitude.toFixed(2), // More stable cache key (approx 1.1km)
+        location?.coords.latitude.toFixed(2),
         location?.coords.longitude.toFixed(2),
       ],
       queryFn: async () => {
@@ -94,7 +96,7 @@ export default function HomeScreen() {
         return apiRequest(`/rooms/nearby?lat=${latitude}&lng=${longitude}`);
       },
       enabled: !!location,
-      staleTime: 60000 * 2, // 2 minutes stale time for nearby rooms
+      staleTime: 60000 * 2,
       gcTime: 1000 * 60 * 15,
       placeholderData: (previousData) => previousData,
     });
@@ -223,17 +225,36 @@ export default function HomeScreen() {
           )}
         </TouchableOpacity>
 
-        <View className="flex-1">
-          <View className="flex-row items-center justify-between mb-4">
-            <Text className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">
-              Active Zones
-            </Text>
-            {isFetching && (
-               <ActivityIndicator size="small" color={theme.primary} />
-            )}
-          </View>
-          
-            {isLoading && rooms.length === 0 ? (
+          <View className="flex-1">
+            <View className="flex-row items-center justify-between mb-4">
+              <Text className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">
+                Active Zones
+              </Text>
+              {isFetching && (
+                 <ActivityIndicator size="small" color={theme.primary} />
+              )}
+            </View>
+            
+              {isError ? (
+                <View className="mt-10 items-center justify-center p-12 rounded-[40px] border-2 border-dashed border-destructive/30 bg-destructive/5">
+                  <View className="h-20 w-20 items-center justify-center rounded-full bg-background border border-border mb-6">
+                    <WifiOff size={40} color={theme.destructive} opacity={0.6} />
+                  </View>
+                  <Text className="text-2xl font-black text-foreground text-center">
+                    Connection Issue
+                  </Text>
+                  <Text className="mt-2 text-center text-base font-medium text-muted-foreground px-4">
+                    {(error as Error)?.message || 'Unable to load nearby zones. Check your connection.'}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => refetch()}
+                    activeOpacity={0.8}
+                    className="mt-6 flex-row items-center gap-2 rounded-2xl bg-primary px-6 py-3">
+                    <RefreshCw size={18} color={theme.primaryForeground} />
+                    <Text className="text-sm font-bold text-primary-foreground">Try Again</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : isLoading && rooms.length === 0 ? (
               <View className="flex-1">
                 {[1, 2, 3, 4].map((i) => (
                   <RoomItemSkeleton key={i} />

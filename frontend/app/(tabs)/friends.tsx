@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator, FlatList } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { Image } from 'expo-image';
-import { User, MessageCircle, Heart, UserPlus, Compass } from 'lucide-react-native';
+import { User, MessageCircle, Heart, UserPlus, Compass, WifiOff, RefreshCw } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/context/AuthContext';
@@ -16,14 +16,14 @@ export default function FriendsScreen() {
   const theme = THEME[colorScheme ?? 'light'];
   const router = useRouter();
 
-    const { data: friendsData, isLoading, refetch } = useQuery({
+    const { data: friendsData, isLoading, isError, error, refetch } = useQuery({
       queryKey: ['friends', user?.id],
       queryFn: async () => {
         if (!user?.id) return [];
         return apiRequest(`/friends/${user.id}`);
       },
       enabled: !!user?.id,
-      staleTime: 60000 * 5, // 5 minutes stale time for friends list
+      staleTime: 60000 * 5,
       gcTime: 1000 * 60 * 30,
       placeholderData: (prev) => prev,
     });
@@ -81,6 +81,25 @@ export default function FriendsScreen() {
         {isLoading ? (
           <View className="flex-1 items-center justify-center">
             <ActivityIndicator size="large" color={theme.primary} />
+          </View>
+        ) : isError ? (
+          <View className="mt-10 items-center justify-center p-12 rounded-[40px] border-2 border-dashed border-destructive/30 bg-destructive/5">
+            <View className="h-20 w-20 items-center justify-center rounded-full bg-background border border-border mb-6">
+              <WifiOff size={40} color={theme.destructive} opacity={0.6} />
+            </View>
+            <Text className="text-2xl font-black text-foreground text-center">
+              Connection Issue
+            </Text>
+            <Text className="mt-2 text-center text-base font-medium text-muted-foreground px-4">
+              {(error as Error)?.message || 'Unable to load friends. Check your connection.'}
+            </Text>
+            <TouchableOpacity
+              onPress={() => refetch()}
+              activeOpacity={0.8}
+              className="mt-6 flex-row items-center gap-2 rounded-2xl bg-primary px-6 py-3">
+              <RefreshCw size={18} color={theme.primaryForeground} />
+              <Text className="text-sm font-bold text-primary-foreground">Try Again</Text>
+            </TouchableOpacity>
           </View>
         ) : (
           <View className="flex-1">

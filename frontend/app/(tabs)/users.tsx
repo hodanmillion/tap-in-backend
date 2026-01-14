@@ -11,7 +11,7 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocation } from '@/hooks/useLocation';
 import { useState, useEffect } from 'react';
-import { UserPlus, Clock, MapPin, Search, X, Users, MessageCircle, Compass } from 'lucide-react-native';
+import { UserPlus, Clock, MapPin, Search, X, Users, MessageCircle, Compass, WifiOff, RefreshCw } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/context/AuthContext';
 import { useColorScheme } from 'nativewind';
@@ -48,6 +48,8 @@ export default function UsersScreen() {
     const {
       data: nearbyUsers,
       isLoading: loadingNearby,
+      isError: nearbyError,
+      error: nearbyErrorMsg,
       refetch: refetchNearby,
     } = useQuery({
       queryKey: [
@@ -63,12 +65,12 @@ export default function UsersScreen() {
         );
       },
       enabled: !!location && !!user?.id && !debouncedQuery,
-      staleTime: 60000 * 2, // 2 minutes stale time for nearby users
+      staleTime: 60000 * 2,
       gcTime: 1000 * 60 * 15,
       placeholderData: (prev) => prev,
     });
   
-    const { data: searchResults, isLoading: loadingSearch } = useQuery({
+    const { data: searchResults, isLoading: loadingSearch, isError: searchError, error: searchErrorMsg } = useQuery({
       queryKey: ['userSearch', debouncedQuery],
       queryFn: async () => {
         if (!debouncedQuery || !user?.id) return [];
@@ -77,7 +79,7 @@ export default function UsersScreen() {
         );
       },
       enabled: !!debouncedQuery && !!user?.id,
-      staleTime: 60000 * 1, // 1 minute stale time for search results
+      staleTime: 60000 * 1,
       gcTime: 1000 * 60 * 5,
     });
 
@@ -149,6 +151,8 @@ export default function UsersScreen() {
 
   const displayData = debouncedQuery ? searchResults : nearbyUsers;
   const isLoading = debouncedQuery ? loadingSearch : loadingNearby;
+  const isError = debouncedQuery ? searchError : nearbyError;
+  const errorMsg = debouncedQuery ? searchErrorMsg : nearbyErrorMsg;
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top']}>
@@ -197,6 +201,25 @@ export default function UsersScreen() {
             {[1, 2, 3, 4, 5].map((i) => (
               <UserItemSkeleton key={i} />
             ))}
+          </View>
+        ) : isError ? (
+          <View className="mt-10 items-center justify-center p-12 rounded-[40px] border-2 border-dashed border-destructive/30 bg-destructive/5">
+            <View className="h-20 w-20 items-center justify-center rounded-full bg-background border border-border mb-6">
+              <WifiOff size={40} color={theme.destructive} opacity={0.6} />
+            </View>
+            <Text className="text-2xl font-black text-foreground text-center">
+              Connection Issue
+            </Text>
+            <Text className="mt-2 text-center text-base font-medium text-muted-foreground px-4">
+              {(errorMsg as Error)?.message || 'Unable to discover people. Check your connection.'}
+            </Text>
+            <TouchableOpacity
+              onPress={() => refetchNearby()}
+              activeOpacity={0.8}
+              className="mt-6 flex-row items-center gap-2 rounded-2xl bg-primary px-6 py-3">
+              <RefreshCw size={18} color={theme.primaryForeground} />
+              <Text className="text-sm font-bold text-primary-foreground">Try Again</Text>
+            </TouchableOpacity>
           </View>
         ) : (
           <FlatList

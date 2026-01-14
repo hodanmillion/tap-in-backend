@@ -10,8 +10,8 @@
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:3002';
 
 const MAX_RETRIES = 3;
-const RETRY_DELAY = 1000; // 1s
-const FETCH_TIMEOUT = 10000; // 10s
+const RETRY_DELAY = 1500;
+const FETCH_TIMEOUT = 15000;
 
 /**
  * Simple fetch wrapper with retry logic and timeout for stability on the move
