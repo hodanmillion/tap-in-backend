@@ -40,14 +40,21 @@ export async function apiRequest<T = any>(
 
     clearTimeout(timeoutId);
 
-    if (!response.ok) {
-      let errorMessage = response.statusText;
-      try {
-        const errorBody = await response.json();
-        errorMessage = errorBody.error || errorBody.message || errorMessage;
-      } catch (e) {
-        // Ignore if body is not JSON
-      }
+      if (!response.ok) {
+        let errorMessage = `Error ${response.status}: ${response.statusText}`;
+        try {
+          const errorBody = await response.json();
+          errorMessage = errorBody.error || errorBody.message || errorMessage;
+        } catch (e) {
+          // If not JSON, try to get text body
+          try {
+            const textBody = await response.text();
+            if (textBody && textBody.length < 100) errorMessage = textBody;
+          } catch (textErr) {
+            // Ignore
+          }
+        }
+
 
       // Retry on 5xx errors or 429
       if ((response.status >= 500 || response.status === 429) && retryCount < MAX_RETRIES) {
