@@ -16,10 +16,12 @@ export function useLocation(userId: string | undefined) {
     (async () => {
       try {
         // 1. Try to load from persistent cache first (instant)
-        const cached = await AsyncStorage.getItem(LOCATION_CACHE_KEY);
-        if (cached) {
-          const parsedCache = JSON.parse(cached);
-          setLocation(parsedCache);
+        if (typeof window !== 'undefined' || Platform.OS !== 'web') {
+          const cached = await AsyncStorage.getItem(LOCATION_CACHE_KEY);
+          if (cached) {
+            const parsedCache = JSON.parse(cached);
+            setLocation(parsedCache);
+          }
         }
 
         let { status } = await Location.requestForegroundPermissionsAsync();

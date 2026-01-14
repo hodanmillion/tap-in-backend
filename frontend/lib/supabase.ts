@@ -13,29 +13,34 @@ if (!supabaseUrl || !supabaseAnonKey) {
 // Custom storage wrapper to prevent "window is not defined" error during SSR/Static rendering
 const customStorage = {
   getItem: async (key: string) => {
+    if (typeof window === 'undefined') {
+      if (Platform.OS === 'web') return null;
+      return AsyncStorage.getItem(key);
+    }
     if (Platform.OS === 'web') {
-      if (typeof window === 'undefined') {
-        return null;
-      }
       return window.localStorage.getItem(key);
     }
     return AsyncStorage.getItem(key);
   },
   setItem: async (key: string, value: string) => {
+    if (typeof window === 'undefined') {
+      if (Platform.OS === 'web') return;
+      await AsyncStorage.setItem(key, value);
+      return;
+    }
     if (Platform.OS === 'web') {
-      if (typeof window === 'undefined') {
-        return;
-      }
       window.localStorage.setItem(key, value);
     } else {
       await AsyncStorage.setItem(key, value);
     }
   },
   removeItem: async (key: string) => {
+    if (typeof window === 'undefined') {
+      if (Platform.OS === 'web') return;
+      await AsyncStorage.removeItem(key);
+      return;
+    }
     if (Platform.OS === 'web') {
-      if (typeof window === 'undefined') {
-        return;
-      }
       window.localStorage.removeItem(key);
     } else {
       await AsyncStorage.removeItem(key);
