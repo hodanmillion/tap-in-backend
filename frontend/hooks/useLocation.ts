@@ -1,5 +1,6 @@
 import * as Location from 'expo-location';
 import { useEffect, useState, useRef } from 'react';
+import { Platform } from 'react-native';
 import { apiRequest } from '@/lib/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 

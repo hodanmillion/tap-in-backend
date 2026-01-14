@@ -61,6 +61,7 @@ interface Database {
           avatar_url?: string | null;
           latitude?: number | null;
           longitude?: number | null;
+          location?: unknown | null;
           last_seen?: string | null;
           bio?: string | null;
           website?: string | null;
@@ -99,32 +100,35 @@ interface Database {
         Row: {
           id: string;
           name: string;
-          type: 'private' | 'auto_generated';
-          latitude: number | null;
-          longitude: number | null;
-          radius: number | null;
-          expires_at: string | null;
+          type: string;
+          latitude: number;
+          longitude: number;
+          radius: number;
           created_at: string;
+          expires_at: string | null;
+          location: unknown | null;
         };
         Insert: {
           id?: string;
           name: string;
-          type: 'private' | 'auto_generated';
-          latitude?: number | null;
-          longitude?: number | null;
-          radius?: number | null;
-          expires_at?: string | null;
+          type: string;
+          latitude: number;
+          longitude: number;
+          radius: number;
           created_at?: string;
+          expires_at?: string | null;
+          location?: unknown | null;
         };
         Update: {
           id?: string;
           name?: string;
-          type?: 'private' | 'auto_generated';
-          latitude?: number | null;
-          longitude?: number | null;
-          radius?: number | null;
-          expires_at?: string | null;
+          type?: string;
+          latitude?: number;
+          longitude?: number;
+          radius?: number;
           created_at?: string;
+          expires_at?: string | null;
+          location?: unknown | null;
         };
       };
       room_participants: {
@@ -147,35 +151,26 @@ interface Database {
           joined_at?: string;
         };
       };
-      notifications: {
+      friend_requests: {
         Row: {
           id: string;
-          user_id: string;
-          type: string;
-          title: string | null;
-          content: string;
-          data: unknown | null;
-          is_read: boolean;
+          sender_id: string;
+          receiver_id: string;
+          status: string;
           created_at: string;
         };
         Insert: {
           id?: string;
-          user_id: string;
-          type: string;
-          title?: string | null;
-          content: string;
-          data?: unknown | null;
-          is_read?: boolean;
+          sender_id: string;
+          receiver_id: string;
+          status: string;
           created_at?: string;
         };
         Update: {
           id?: string;
-          user_id?: string;
-          type?: string;
-          title?: string | null;
-          content?: string;
-          data?: unknown | null;
-          is_read?: boolean;
+          sender_id?: string;
+          receiver_id?: string;
+          status?: string;
           created_at?: string;
         };
       };
@@ -199,51 +194,51 @@ interface Database {
           created_at?: string;
         };
       };
-      friend_requests: {
+      notifications: {
         Row: {
           id: string;
-          sender_id: string;
-          receiver_id: string;
-          status: 'pending' | 'accepted' | 'declined';
+          user_id: string;
+          type: string;
+          title: string | null;
+          content: string;
+          data: any | null;
+          is_read: boolean;
           created_at: string;
         };
         Insert: {
           id?: string;
-          sender_id: string;
-          receiver_id: string;
-          status?: 'pending' | 'accepted' | 'declined';
+          user_id: string;
+          type: string;
+          title?: string | null;
+          content: string;
+          data?: any | null;
+          is_read?: boolean;
           created_at?: string;
         };
         Update: {
           id?: string;
-          sender_id?: string;
-          receiver_id?: string;
-          status?: 'pending' | 'accepted' | 'declined';
+          user_id?: string;
+          type?: string;
+          title?: string | null;
+          content?: string;
+          data?: any | null;
+          is_read?: boolean;
           created_at?: string;
         };
       };
     };
-    Views: {
-      [_ in never]: never;
-    };
     Functions: {
+      cleanup_expired_rooms: {
+        Args: Record<string, never>;
+        Returns: undefined;
+      };
       find_nearby_rooms: {
         Args: {
           lat: number;
           lng: number;
           max_dist_meters: number;
         };
-        Returns: {
-          id: string;
-          name: string;
-          type: string;
-          latitude: number;
-          longitude: number;
-          radius: number;
-          expires_at: string | null;
-          created_at: string;
-          distance: number;
-        }[];
+        Returns: Array<Database['public']['Tables']['chat_rooms']['Row'] & { distance: number }>;
       };
       find_nearby_users: {
         Args: {
@@ -251,226 +246,90 @@ interface Database {
           lng: number;
           max_dist_meters: number;
         };
-        Returns: {
-          id: string;
-          username: string;
-          full_name: string;
-          avatar_url: string;
-          latitude: number;
-          longitude: number;
-          distance: number;
-        }[];
+        Returns: Array<Database['public']['Tables']['profiles']['Row'] & { distance: number }>;
       };
-      cleanup_expired_rooms: {
-        Args: Record<PropertyKey, never>;
-        Returns: void;
-      };
-    };
-    Enums: {
-      [_ in never]: never;
-    };
-    CompositeTypes: {
-      [_ in never]: never;
     };
   };
 }
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const resendApiKey = process.env.RESEND_API_KEY;
-
-if (!supabaseUrl || !supabaseKey) {
-  console.error(
-    'ERROR: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is missing from environment variables!'
-  );
-}
-
-// Create Supabase client safely
-let supabase: ReturnType<typeof createClient<Database>>;
-try {
-  if (!supabaseUrl) throw new Error('SUPABASE_URL is missing');
-  supabase = createClient<Database>(supabaseUrl, supabaseKey || '');
-  console.log('Supabase client initialized successfully');
-} catch (err) {
-  const error = err as Error;
-  console.error('CRITICAL: Failed to initialize Supabase client:', error.message);
-}
-
-// Initialize Resend
-const resend = resendApiKey ? new Resend(resendApiKey) : null;
-if (!resend) {
-  console.warn('WARNING: RESEND_API_KEY is missing. Welcome emails will be disabled.');
-}
-
-// 3. App Initialization
-const app = new Hono();
-
-app.use(
-  '*',
-  cors({
-    origin: (origin) => origin || '*',
-    credentials: true,
-    allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowHeaders: [
-      'Content-Type',
-      'Authorization',
-      'ngrok-skip-browser-warning',
-      'Bypass-Tunnel-Reminder',
-    ],
-    exposeHeaders: ['Content-Length', 'X-Kuma-Revision'],
-    maxAge: 600,
-  })
+const supabase = createClient<Database>(
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// 4. Endpoints
+const resend = new Resend(process.env.RESEND_API_KEY);
 
-// Health Check
-app.get('/health', async (c) => {
-  // Try to run cleanup occasionally on health checks
-  try {
-    if (Math.random() < 0.1) {
-      // 10% of health checks trigger cleanup
-      await supabase.rpc('cleanup_expired_rooms');
-    }
-  } catch (e) {
-    console.error('Cleanup failed:', e);
-  }
+const app = new Hono();
+app.use('*', cors());
 
-  return c.json({
-    status: 'ok',
-    uptime: process.uptime(),
-    timestamp: new Date().toISOString(),
-    supabase: !!supabaseUrl && !!supabaseKey,
-    resend: !!resendApiKey,
-  });
+// --- ROUTES ---
+
+// 3. Profiles
+app.get('/profiles/:id', async (c) => {
+  const id = c.req.param('id');
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (error) return c.json({ error: error.message }, 404);
+  return c.json(data);
 });
 
-app.get('/', (c) => c.text('Tap In API v1.0.0 is Running'));
-
-// POST /auth/welcome - Send tailored welcome email
 app.post(
-  '/auth/welcome',
+  '/profiles',
   zValidator(
     'json',
     z.object({
       id: z.string(),
-      email: z.string().email(),
+      username: z.string().optional(),
       full_name: z.string().optional(),
     })
   ),
   async (c) => {
-    const { email, full_name } = c.req.valid('json');
+    const body = c.req.valid('json');
+    const { data, error } = await supabase
+      .from('profiles')
+      .upsert(body)
+      .select()
+      .single();
 
-    if (!resend) {
-      return c.json({ error: 'Email service not configured' }, 500);
-    }
-
-    try {
-      const { data, error } = await resend.emails.send({
-        from: 'Tap In <welcome@updates.tapin.app>',
-        to: email,
-        subject: 'Welcome to Tap In!',
-        html: `
-          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px;">
-            <h1 style="color: #3b82f6; font-size: 24px; font-weight: bold; margin-bottom: 16px;">Welcome to Tap In, ${full_name || 'there'}! 🚀</h1>
-            <p style="color: #4b5563; font-size: 16px; line-height: 1.5; margin-bottom: 24px;">
-              We're thrilled to have you join our community. Tap In helps you connect with people and discover what's happening right where you are.
-            </p>
-            <div style="background-color: #f8fafc; padding: 20px; border-radius: 8px; margin-bottom: 24px;">
-              <h2 style="color: #1e293b; font-size: 18px; font-weight: 600; margin-bottom: 12px;">Getting Started:</h2>
-              <ul style="color: #4b5563; font-size: 14px; line-height: 1.6; padding-left: 20px;">
-                <li>📍 <strong>Find Chats:</strong> Look at the map or list to find chats happening within 1km.</li>
-                <li>💬 <strong>Join In:</strong> Tap any chat room to start messaging people nearby.</li>
-                <li>✨ <strong>Create:</strong> Use the "Create Chat Here" button to start your own 48-hour localized chat!</li>
-              </ul>
-            </div>
-            <p style="color: #64748b; font-size: 14px; margin-bottom: 8px;">
-              Stay connected,
-            </p>
-            <p style="color: #1e293b; font-weight: bold; font-size: 16px;">
-              The Tap In Team
-            </p>
-          </div>
-        `,
-      });
-
-      if (error) throw error;
-      return c.json({ success: true, id: data?.id });
-    } catch (err) {
-      const error = err as Error;
-      console.error('Error sending welcome email:', error);
-      return c.json({ error: error.message }, 500);
-    }
+    if (error) return c.json({ error: error.message }, 400);
+    return c.json(data);
   }
 );
 
-// POST /rooms/private - Create or get private chat room
-app.post(
-  '/rooms/private',
+app.patch(
+  '/profiles/:id',
   zValidator(
     'json',
     z.object({
-      user1_id: z.string(),
-      user2_id: z.string(),
+      full_name: z.string().optional(),
+      username: z.string().optional(),
+      avatar_url: z.string().optional(),
+      bio: z.string().optional(),
+      website: z.string().optional(),
+      location_name: z.string().optional(),
+      occupation: z.string().optional(),
     })
   ),
   async (c) => {
-    const { user1_id, user2_id } = c.req.valid('json');
+    const id = c.req.param('id');
+    const body = c.req.valid('json');
+    const { data, error } = await supabase
+      .from('profiles')
+      .update(body)
+      .eq('id', id)
+      .select()
+      .single();
 
-    try {
-      const { data: existingRooms } = await supabase
-        .from('chat_rooms')
-        .select('id')
-        .eq('type', 'private')
-        .returns<{ id: string }[]>();
-
-      if (existingRooms && existingRooms.length > 0) {
-        const roomIds = existingRooms.map((r) => r.id);
-        const { data: participants } = await supabase
-          .from('room_participants')
-          .select('room_id')
-          .in('room_id', roomIds)
-          .in('user_id', [user1_id, user2_id]);
-
-        if (participants) {
-          const counts: Record<string, number> = {};
-          for (const p of participants) {
-            counts[p.room_id] = (counts[p.room_id] || 0) + 1;
-            if (counts[p.room_id] === 2) {
-              return c.json({ room_id: p.room_id });
-            }
-          }
-        }
-      }
-
-      const { data: newRoom, error: roomError } = await supabase
-        .from('chat_rooms')
-        .insert({
-          name: 'Private Chat',
-          type: 'private',
-        })
-        .select()
-        .single();
-
-      if (roomError) throw roomError;
-
-      const { error: partError } = await supabase.from('room_participants').insert([
-        { room_id: newRoom.id, user_id: user1_id },
-        { room_id: newRoom.id, user_id: user2_id },
-      ]);
-
-      if (partError) throw partError;
-
-      return c.json({ room_id: newRoom.id });
-    } catch (err) {
-      const error = err as Error;
-      console.error('Error in /rooms/private:', error);
-      return c.json({ error: error.message }, 500);
-    }
+    if (error) return c.json({ error: error.message }, 400);
+    return c.json(data);
   }
 );
 
-// POST /rooms/sync - Location sync only (removed auto-room generation)
+// 4. Rooms & Location Sync
 app.post(
   '/rooms/sync',
   zValidator(
@@ -486,52 +345,129 @@ app.post(
     const { userId, latitude, longitude, address } = c.req.valid('json');
 
     try {
-      const updateData: Record<string, unknown> = {
-        latitude: latitude,
-        longitude: longitude,
-        location: `POINT(${longitude} ${latitude})`,
-        last_seen: new Date().toISOString(),
-      };
+      // 1. Cleanup expired rooms
+      await supabase.rpc('cleanup_expired_rooms');
 
-      if (address) {
-        updateData.location_name = address;
+      // 2. Update user location
+      await supabase
+        .from('profiles')
+        .update({
+          latitude,
+          longitude,
+          location_name: address,
+          last_seen: new Date().toISOString(),
+        })
+        .eq('id', userId);
+
+      // 3. Find nearby rooms (radius 500m)
+      const { data: existingRooms, error: searchError } = await supabase.rpc('find_nearby_rooms', {
+        lat: latitude,
+        lng: longitude,
+        max_dist_meters: 500,
+      });
+
+      if (searchError) throw searchError;
+
+      // 4. If no nearby rooms, create a default "Nearby Chat"
+      if (!existingRooms || existingRooms.length === 0) {
+        const { data: newRoom, error: createError } = await supabase
+          .from('chat_rooms')
+          .insert({
+            name: address || `Chat near ${latitude.toFixed(2)}, ${longitude.toFixed(2)}`,
+            type: 'public',
+            latitude,
+            longitude,
+            radius: 500,
+            expires_at: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(), // 2 hours
+          })
+          .select()
+          .single();
+
+        if (createError) throw createError;
+
+        // Auto-join the creator
+        await supabase.from('room_participants').insert({
+          room_id: newRoom.id,
+          user_id: userId,
+        });
+
+        return c.json({ rooms: [newRoom] });
       }
 
-      await supabase.from('profiles').update(updateData).eq('id', userId);
+      // 5. Auto-join user to all nearby rooms they aren't in
+      const roomIds = existingRooms.map((r) => r.id);
+      const { data: currentMemberships } = await supabase
+        .from('room_participants')
+        .select('room_id')
+        .eq('user_id', userId)
+        .in('room_id', roomIds);
 
-      return c.json({ success: true });
-    } catch (err) {
-      const error = err as Error;
-      console.error('Error in /rooms/sync:', error);
-      return c.json({ error: error.message }, 500);
+      const joinedRoomIds = currentMemberships?.map((m) => m.room_id) || [];
+      const roomsToJoin = roomIds.filter((id) => !joinedRoomIds.includes(id));
+
+      if (roomsToJoin.length > 0) {
+        await supabase.from('room_participants').insert(
+          roomsToJoin.map((id) => ({
+            room_id: id,
+            user_id: userId,
+          }))
+        );
+      }
+
+      return c.json({ rooms: existingRooms });
+    } catch (err: any) {
+      console.error('Sync Error:', err);
+      return c.json({ error: err.message }, 500);
     }
   }
 );
 
-// GET /messages/:roomId - Get message history
-app.get('/messages/:roomId', async (c) => {
-  const roomId = c.req.param('roomId');
-  try {
-    const { data, error } = await supabase
-      .from('messages')
-      .select(
-        `
-        *,
-        sender:profiles(id, username, full_name, avatar_url)
-      `
-      )
-      .eq('room_id', roomId)
-      .order('created_at', { ascending: true });
+app.get('/rooms/nearby', async (c) => {
+  const lat = parseFloat(c.req.query('lat') || '0');
+  const lng = parseFloat(c.req.query('lng') || '0');
+  const dist = parseInt(c.req.query('dist') || '1000');
 
-    if (error) throw error;
-    return c.json(data || []);
-  } catch (err) {
-    const error = err as Error;
-    return c.json({ error: error.message }, 500);
-  }
+  const { data: rooms, error } = await supabase.rpc('find_nearby_rooms', {
+    lat,
+    lng,
+    max_dist_meters: dist,
+  });
+
+  if (error) return c.json({ error: error.message }, 500);
+  return c.json(rooms);
 });
 
-// POST /messages - Send a message
+app.get('/users/nearby', async (c) => {
+  const lat = parseFloat(c.req.query('lat') || '0');
+  const lng = parseFloat(c.req.query('lng') || '0');
+  const dist = parseInt(c.req.query('dist') || '5000');
+
+  const { data, error } = await supabase.rpc('find_nearby_users', {
+    lat,
+    lng,
+    max_dist_meters: dist,
+  });
+
+  if (error) return c.json({ error: error.message }, 500);
+  return c.json(data);
+});
+
+// 5. Chat & Messages
+app.get('/rooms/:roomId/messages', async (c) => {
+  const roomId = c.req.param('roomId');
+  const { data, error } = await supabase
+    .from('messages')
+    .select(`
+      *,
+      sender:profiles(id, username, avatar_url)
+    `)
+    .eq('room_id', roomId)
+    .order('created_at', { ascending: true });
+
+  if (error) return c.json({ error: error.message }, 500);
+  return c.json(data);
+});
+
 app.post(
   '/messages',
   zValidator(
@@ -544,525 +480,192 @@ app.post(
     })
   ),
   async (c) => {
-    const payload = c.req.valid('json');
+    const body = c.req.valid('json');
+    const { data, error } = await supabase
+      .from('messages')
+      .insert(body)
+      .select()
+      .single();
 
-    try {
-      // 1. Fetch room and user profile to check proximity
-      const { data: room, error: roomError } = await supabase
-        .from('chat_rooms')
-        .select('*')
-        .eq('id', payload.room_id)
-        .single();
-
-      if (roomError || !room) throw new Error('Room not found');
-
-      // 2. Proximity check for non-private rooms
-      if (room.type !== 'private') {
-        const { data: profile, error: profileError } = await supabase
-          .from('profiles')
-          .select('latitude, longitude')
-          .eq('id', payload.sender_id)
-          .single();
-
-        if (profileError || !profile || profile.latitude === null) {
-          throw new Error('User location unknown. Please enable location services.');
-        }
-
-        // Calculate distance using Haversine formula
-        const R = 6371000; // meters
-        const lat1 = profile.latitude * (Math.PI / 180);
-        const lat2 = room.latitude! * (Math.PI / 180);
-        const dLat = (room.latitude! - profile.latitude) * (Math.PI / 180);
-        const dLon = (room.longitude! - profile.longitude) * (Math.PI / 180);
-
-        const a =
-          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-          Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-        const dist = R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
-
-        const radius = room.radius || 100;
-        if (dist > radius) {
-          return c.json(
-            {
-              error: 'Out of range',
-              message: `You must be within ${radius}m to send messages. Current distance: ${Math.round(dist)}m`,
-            },
-            403
-          );
-        }
-      }
-
-      // 3. Insert message
-      const { data, error } = await supabase
-        .from('messages')
-        .insert(payload)
-        .select(
-          `
-          *,
-          sender:profiles(id, username, full_name, avatar_url)
-        `
-        )
-        .single();
-
-      if (error) throw error;
-
-      // 4. Ensure sender is a participant (for persistence in "Chats" tab)
-      await supabase.from('room_participants').upsert(
-        {
-          room_id: payload.room_id,
-          user_id: payload.sender_id,
-        },
-        { onConflict: 'room_id,user_id' }
-      );
-
-      return c.json(data);
-    } catch (err) {
-      const error = err as Error;
-      return c.json({ error: error.message }, 500);
-    }
+    if (error) return c.json({ error: error.message }, 400);
+    return c.json(data);
   }
 );
 
-// POST /rooms/create - Explicitly create a chat room
-app.post(
-  '/rooms/create',
-  zValidator(
-    'json',
-    z.object({
-      name: z.string(),
-      latitude: z.number(),
-      longitude: z.number(),
-      radius: z.number().default(20),
-      userId: z.string().optional(),
-    })
-  ),
-  async (c) => {
-    const { name, latitude, longitude, radius, userId } = c.req.valid('json');
+// 6. Room Management
+app.get('/users/:userId/rooms', async (c) => {
+  const userId = c.req.param('userId');
+  const { data, error } = await supabase
+    .from('room_participants')
+    .select(`
+      room_id,
+      chat_rooms (*)
+    `)
+    .eq('user_id', userId);
 
-    try {
-      // Check if a room already exists within 20m to prevent duplicates
-      const { data: existingRooms, error: searchError } = await supabase.rpc('find_nearby_rooms', {
-        lat: latitude,
-        lng: longitude,
-        max_dist_meters: 20,
-      });
-
-      if (searchError) throw searchError;
-
-      if (existingRooms && existingRooms.length > 0) {
-        return c.json({ error: 'A chat already exists in this exact location (20m radius).' }, 400);
-      }
-
-      const { data: newRoom, error } = await supabase
-        .from('chat_rooms')
-        .insert({
-          name,
-          type: 'auto_generated',
-          latitude,
-          longitude,
-          radius,
-          expires_at: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      // Automatically join the creator if userId is provided
-      if (userId) {
-        await supabase.from('room_participants').insert({
-          room_id: newRoom.id,
-          user_id: userId,
-        });
-      }
-
-      return c.json({ success: true, room: newRoom });
-    } catch (err) {
-      const error = err as Error;
-      console.error('Error in /rooms/create:', error);
-      return c.json({ error: error.message }, 500);
-    }
-  }
-);
-
-// GET /rooms/nearby - List active nearby rooms using PostGIS
-app.get('/rooms/nearby', async (c) => {
-  const lat = parseFloat(c.req.query('lat') || '0');
-  const lng = parseFloat(c.req.query('lng') || '0');
-  const radius = parseFloat(c.req.query('radius') || '1000'); // Default search radius 1km
-
-  try {
-    const { data: rooms, error } = await supabase.rpc('find_nearby_rooms', {
-      lat,
-      lng,
-      max_dist_meters: radius,
-    });
-
-    if (error) throw error;
-
-    // Filter out expired rooms
-    const now = new Date();
-    const activeRooms = (rooms || []).filter((r: { expires_at: string | null }) => {
-      if (!r.expires_at) return true;
-      return new Date(r.expires_at) > now;
-    });
-
-    return c.json(activeRooms);
-  } catch (err) {
-    const error = err as Error;
-    console.error('Error in /rooms/nearby:', error);
-    return c.json({ error: error.message }, 500);
-  }
+  if (error) return c.json({ error: error.message }, 500);
+  return c.json(data.map((item: any) => item.chat_rooms));
 });
 
-// POST /rooms/:roomId/join - Join a chat room
-app.post(
-  '/rooms/:roomId/join',
-  zValidator(
-    'json',
-    z.object({
-      userId: z.string(),
-    })
-  ),
-  async (c) => {
-    const roomId = c.req.param('roomId');
-    const { userId } = c.req.valid('json');
+app.post('/rooms/:roomId/join', async (c) => {
+  const roomId = c.req.param('roomId');
+  const { userId } = await c.req.json();
+  const { data, error } = await supabase
+    .from('room_participants')
+    .insert({ room_id: roomId, user_id: userId })
+    .select()
+    .single();
 
-    try {
-      // Check if already a participant
-      const { data: existing } = await supabase
-        .from('room_participants')
-        .select('id')
-        .eq('room_id', roomId)
-        .eq('user_id', userId)
-        .single();
+  if (error) return c.json({ error: error.message }, 400);
+  return c.json(data);
+});
 
-      if (existing) {
-        return c.json({ success: true, message: 'Already a participant' });
-      }
+app.delete('/rooms/:roomId/leave', async (c) => {
+  const roomId = c.req.param('roomId');
+  const { userId } = await c.req.json();
+  const { error } = await supabase
+    .from('room_participants')
+    .delete()
+    .eq('room_id', roomId)
+    .eq('user_id', userId);
 
-      const { error } = await supabase.from('room_participants').insert({
-        room_id: roomId,
-        user_id: userId,
-      });
+  if (error) return c.json({ error: error.message }, 400);
+  return c.json({ success: true });
+});
 
-      if (error) throw error;
-      return c.json({ success: true });
-    } catch (err) {
-      const error = err as Error;
-      return c.json({ error: error.message }, 500);
-    }
-  }
-);
-
-// GET /notifications/:userId - List notifications
+// 7. Notifications
 app.get('/notifications/:userId', async (c) => {
   const userId = c.req.param('userId');
-  try {
-    const { data, error } = await supabase
-      .from('notifications')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-      .limit(50);
+  const { data, error } = await supabase
+    .from('notifications')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
 
-    if (error) throw error;
-    return c.json(data || []);
-  } catch (err) {
-    const error = err as Error;
-    return c.json({ error: error.message }, 500);
-  }
+  if (error) return c.json({ error: error.message }, 500);
+  return c.json(data);
 });
 
-// POST /notifications/read - Mark notifications as read
-app.post(
-  '/notifications/read',
-  zValidator(
-    'json',
-    z.object({
-      notificationIds: z.array(z.string()),
-    })
-  ),
-  async (c) => {
-    const { notificationIds } = c.req.valid('json');
-    try {
-      const { error } = await supabase
-        .from('notifications')
-        .update({ is_read: true })
-        .in('id', notificationIds);
+app.patch('/notifications/:id/read', async (c) => {
+  const id = c.req.param('id');
+  const { data, error } = await supabase
+    .from('notifications')
+    .update({ is_read: true })
+    .eq('id', id)
+    .select()
+    .single();
 
-      if (error) throw error;
-      return c.json({ success: true });
-    } catch (err) {
-      const error = err as Error;
-      return c.json({ error: error.message }, 500);
-    }
-  }
-);
-
-// GET /profiles/search - Search for users
-app.get('/profiles/search', async (c) => {
-  const query = c.req.query('q') || '';
-  const userId = c.req.query('userId');
-
-  if (!query) return c.json([]);
-
-  try {
-    let supabaseQuery = supabase
-      .from('profiles')
-      .select('id, username, full_name, avatar_url')
-      .or(`username.ilike.%${query}%,full_name.ilike.%${query}%`)
-      .limit(20);
-
-    if (userId) {
-      supabaseQuery = supabaseQuery.neq('id', userId);
-    }
-
-    const { data, error } = await supabaseQuery;
-    if (error) throw error;
-    return c.json(data || []);
-  } catch (err) {
-    const error = err as Error;
-    return c.json({ error: error.message }, 500);
-  }
+  if (error) return c.json({ error: error.message }, 400);
+  return c.json(data);
 });
 
-// GET /profiles/nearby - List nearby users
-app.get('/profiles/nearby', async (c) => {
-  const lat = parseFloat(c.req.query('lat') || '0');
-  const lng = parseFloat(c.req.query('lng') || '0');
-  const radius = parseFloat(c.req.query('radius') || '1000');
-  const userId = c.req.query('userId');
-
-  try {
-    // Using simple distance calculation for now if PostGIS RPC is not available for profiles
-    // But since we have location column, we can use it.
-    // Let's try to use a RPC if it exists, otherwise use a fallback.
-    const { data, error } = await supabase.rpc('find_nearby_users', {
-      lat,
-      lng,
-      max_dist_meters: radius,
-    });
-
-    if (error) {
-      console.warn('find_nearby_users RPC failed, falling back to simple query');
-      const { data: fallbackData, error: fallbackError } = await supabase
-        .from('profiles')
-        .select('id, username, full_name, avatar_url, latitude, longitude')
-        .neq('id', userId || '')
-        .limit(50);
-
-      if (fallbackError) throw fallbackError;
-      return c.json(fallbackData || []);
-    }
-
-    let results = data || [];
-    if (userId) {
-      results = results.filter((u: { id: string }) => u.id !== userId);
-    }
-
-    return c.json(results);
-  } catch (err) {
-    const error = err as Error;
-    return c.json({ error: error.message }, 500);
-  }
-});
-
-// GET /friends/:userId - List friends
+// 8. Friends & Social
 app.get('/friends/:userId', async (c) => {
   const userId = c.req.param('userId');
-  try {
-    const { data, error } = await supabase
-      .from('friends')
-      .select(
-        `
-        id,
-        user_id_1,
-        user_id_2,
-        profiles!friends_user_id_1_fkey(id, username, full_name, avatar_url),
-        profiles_2:profiles!friends_user_id_2_fkey(id, username, full_name, avatar_url)
-      `
-      )
-      .or(`user_id_1.eq.${userId},user_id_2.eq.${userId}`);
+  const { data, error } = await supabase
+    .from('friends')
+    .select(`
+      *,
+      user_1:profiles!user_id_1(*),
+      user_2:profiles!user_id_2(*)
+    `)
+    .or(`user_id_1.eq.${userId},user_id_2.eq.${userId}`);
 
-    if (error) throw error;
+  if (error) return c.json({ error: error.message }, 500);
 
-    const friends = (data || []).map(
-      (f: { user_id_1: string; profiles: unknown; profiles_2: unknown }) => {
-        return f.user_id_1 === userId ? f.profiles_2 : f.profiles;
-      }
-    );
-
-    return c.json(friends);
-  } catch (err) {
-    const error = err as Error;
-    return c.json({ error: error.message }, 500);
-  }
+  // Map to only return the "friend" profile
+  const friends = data.map((f: any) => (f.user_id_1 === userId ? f.user_2 : f.user_1));
+  return c.json(friends);
 });
 
-// GET /friends/requests/:userId - List incoming friend requests
-app.get('/friends/requests/:userId', async (c) => {
+app.get('/friend-requests/:userId', async (c) => {
   const userId = c.req.param('userId');
-  try {
-    const { data, error } = await supabase
-      .from('friend_requests')
-      .select(
-        'id, sender_id, status, created_at, sender:profiles!friend_requests_sender_id_fkey(id, username, full_name, avatar_url)'
-      )
-      .eq('receiver_id', userId)
-      .eq('status', 'pending');
+  const { data, error } = await supabase
+    .from('friend_requests')
+    .select(`
+      *,
+      sender:profiles!sender_id(*)
+    `)
+    .eq('receiver_id', userId)
+    .eq('status', 'pending');
 
-    if (error) throw error;
-    return c.json(data || []);
-  } catch (err) {
-    const error = err as Error;
-    return c.json({ error: error.message }, 500);
+  if (error) return c.json({ error: error.message }, 500);
+  return c.json(data);
+});
+
+app.post('/friend-requests', async (c) => {
+  const { sender_id, receiver_id } = await c.req.json();
+
+  const { data, error } = await supabase
+    .from('friend_requests')
+    .insert({ sender_id, receiver_id, status: 'pending' })
+    .select()
+    .single();
+
+  if (error) return c.json({ error: error.message }, 400);
+
+  // Notify receiver
+  await supabase.from('notifications').insert({
+    user_id: receiver_id,
+    type: 'friend_request',
+    content: 'You have a new friend request!',
+  });
+
+  return c.json(data);
+});
+
+app.post('/friend-requests/:id/respond', async (c) => {
+  const id = c.req.param('id');
+  const { status } = await c.req.json(); // 'accepted' or 'rejected'
+
+  const { data: request, error: fetchError } = await supabase
+    .from('friend_requests')
+    .update({ status })
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (fetchError) return c.json({ error: fetchError.message }, 400);
+
+  if (status === 'accepted') {
+    // Add to friends table
+    await supabase.from('friends').insert({
+      user_id_1: request.sender_id,
+      user_id_2: request.receiver_id,
+    });
+
+    // Notify sender
+    await supabase.from('notifications').insert({
+      user_id: request.sender_id,
+      type: 'friend_request_accepted',
+      content: 'Your friend request was accepted!',
+    });
+  }
+
+  return c.json(request);
+});
+
+// 9. Resend Integration (Email Notifications)
+app.post('/email/notification', async (c) => {
+  const { to, subject, body } = await c.req.json();
+
+  try {
+    const data = await resend.emails.send({
+      from: 'TapIn <notifications@tapin.pro>',
+      to: [to],
+      subject,
+      html: body,
+    });
+    return c.json(data);
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
   }
 });
 
-// POST /friends/request - Send friend request
-app.post(
-  '/friends/request',
-  zValidator(
-    'json',
-    z.object({
-      sender_id: z.string(),
-      receiver_id: z.string(),
-    })
-  ),
-  async (c) => {
-    const { sender_id, receiver_id } = c.req.valid('json');
+const port = process.env.PORT || 3003;
+console.log(`Server is running on port ${port}`);
 
-    try {
-      // Check if already friends or request exists
-      const { data: existing } = await supabase
-        .from('friend_requests')
-        .select('id')
-        .or(
-          `and(sender_id.eq.${sender_id},receiver_id.eq.${receiver_id}),and(sender_id.eq.${receiver_id},receiver_id.eq.${sender_id})`
-        )
-        .single();
-
-      if (existing) {
-        return c.json({ error: 'Request already exists or you are already connected' }, 400);
-      }
-
-      const { data, error } = await supabase
-        .from('friend_requests')
-        .insert({
-          sender_id,
-          receiver_id,
-          status: 'pending',
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      // Create notification
-      await supabase.from('notifications').insert({
-        user_id: receiver_id,
-        type: 'friend_request',
-        content: 'You have a new friend request!',
-      });
-
-      return c.json(data);
-    } catch (err) {
-      const error = err as Error;
-      return c.json({ error: error.message }, 500);
-    }
-  }
-);
-
-// POST /friends/accept - Accept friend request
-app.post(
-  '/friends/accept',
-  zValidator(
-    'json',
-    z.object({
-      request_id: z.string(),
-    })
-  ),
-  async (c) => {
-    const { request_id } = c.req.valid('json');
-
-    try {
-      const { data: request, error: fetchError } = await supabase
-        .from('friend_requests')
-        .select('*')
-        .eq('id', request_id)
-        .single();
-
-      if (fetchError || !request) throw new Error('Request not found');
-
-      // Update request status
-      await supabase.from('friend_requests').update({ status: 'accepted' }).eq('id', request_id);
-
-      // Add to friends table
-      const { error: friendError } = await supabase.from('friends').insert({
-        user_id_1: request.sender_id,
-        user_id_2: request.receiver_id,
-      });
-
-      if (friendError) throw friendError;
-
-      // Create notification for sender
-      await supabase.from('notifications').insert({
-        user_id: request.sender_id,
-        type: 'friend_request_accepted',
-        content: 'Your friend request was accepted!',
-      });
-
-      return c.json({ success: true });
-    } catch (err) {
-      const error = err as Error;
-      return c.json({ error: error.message }, 500);
-    }
-  }
-);
-
-// PATCH /profiles/:userId - Update profile
-app.patch(
-  '/profiles/:userId',
-  zValidator(
-    'json',
-    z.object({
-      full_name: z.string().optional(),
-      username: z.string().optional(),
-      avatar_url: z.string().optional(),
-      bio: z.string().optional(),
-      website: z.string().optional(),
-      location_name: z.string().optional(),
-      occupation: z.string().optional(),
-    })
-  ),
-  async (c) => {
-    const userId = c.req.param('userId');
-    const updates = c.req.valid('json');
-
-    console.log(`Updating profile for user ${userId}:`, updates);
-
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .update(updates)
-        .eq('id', userId)
-        .select()
-        .single();
-
-      if (error) {
-        console.error('Supabase update error:', error);
-        throw error;
-      }
-
-      console.log('Profile updated successfully');
-      return c.json(data);
-    } catch (err) {
-      const error = err as Error;
-      console.error('Profile update failed:', error.message);
-      return c.json({ error: error.message }, 500);
-    }
-  }
-);
-
-export default app;
+export default {
+  port,
+  fetch: app.fetch,
+};
