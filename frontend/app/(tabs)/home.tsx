@@ -3,13 +3,15 @@ import { View, Text, TouchableOpacity, Alert, ActivityIndicator } from 'react-na
 import { FlashList } from '@shopify/flash-list';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocation } from '@/hooks/useLocation';
-import { MapPin, Users, ArrowRight, Clock, Bell, Plus, Compass, WifiOff, RefreshCw } from 'lucide-react-native';
+import { MapPin, Users, ArrowRight, Clock, Bell, Plus, Compass, WifiOff, RefreshCw, Sparkles, Radio } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiRequest } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { useColorScheme } from 'nativewind';
 import { THEME } from '@/lib/theme';
+import { LinearGradient } from 'expo-linear-gradient';
+import Animated, { FadeInDown, FadeInUp, FadeIn } from 'react-native-reanimated';
 
 import * as Haptics from 'expo-haptics';
 
@@ -26,35 +28,44 @@ function getTimeRemaining(expiresAt: string | null): string {
 }
 
 const RoomItemSkeleton = () => (
-  <View className="mb-4 flex-row items-center rounded-3xl bg-card p-4 opacity-50 border border-border/50">
-    <View className="h-14 w-14 rounded-2xl bg-secondary/60" />
-    <View className="ml-4 flex-1 gap-2">
-      <View className="h-4 w-32 rounded bg-secondary/60" />
-      <View className="h-3 w-20 rounded bg-secondary/60" />
+  <View className="mb-3 flex-row items-center rounded-3xl bg-card p-4 border border-border/50">
+    <View className="h-14 w-14 rounded-2xl bg-secondary/80" />
+    <View className="ml-4 flex-1 gap-2.5">
+      <View className="h-4 w-36 rounded-lg bg-secondary/80" />
+      <View className="h-3 w-24 rounded-lg bg-secondary/60" />
     </View>
-    <View className="h-9 w-9 rounded-full bg-secondary/60" />
+    <View className="h-10 w-10 rounded-xl bg-secondary/60" />
   </View>
 );
 
-const RoomItem = memo(({ item, onPress, theme }: { item: any; onPress: () => void; theme: any }) => (
-  <TouchableOpacity
-    onPress={onPress}
-    activeOpacity={0.7}
-    className="mb-3 flex-row items-center rounded-2xl bg-card p-5 border-[0.5px] border-border/40 active:bg-secondary/20">
-    <View className="h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
-      <Users size={24} color={theme.primary} />
-    </View>
-    <View className="ml-4 flex-1">
-      <Text className="text-base font-bold text-foreground tracking-tight" numberOfLines={1}>
-        {item.name}
-      </Text>
-      <View className="flex-row items-center gap-1.5 mt-0.5">
-        <Clock size={10} color={theme.mutedForeground} />
-        <Text className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{getTimeRemaining(item.expires_at)}</Text>
+const RoomItem = memo(({ item, onPress, theme, index }: { item: any; onPress: () => void; theme: any; index: number }) => (
+  <Animated.View entering={FadeInDown.delay(index * 60).springify()}>
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.7}
+      className="mb-3 flex-row items-center rounded-3xl bg-card p-4 border border-border/50 shadow-sm">
+      <LinearGradient
+        colors={[theme.primary + '25', theme.primary + '10']}
+        className="h-14 w-14 items-center justify-center rounded-2xl"
+      >
+        <Users size={24} color={theme.primary} />
+      </LinearGradient>
+      <View className="ml-4 flex-1">
+        <Text className="text-base font-bold text-foreground" numberOfLines={1}>
+          {item.name}
+        </Text>
+        <View className="flex-row items-center gap-2 mt-1.5">
+          <View className="flex-row items-center gap-1 bg-secondary/60 px-2 py-0.5 rounded-md">
+            <Clock size={10} color={theme.mutedForeground} />
+            <Text className="text-[10px] font-semibold text-muted-foreground">{getTimeRemaining(item.expires_at)}</Text>
+          </View>
+        </View>
       </View>
-    </View>
-    <ArrowRight size={16} color={theme.mutedForeground} />
-  </TouchableOpacity>
+      <View className="h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
+        <ArrowRight size={18} color={theme.primary} />
+      </View>
+    </TouchableOpacity>
+  </Animated.View>
 ));
 
 export default function HomeScreen() {
@@ -72,7 +83,7 @@ export default function HomeScreen() {
       },
       enabled: !!user?.id,
       refetchInterval: 60000,
-      staleTime: 60000, // Increase to 1 minute
+      staleTime: 60000,
       gcTime: 1000 * 60 * 15,
     });
   
@@ -110,7 +121,6 @@ export default function HomeScreen() {
 
   const createRoomMutation = useMutation({
     mutationFn: async () => {
-      // Add haptic feedback
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
       if (!location) {
@@ -170,91 +180,88 @@ export default function HomeScreen() {
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top']}>
       <View className="flex-1 px-5">
-          <View className="mb-8 mt-6 flex-row items-center justify-between">
+          <Animated.View entering={FadeInUp.springify()} className="mb-5 mt-4 flex-row items-center justify-between">
             <View>
-                <View className="flex-row items-center">
-                  <Text className="text-3xl font-black tracking-tight text-foreground">Nearby</Text>
-                  <View className="ml-3 bg-brand-pink px-2 py-0.5 rounded-md">
-                    <Text className="text-[10px] font-black text-white uppercase">Pro</Text>
-                  </View>
-                </View>
-              <View className="mt-1 flex-row items-center gap-2">
-
-              <View className={`h-2 w-2 rounded-full ${location ? 'bg-green-500' : 'bg-amber-500 shadow-sm'}`} />
-              <Text className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
-                {location ? 'Live Discovery' : errorMsg || 'Locating...'}
-              </Text>
+              <Text className="text-3xl font-black tracking-tight text-foreground">Nearby</Text>
+              <View className="mt-2 flex-row items-center gap-2">
+                <View className={`h-2.5 w-2.5 rounded-full ${location ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                <Text className="text-sm font-medium text-muted-foreground">
+                  {location ? 'Live' : errorMsg || 'Locating...'}
+                </Text>
+              </View>
             </View>
-          </View>
-          <View className="flex-row items-center gap-3">
             <TouchableOpacity
               onPress={() => router.push('/notifications')}
               activeOpacity={0.7}
-              className="relative h-11 w-11 items-center justify-center rounded-xl bg-secondary/50 border border-border/50">
+              className="relative h-12 w-12 items-center justify-center rounded-2xl bg-secondary/80 border border-border/50">
               <Bell size={22} color={theme.foreground} />
               {unreadCount > 0 && (
-                <View className="absolute -right-1 -top-1 h-5 w-5 items-center justify-center rounded-full border-2 border-background bg-primary">
-                  <Text className="text-[9px] font-black text-primary-foreground">
+                <View className="absolute -right-1.5 -top-1.5 h-5.5 w-5.5 items-center justify-center rounded-full bg-primary border-2 border-background">
+                  <Text className="text-[10px] font-bold text-primary-foreground">
                     {unreadCount > 9 ? '9+' : unreadCount}
                   </Text>
                 </View>
               )}
             </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => router.push('/profile')}
-              activeOpacity={0.8}
-              className="h-11 w-11 items-center justify-center rounded-xl bg-primary shadow-md shadow-primary/20">
-              <Plus size={24} color={theme.primaryForeground} />
-            </TouchableOpacity>
-          </View>
-        </View>
+          </Animated.View>
 
-        <TouchableOpacity
-          onPress={() => createRoomMutation.mutate()}
-          disabled={createRoomMutation.isPending}
-          activeOpacity={0.9}
-          className={`mb-8 flex-row items-center justify-center gap-3 rounded-3xl bg-primary py-5 shadow-lg shadow-primary/25 ${
-            createRoomMutation.isPending ? 'opacity-50' : ''
-          }`}>
-          {createRoomMutation.isPending ? (
-            <ActivityIndicator color={theme.primaryForeground} size="small" />
-          ) : (
-            <>
-              <Compass size={22} color={theme.primaryForeground} strokeWidth={2.5} />
-              <Text className="text-lg font-bold text-primary-foreground tracking-tight">Drop a Pin & Chat</Text>
-            </>
-          )}
-        </TouchableOpacity>
+          <Animated.View entering={FadeInUp.delay(100).springify()}>
+            <TouchableOpacity
+              onPress={() => createRoomMutation.mutate()}
+              disabled={createRoomMutation.isPending}
+              activeOpacity={0.85}
+              className="mb-6 overflow-hidden rounded-3xl shadow-lg shadow-primary/20">
+              <LinearGradient
+                colors={colorScheme === 'dark' ? ['#8b5cf6', '#6366f1'] : ['#7c3aed', '#8b5cf6']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                className="flex-row items-center justify-center gap-3 py-5">
+                {createRoomMutation.isPending ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <>
+                    <View className="h-10 w-10 items-center justify-center rounded-xl bg-white/20">
+                      <Sparkles size={22} color="#fff" />
+                    </View>
+                    <Text className="text-lg font-bold text-white">Start a Chat Here</Text>
+                  </>
+                )}
+              </LinearGradient>
+            </TouchableOpacity>
+          </Animated.View>
 
           <View className="flex-1">
             <View className="flex-row items-center justify-between mb-4">
-              <Text className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">
-                Active Zones
-              </Text>
+              <View className="flex-row items-center gap-2">
+                <Radio size={14} color={theme.primary} />
+                <Text className="text-sm font-bold text-foreground">
+                  Active Zones
+                </Text>
+              </View>
               {isFetching && (
                  <ActivityIndicator size="small" color={theme.primary} />
               )}
             </View>
             
               {isError ? (
-                <View className="mt-10 items-center justify-center p-12 rounded-[40px] border-2 border-dashed border-destructive/30 bg-destructive/5">
-                  <View className="h-20 w-20 items-center justify-center rounded-full bg-background border border-border mb-6">
-                    <WifiOff size={40} color={theme.destructive} opacity={0.6} />
+                <Animated.View entering={FadeIn} className="mt-4 items-center justify-center p-8 rounded-3xl border border-destructive/20 bg-destructive/5">
+                  <View className="h-16 w-16 items-center justify-center rounded-2xl bg-background border border-border mb-4">
+                    <WifiOff size={28} color={theme.destructive} />
                   </View>
-                  <Text className="text-2xl font-black text-foreground text-center">
+                  <Text className="text-xl font-bold text-foreground text-center">
                     Connection Issue
                   </Text>
-                  <Text className="mt-2 text-center text-base font-medium text-muted-foreground px-4">
-                    {(error as Error)?.message || 'Unable to load nearby zones. Check your connection.'}
+                  <Text className="mt-2 text-center text-sm text-muted-foreground px-4">
+                    {(error as Error)?.message || 'Unable to load nearby zones.'}
                   </Text>
                   <TouchableOpacity
                     onPress={() => refetch()}
                     activeOpacity={0.8}
-                    className="mt-6 flex-row items-center gap-2 rounded-2xl bg-primary px-6 py-3">
-                    <RefreshCw size={18} color={theme.primaryForeground} />
+                    className="mt-5 flex-row items-center gap-2 rounded-2xl bg-primary px-6 py-3">
+                    <RefreshCw size={16} color={theme.primaryForeground} />
                     <Text className="text-sm font-bold text-primary-foreground">Try Again</Text>
                   </TouchableOpacity>
-                </View>
+                </Animated.View>
               ) : isLoading && rooms.length === 0 ? (
               <View className="flex-1">
                 {[1, 2, 3, 4].map((i) => (
@@ -266,23 +273,23 @@ export default function HomeScreen() {
                     <FlashList
                       data={rooms as any[]}
                       keyExtractor={(item: any) => item.id}
-                      renderItem={({ item }: { item: any }) => (
-                        <RoomItem item={item} theme={theme} onPress={() => router.push(`/chat/${item.id}`)} />
+                      renderItem={({ item, index }: { item: any; index: number }) => (
+                        <RoomItem item={item} theme={theme} index={index} onPress={() => router.push(`/chat/${item.id}`)} />
                       )}
                       estimatedItemSize={80}
                       ListEmptyComponent={
                         !isFetching ? (
-                          <View className="mt-10 items-center justify-center p-12 rounded-[40px] border-2 border-dashed border-border/60 bg-secondary/50">
-                            <View className="h-20 w-20 items-center justify-center rounded-full bg-background border border-border mb-6">
-                              <Users size={40} color={theme.mutedForeground} opacity={0.4} />
+                          <Animated.View entering={FadeIn} className="mt-4 items-center justify-center p-8 rounded-3xl border border-border/50 bg-card">
+                            <View className="h-16 w-16 items-center justify-center rounded-2xl bg-secondary mb-4">
+                              <Users size={28} color={theme.mutedForeground} />
                             </View>
-                            <Text className="text-2xl font-black text-foreground text-center">
+                            <Text className="text-xl font-bold text-foreground text-center">
                               Quiet around here
                             </Text>
-                            <Text className="mt-2 text-center text-base font-medium text-muted-foreground px-4">
-                              Be the pioneer! Start a conversation and see who's nearby.
+                            <Text className="mt-2 text-center text-sm text-muted-foreground px-4">
+                              Be the first to start a conversation!
                             </Text>
-                          </View>
+                          </Animated.View>
                         ) : null
                       }
                       onRefresh={refetch}

@@ -1,8 +1,9 @@
 import { Tabs, useRouter } from 'expo-router';
-import { Home, Compass, User, Heart, MessageSquare, Settings, Zap } from 'lucide-react-native';
+import { Compass, User, Heart, MessageSquare, Settings, Zap } from 'lucide-react-native';
 import { useColorScheme } from 'nativewind';
 import { NAV_THEME, THEME } from '@/lib/theme';
-import { View, TouchableOpacity, Text } from 'react-native';
+import { View, TouchableOpacity, Text, Platform } from 'react-native';
+import { BlurView } from 'expo-blur';
 
 export default function TabsLayout() {
   const { colorScheme } = useColorScheme();
@@ -12,14 +13,15 @@ export default function TabsLayout() {
 
   const headerRight = () => (
     <View className="flex-row items-center mr-5">
-      <View className="mr-3 bg-primary/20 px-2 py-1 rounded-md border border-primary/30">
-        <Text className="text-[10px] font-black text-primary uppercase">Pro</Text>
+      <View className="mr-3 bg-primary/15 px-3 py-1.5 rounded-xl border border-primary/20">
+        <Text className="text-[10px] font-black text-primary uppercase tracking-wider">Pro</Text>
       </View>
       <TouchableOpacity 
         onPress={() => router.push('/settings')}
-        className="h-10 w-10 items-center justify-center rounded-xl bg-secondary/50"
+        activeOpacity={0.7}
+        className="h-11 w-11 items-center justify-center rounded-xl bg-secondary/80 border border-border/50"
       >
-        <Settings size={22} color={theme.foreground} />
+        <Settings size={20} color={theme.mutedForeground} />
       </TouchableOpacity>
     </View>
   );
@@ -35,39 +37,51 @@ export default function TabsLayout() {
           backgroundColor: theme.background,
           elevation: 0,
           shadowOpacity: 0,
-          borderBottomWidth: 1,
-          borderBottomColor: theme.border,
+          borderBottomWidth: 0,
         },
         headerTitleStyle: {
-          fontWeight: '900',
-          fontSize: 18,
-          textTransform: 'uppercase',
-          letterSpacing: 2,
+          fontWeight: '800',
+          fontSize: 17,
+          letterSpacing: 0.3,
           color: theme.foreground,
         },
         headerRight: headerRight,
         tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: '700',
-          marginBottom: 8,
+          fontSize: 10,
+          fontWeight: '600',
+          marginBottom: 4,
+          letterSpacing: 0.2,
         },
         tabBarStyle: {
-          backgroundColor: theme.card,
-          borderTopWidth: 1,
-          borderTopColor: theme.border,
-          height: 90,
-          paddingTop: 12,
+          position: 'absolute',
+          backgroundColor: colorScheme === 'dark' ? 'rgba(12, 12, 16, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+          borderTopWidth: 0,
+          height: Platform.OS === 'ios' ? 85 : 68,
+          paddingTop: 6,
           elevation: 0,
-          shadowOpacity: 0,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -6 },
+          shadowOpacity: 0.1,
+          shadowRadius: 16,
         },
+        tabBarBackground: () => (
+          Platform.OS === 'ios' ? (
+            <BlurView
+              intensity={90}
+              tint={colorScheme === 'dark' ? 'dark' : 'light'}
+              style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+            />
+          ) : null
+        ),
       }}>
       <Tabs.Screen
         name="home"
         options={{
-          title: 'Tap In Pro',
+          title: 'Nearby',
+          tabBarLabel: 'Nearby',
           tabBarIcon: ({ color, focused }) => (
-            <View className={`p-2 rounded-xl ${focused ? 'bg-primary/10' : ''}`}>
-              <Zap color={color} size={24} strokeWidth={focused ? 2.5 : 2} />
+            <View className={`p-2.5 rounded-2xl ${focused ? 'bg-primary/15' : ''}`}>
+              <Zap color={color} size={22} strokeWidth={focused ? 2.5 : 2} fill={focused ? color : 'transparent'} />
             </View>
           ),
         }}
@@ -77,8 +91,8 @@ export default function TabsLayout() {
         options={{
           title: 'Discover',
           tabBarIcon: ({ color, focused }) => (
-            <View className={`p-2 rounded-xl ${focused ? 'bg-primary/10' : ''}`}>
-              <Compass color={color} size={24} strokeWidth={focused ? 2.5 : 2} />
+            <View className={`p-2.5 rounded-2xl ${focused ? 'bg-primary/15' : ''}`}>
+              <Compass color={color} size={22} strokeWidth={focused ? 2.5 : 2} />
             </View>
           ),
         }}
@@ -88,8 +102,8 @@ export default function TabsLayout() {
         options={{
           title: 'Friends',
           tabBarIcon: ({ color, focused }) => (
-            <View className={`p-2 rounded-xl ${focused ? 'bg-primary/10' : ''}`}>
-              <Heart color={color} size={24} strokeWidth={focused ? 2.5 : 2} />
+            <View className={`p-2.5 rounded-2xl ${focused ? 'bg-primary/15' : ''}`}>
+              <Heart color={color} size={22} strokeWidth={focused ? 2.5 : 2} fill={focused ? color : 'transparent'} />
             </View>
           ),
         }}
@@ -99,8 +113,8 @@ export default function TabsLayout() {
         options={{
           title: 'Chats',
           tabBarIcon: ({ color, focused }) => (
-            <View className={`p-2 rounded-xl ${focused ? 'bg-primary/10' : ''}`}>
-              <MessageSquare color={color} size={24} strokeWidth={focused ? 2.5 : 2} />
+            <View className={`p-2.5 rounded-2xl ${focused ? 'bg-primary/15' : ''}`}>
+              <MessageSquare color={color} size={22} strokeWidth={focused ? 2.5 : 2} fill={focused ? color : 'transparent'} />
             </View>
           ),
         }}
@@ -110,8 +124,8 @@ export default function TabsLayout() {
         options={{
           title: 'Profile',
           tabBarIcon: ({ color, focused }) => (
-            <View className={`p-2 rounded-xl ${focused ? 'bg-primary/10' : ''}`}>
-              <User color={color} size={24} strokeWidth={focused ? 2.5 : 2} />
+            <View className={`p-2.5 rounded-2xl ${focused ? 'bg-primary/15' : ''}`}>
+              <User color={color} size={22} strokeWidth={focused ? 2.5 : 2} fill={focused ? color : 'transparent'} />
             </View>
           ),
         }}

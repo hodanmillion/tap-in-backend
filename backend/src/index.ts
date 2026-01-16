@@ -71,32 +71,35 @@ interface Database {
           created_at?: string;
         };
       };
-      messages: {
-        Row: {
-          id: string;
-          room_id: string;
-          sender_id: string;
-          content: string;
-          type: string;
-          created_at: string;
+        messages: {
+          Row: {
+            id: string;
+            room_id: string;
+            sender_id: string;
+            content: string;
+            type: string;
+            created_at: string;
+            client_msg_id: string | null;
+          };
+          Insert: {
+            id?: string;
+            room_id: string;
+            sender_id: string;
+            content: string;
+            type?: string;
+            created_at?: string;
+            client_msg_id?: string | null;
+          };
+          Update: {
+            id?: string;
+            room_id?: string;
+            sender_id?: string;
+            content?: string;
+            type?: string;
+            created_at?: string;
+            client_msg_id?: string | null;
+          };
         };
-        Insert: {
-          id?: string;
-          room_id: string;
-          sender_id: string;
-          content: string;
-          type?: string;
-          created_at?: string;
-        };
-        Update: {
-          id?: string;
-          room_id?: string;
-          sender_id?: string;
-          content?: string;
-          type?: string;
-          created_at?: string;
-        };
-      };
       chat_rooms: {
         Row: {
           id: string;
@@ -260,8 +263,42 @@ const supabase = createClient<Database>(
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
+const messageRateLimit = new Map<string, number[]>();
+const RATE_LIMIT_WINDOW_MS = 2000;
+const RATE_LIMIT_MAX_MESSAGES = 5;
+
+function checkRateLimit(senderId: string): boolean {
+  const now = Date.now();
+  const timestamps = messageRateLimit.get(senderId) || [];
+  const recentTimestamps = timestamps.filter(t => now - t < RATE_LIMIT_WINDOW_MS);
+  
+  if (recentTimestamps.length >= RATE_LIMIT_MAX_MESSAGES) {
+    return false;
+  }
+  
+  recentTimestamps.push(now);
+  messageRateLimit.set(senderId, recentTimestamps);
+  return true;
+}
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, timestamps] of messageRateLimit.entries()) {
+    const recent = timestamps.filter(t => now - t < RATE_LIMIT_WINDOW_MS);
+    if (recent.length === 0) {
+      messageRateLimit.delete(key);
+    } else {
+      messageRateLimit.set(key, recent);
+    }
+  }
+}, 10000);
+
 const app = new Hono();
 app.use('*', cors());
+
+app.get('/', (c) => {
+  return c.text('Tap In API v1.0.1 is Running');
+});
 
 // --- ROUTES ---
 
@@ -611,14 +648,28 @@ app.post(
       sender_id: z.string(),
       content: z.string(),
       type: z.string().default('text'),
+      client_msg_id: z.string().uuid().optional(),
     })
   ),
   async (c) => {
     const body = c.req.valid('json');
+    
+    if (!checkRateLimit(body.sender_id)) {
+      return c.json({ error: 'Rate limit exceeded. Max 5 messages per 2 seconds.' }, 429);
+    }
+    
+    const client_msg_id = body.client_msg_id || crypto.randomUUID();
+    
     const { data, error } = await supabase
       .from('messages')
-      .insert(body)
-      .select()
+      .insert({
+        room_id: body.room_id,
+        sender_id: body.sender_id,
+        content: body.content,
+        type: body.type,
+        client_msg_id,
+      })
+      .select('id, client_msg_id, room_id, sender_id, content, type, created_at')
       .single();
 
     if (error) return c.json({ error: error.message }, 400);

@@ -446,7 +446,13 @@ export default function ProfileScreen() {
                 {userPhotos.map((url: string, index: number) => (
                   <View key={index} className="w-1/2 p-2">
                     <View className="aspect-square rounded-[24px] overflow-hidden bg-card border border-border shadow-sm">
-                      <Image source={{ uri: url }} className="h-full w-full" />
+                      <Image 
+                        source={{ uri: url }} 
+                        style={{ width: '100%', height: '100%' }}
+                        contentFit="cover"
+                        cachePolicy="memory-disk"
+                        transition={200}
+                      />
                     </View>
                   </View>
                 ))}
@@ -478,13 +484,19 @@ export default function ProfileScreen() {
               disabled={uploading}
               className="h-36 w-36 items-center justify-center rounded-[40px] bg-card border-4 border-background overflow-hidden"
             >
-              {uploading ? (
-                <ActivityIndicator color={theme.primary} />
-              ) : profile?.avatar_url ? (
-                <Image source={{ uri: profile.avatar_url }} className="h-full w-full" />
-              ) : (
-                <User size={64} color={theme.mutedForeground} opacity={0.3} />
-              )}
+            {uploading ? (
+              <ActivityIndicator color={theme.primary} />
+            ) : profile?.avatar_url ? (
+              <Image 
+                source={{ uri: profile.avatar_url }} 
+                style={{ width: '100%', height: '100%' }}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+                transition={200}
+              />
+            ) : (
+              <User size={64} color={theme.mutedForeground} opacity={0.3} />
+            )}
               <View className="absolute inset-0 bg-black/20 items-center justify-center opacity-0 hover:opacity-100">
                 <Camera size={24} color="white" />
               </View>

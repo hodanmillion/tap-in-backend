@@ -3,11 +3,11 @@ import {
   Text,
   TouchableOpacity,
   ActivityIndicator,
-  Image,
   Alert,
   TextInput,
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
+import { Image } from 'expo-image';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocation } from '@/hooks/useLocation';
 import { useState, useEffect } from 'react';
@@ -105,7 +105,13 @@ export default function UsersScreen() {
     <View className="mb-4 flex-row items-center rounded-3xl border border-border bg-card p-4 shadow-sm">
       <View className="h-14 w-14 items-center justify-center overflow-hidden rounded-2xl bg-primary/5">
         {item.avatar_url ? (
-          <Image source={{ uri: item.avatar_url }} className="h-14 w-14" />
+          <Image 
+            source={{ uri: item.avatar_url }} 
+            style={{ width: 56, height: 56 }}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+            transition={150}
+          />
         ) : (
           <Users size={24} color={theme.primary} />
         )}

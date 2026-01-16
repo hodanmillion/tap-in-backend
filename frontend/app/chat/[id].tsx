@@ -36,9 +36,32 @@ import { useColorScheme } from 'nativewind';
 import { THEME } from '@/lib/theme';
 import * as Haptics from 'expo-haptics';
 import { apiRequest } from '@/lib/api';
+import { generateUUID } from '@/lib/utils';
 
 const CHAT_RADIUS_METERS = 100;
 const GIPHY_API_KEY = process.env.EXPO_PUBLIC_GIPHY_API_KEY || 'l1WfAFgqA5WupWoMaCaWKB12G54J6LtZ';
+const REALTIME_BUFFER_MS = 50;
+const PROFILE_FETCH_DEBOUNCE_MS = 100;
+
+type Profile = {
+  id: string;
+  username: string | null;
+  full_name: string | null;
+  avatar_url: string | null;
+};
+
+type Message = {
+  id: string;
+  room_id: string;
+  sender_id: string;
+  content: string;
+  type: string;
+  created_at: string;
+  client_msg_id?: string | null;
+  isOptimistic?: boolean;
+  status?: 'sending' | 'sent' | 'failed';
+  sender?: Profile | null;
+};
 
 function isSameDay(d1: Date, d2: Date) {
   return (
@@ -65,9 +88,15 @@ export default function ChatScreen() {
   const { user } = useAuth();
   const { drafts, setDraft, clearDraft } = useChat();
   const [id, setId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<any[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [isResolvingId, setIsResolvingId] = useState(true);
+
+  const senderCacheRef = useRef<Map<string, Profile>>(new Map());
+  const pendingSenderIdsRef = useRef<Set<string>>(new Set());
+  const profileFetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const realtimeBufferRef = useRef<any[]>([]);
+  const realtimeFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Restore draft on mount
   useEffect(() => {
@@ -226,80 +255,148 @@ export default function ChatScreen() {
     setLoadingMore(false);
   }, [hasMoreMessages, loadingMore, nextCursor, fetchMessages]);
 
+  const fetchMissingProfiles = useCallback(async () => {
+    const idsToFetch = Array.from(pendingSenderIdsRef.current);
+    if (idsToFetch.length === 0) return;
+    
+    pendingSenderIdsRef.current.clear();
+    
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, username, full_name, avatar_url')
+      .in('id', idsToFetch);
+    
+    if (!profiles) return;
+    
+    profiles.forEach((p) => {
+      senderCacheRef.current.set(p.id, p);
+    });
+    
+    setMessages((current) =>
+      current.map((m) => {
+        if (!m.sender && senderCacheRef.current.has(m.sender_id)) {
+          return { ...m, sender: senderCacheRef.current.get(m.sender_id) };
+        }
+        return m;
+      })
+    );
+  }, []);
+
+  const scheduleFetchProfiles = useCallback((senderIds: string[]) => {
+    senderIds.forEach((id) => {
+      if (!senderCacheRef.current.has(id)) {
+        pendingSenderIdsRef.current.add(id);
+      }
+    });
+    
+    if (profileFetchTimerRef.current) {
+      clearTimeout(profileFetchTimerRef.current);
+    }
+    profileFetchTimerRef.current = setTimeout(fetchMissingProfiles, PROFILE_FETCH_DEBOUNCE_MS);
+  }, [fetchMissingProfiles]);
+
+  const processRealtimeBuffer = useCallback(() => {
+    const buffer = realtimeBufferRef.current;
+    if (buffer.length === 0) return;
+    
+    realtimeBufferRef.current = [];
+    const senderIdsToFetch: string[] = [];
+    
+    setMessages((current) => {
+      let updated = [...current];
+      
+      for (const payload of buffer) {
+        const newMsg = payload.new as Message;
+        
+        if (updated.some((m) => m.id === newMsg.id)) {
+          continue;
+        }
+        
+        if (newMsg.client_msg_id) {
+          const optimisticIndex = updated.findIndex(
+            (m) => m.isOptimistic && m.client_msg_id === newMsg.client_msg_id
+          );
+          
+          if (optimisticIndex > -1) {
+            const existingSender = updated[optimisticIndex].sender;
+            updated[optimisticIndex] = {
+              ...newMsg,
+              sender: existingSender || senderCacheRef.current.get(newMsg.sender_id) || null,
+              isOptimistic: false,
+              status: 'sent',
+            };
+            continue;
+          }
+        }
+        
+        const cachedSender = senderCacheRef.current.get(newMsg.sender_id);
+        if (!cachedSender) {
+          senderIdsToFetch.push(newMsg.sender_id);
+        }
+        
+        const messageWithSender: Message = {
+          ...newMsg,
+          sender: cachedSender || null,
+        };
+        
+        const insertIndex = updated.findIndex(
+          (m) => new Date(m.created_at) < new Date(newMsg.created_at)
+        );
+        if (insertIndex === -1) {
+          updated.push(messageWithSender);
+        } else {
+          updated.splice(insertIndex, 0, messageWithSender);
+        }
+      }
+      
+      return updated;
+    });
+    
+    if (senderIdsToFetch.length > 0) {
+      scheduleFetchProfiles(senderIdsToFetch);
+    }
+  }, [scheduleFetchProfiles]);
+
   useEffect(() => {
     if (!id) return;
     fetchRoomAndUser();
     fetchMessages();
+    
+    if (user) {
+      senderCacheRef.current.set(user.id, {
+        id: user.id,
+        username: user.user_metadata?.username || null,
+        full_name: user.user_metadata?.full_name || null,
+        avatar_url: user.user_metadata?.avatar_url || null,
+      });
+    }
+    
     const channel = supabase
       .channel(`room:${id}`)
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${id}` },
-        async (payload) => {
-          // Check if we already have this message (optimistic or otherwise)
-          setMessages((current) => {
-            if (current.some((m) => m.id === payload.new.id)) return current;
-
-            // Try to find if there's an optimistic version of this message to replace
-            // We check for matching content, sender, and recent timestamp
-            const isMyMessage = payload.new.sender_id === user?.id;
-            const optimisticIndex = isMyMessage
-              ? current.findIndex((m) => m.isOptimistic && m.content === payload.new.content)
-              : -1;
-
-            if (optimisticIndex > -1) {
-              const updated = [...current];
-              updated[optimisticIndex] = {
-                ...payload.new,
-                sender: {
-                  id: user?.id,
-                  username: user?.user_metadata?.username,
-                  full_name: user?.user_metadata?.full_name,
-                  avatar_url: user?.user_metadata?.avatar_url,
-                },
-              };
-              return updated;
-            }
-
-            // If not found, fetch profile and add (actually we should fetch profile for non-mine messages)
-            return current;
-          });
-
-          // If it's not my message or not found optimistically, we need the profile
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('id, username, full_name, avatar_url')
-            .eq('id', payload.new.sender_id)
-            .single();
-
-          setMessages((current) => {
-            if (current.some((m) => m.id === payload.new.id)) {
-              // Just update the profile if it was already there
-              return current.map((m) => (m.id === payload.new.id ? { ...m, sender: profile } : m));
-            }
-            const newMessage = { ...payload.new, sender: profile };
-
-            // Check again for optimistic match to replace
-            const isMyMessage = payload.new.sender_id === user?.id;
-            const optimisticIndex = isMyMessage
-              ? current.findIndex((m) => m.isOptimistic && m.content === payload.new.content)
-              : -1;
-
-            if (optimisticIndex > -1) {
-              const updated = [...current];
-              updated[optimisticIndex] = newMessage;
-              return updated;
-            }
-
-            return [newMessage, ...current];
-          });
+        (payload) => {
+          realtimeBufferRef.current.push(payload);
+          
+          if (realtimeFlushTimerRef.current) {
+            clearTimeout(realtimeFlushTimerRef.current);
+          }
+          realtimeFlushTimerRef.current = setTimeout(processRealtimeBuffer, REALTIME_BUFFER_MS);
         }
       )
       .subscribe();
+    
     return () => {
       supabase.removeChannel(channel);
+      if (profileFetchTimerRef.current) {
+        clearTimeout(profileFetchTimerRef.current);
+      }
+      if (realtimeFlushTimerRef.current) {
+        clearTimeout(realtimeFlushTimerRef.current);
+      }
     };
-  }, [id, user?.id, fetchRoomAndUser, fetchMessages]);
+  }, [id, user?.id, fetchRoomAndUser, fetchMessages, processRealtimeBuffer]);
 
   function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
     const R = 6371000;
@@ -365,7 +462,6 @@ export default function ChatScreen() {
       }
       if (!id) {
         if (isResolvingId) {
-          // If still resolving, we wait a bit or show an alert
           Alert.alert('Please Wait', 'Connecting to chat room...');
         } else {
           Alert.alert('Error', 'Room ID not resolved. Please try again.');
@@ -373,31 +469,29 @@ export default function ChatScreen() {
         return;
       }
 
-      // Add haptic feedback
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-      // 1. Create optimistic message
-      const tempId = `temp-${Date.now()}`;
-      const optimisticMessage = {
-        id: tempId,
+      const client_msg_id = generateUUID();
+      const optimisticMessage: Message = {
+        id: `temp:${client_msg_id}`,
         room_id: id,
         sender_id: user.id,
         content: finalContent,
         type: type,
         created_at: new Date().toISOString(),
+        client_msg_id,
         isOptimistic: true,
+        status: 'sending',
         sender: {
           id: user.id,
-          username: user.user_metadata?.username,
-          full_name: user.user_metadata?.full_name,
-          avatar_url: user.user_metadata?.avatar_url,
+          username: user.user_metadata?.username || null,
+          full_name: user.user_metadata?.full_name || null,
+          avatar_url: user.user_metadata?.avatar_url || null,
         },
       };
 
-      // 2. Add to local state immediately
       setMessages((current) => [optimisticMessage, ...current]);
 
-      // 3. Clear input and draft immediately for responsiveness
       if (type === 'text') {
         setNewMessage('');
         clearDraft(id);
@@ -411,24 +505,38 @@ export default function ChatScreen() {
             sender_id: user.id,
             content: finalContent,
             type: type,
+            client_msg_id,
           }),
         });
 
         if (!data || data.error) {
           throw new Error(data?.message || data?.error || 'Failed to send');
         }
+
+        setMessages((current) =>
+          current.map((m) =>
+            m.client_msg_id === client_msg_id
+              ? { ...m, id: data.id, isOptimistic: false, status: 'sent' as const }
+              : m
+          )
+        );
       } catch (error: any) {
         console.error('Error sending message:', error);
 
-        // 4. On error, remove optimistic message and restore input
-        setMessages((current) => current.filter((m) => m.id !== tempId));
+        setMessages((current) =>
+          current.map((m) =>
+            m.client_msg_id === client_msg_id ? { ...m, status: 'failed' as const } : m
+          )
+        );
 
         if (type === 'text') {
           setNewMessage(finalContent);
           setDraft(id, finalContent);
         }
 
-        if (error.message?.includes('Out of range') || error.error === 'Out of range') {
+        if (error.message?.includes('Rate limit')) {
+          Alert.alert('Slow Down', 'You are sending messages too quickly. Please wait a moment.');
+        } else if (error.message?.includes('Out of range') || error.error === 'Out of range') {
           Alert.alert('Out of Range', error.message || 'You are too far from this location.');
         } else if (error.code === '23503') {
           setRoomNotFound(true);
@@ -438,7 +546,7 @@ export default function ChatScreen() {
         }
       }
     },
-    [id, user, newMessage, roomNotFound, isExpired, isOutOfRange, room?.type, isResolvingId]
+    [id, user, newMessage, roomNotFound, isExpired, isOutOfRange, room?.type, isResolvingId, clearDraft, setDraft]
   );
 
   const pickImage = useCallback(async () => {
@@ -627,7 +735,8 @@ export default function ChatScreen() {
                   source={{ uri: item.content }}
                   className="h-48 w-64"
                   contentFit="cover"
-                  transition={200}
+                  cachePolicy="memory-disk"
+                  transition={150}
                 />
               </TouchableOpacity>
             ) : (
@@ -826,6 +935,7 @@ export default function ChatScreen() {
                       }}
                       className="h-32 w-full bg-secondary/30"
                       contentFit="cover"
+                      cachePolicy="memory"
                     />
                   </TouchableOpacity>
                 ))
