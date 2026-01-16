@@ -1,20 +1,34 @@
 import '@/global.css';
 import { Stack } from 'expo-router';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, focusManager } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { ChatProvider } from '@/context/ChatContext';
 import { useEffect } from 'react';
 import { useRouter, useSegments } from 'expo-router';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, AppState, Platform } from 'react-native';
 import { ErrorBoundary } from './error-boundary';
 import { useLocation } from '@/hooks/useLocation';
+import { mark, measure, PerfMarks } from '@/lib/perf';
+
+mark(PerfMarks.APP_START);
+
+focusManager.setEventListener((handleFocus) => {
+  const subscription = AppState.addEventListener('change', (state) => {
+    if (Platform.OS !== 'web') {
+      handleFocus(state === 'active');
+    }
+  });
+  return () => subscription.remove();
+});
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60 * 5,
+      staleTime: 1000 * 60 * 2,
       gcTime: 1000 * 60 * 30,
       refetchOnWindowFocus: false,
+      refetchOnMount: false,
+      refetchOnReconnect: 'always',
       retry: 2,
       retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
       networkMode: 'offlineFirst',
@@ -31,9 +45,14 @@ function RootLayoutContent() {
   const { session, loading, user } = useAuth();
   const segments = useSegments();
   const router = useRouter();
-  
-  // Initialize location sync globally
+
   useLocation(user?.id);
+
+  useEffect(() => {
+    if (!loading) {
+      measure(PerfMarks.APP_START);
+    }
+  }, [loading]);
 
   useEffect(() => {
     if (loading) return;

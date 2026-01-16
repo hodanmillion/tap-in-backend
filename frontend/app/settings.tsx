@@ -26,7 +26,8 @@ import {
   Globe,
   Lock,
   EyeOff,
-  Mail
+  Mail,
+  Bug
 } from 'lucide-react-native';
 import { useAuth } from '@/context/AuthContext';
 import { useColorScheme } from 'nativewind';
@@ -227,6 +228,11 @@ function SettingsContent() {
                   label="Subscription" 
                   value="Pro"
                   onPress={() => Alert.alert('Subscription', 'Manage your subscription options here. Feature coming soon.')}
+                />
+                <SettingItem 
+                  icon={<Bug size={20} color={theme.mutedForeground} />} 
+                  label="Debug & Performance" 
+                  onPress={() => router.push('/debug')}
                 />
               </View>
             </View>

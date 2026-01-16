@@ -1,4 +1,6 @@
-import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, Image } from 'react-native';
+import React, { memo, useCallback } from 'react';
+import { View, Text, TouchableOpacity, ActivityIndicator, Image } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { MessageCircle, Clock, ChevronRight, Hash, MessageSquare, Compass, Lock } from 'lucide-react-native';
@@ -18,6 +20,73 @@ const ChatItemSkeleton = () => (
     </View>
     <View className="h-11 w-11 rounded-full bg-secondary/60" />
   </View>
+);
+
+const ChatRoomItem = memo(
+  ({
+    item,
+    theme,
+    isOutOfRange,
+    isExpired,
+    onPress,
+  }: {
+    item: any;
+    theme: any;
+    isOutOfRange: boolean;
+    isExpired: boolean;
+    onPress: () => void;
+  }) => (
+    <TouchableOpacity
+      activeOpacity={0.7}
+      onPress={onPress}
+      className="mb-5 flex-row items-center rounded-[28px] border border-border bg-card p-5 shadow-sm">
+      <View
+        className={`h-16 w-16 items-center justify-center rounded-[20px] overflow-hidden ${
+          item.type === 'private' ? 'bg-primary/10' : 'bg-secondary/50'
+        }`}>
+        {item.type === 'private' ? (
+          item.other_user_avatar ? (
+            <Image source={{ uri: item.other_user_avatar }} className="h-full w-full" />
+          ) : (
+            <MessageCircle size={30} color={theme.primary} />
+          )
+        ) : (
+          <Hash size={30} color={theme.mutedForeground} />
+        )}
+      </View>
+      <View className="ml-4 flex-1">
+        <View className="flex-row items-center justify-between">
+          <Text className="text-xl font-bold text-foreground flex-1 mr-2" numberOfLines={1}>
+            {item.name}
+          </Text>
+          {(isOutOfRange || isExpired) && item.type !== 'private' && (
+            <View className="flex-row items-center bg-zinc-900 px-2 py-0.5 rounded-md border border-zinc-800">
+              <Lock size={10} color={theme.mutedForeground} className="mr-1" />
+              <Text className="text-[10px] font-bold text-muted-foreground uppercase">Read Only</Text>
+            </View>
+          )}
+        </View>
+        <View className="mt-1 flex-row items-center justify-between">
+          <View className="flex-row items-center">
+            <Clock size={12} color={theme.mutedForeground} />
+            <Text className="ml-1.5 text-xs font-semibold text-muted-foreground">
+              {item.created_at ? new Date(item.created_at).toLocaleDateString() : 'Active'}
+            </Text>
+          </View>
+          <View
+            className={`px-2.5 py-1 rounded-full ${item.type === 'private' ? 'bg-primary/10' : 'bg-secondary'}`}>
+            <Text
+              className={`text-[10px] font-black uppercase tracking-widest ${item.type === 'private' ? 'text-primary' : 'text-muted-foreground'}`}>
+              {item.type}
+            </Text>
+          </View>
+        </View>
+      </View>
+      <View className="ml-3 h-11 w-11 items-center justify-center rounded-full bg-secondary">
+        <ChevronRight size={18} color={theme.mutedForeground} opacity={0.5} />
+      </View>
+    </TouchableOpacity>
+  )
 );
 
 export default function ChatsScreen() {
@@ -101,70 +170,32 @@ export default function ChatsScreen() {
     });
 
 
-  const renderRoom = ({ item }: { item: any }) => {
-    const isOutOfRange = 
-      item.type !== 'private' && 
-      location && 
-      calculateDistance(
-        location.coords.latitude,
-        location.coords.longitude,
-        item.latitude,
-        item.longitude
-      ) > (item.radius || 100);
+  const renderRoom = useCallback(
+    ({ item }: { item: any }) => {
+      const isOutOfRange =
+        item.type !== 'private' &&
+        location &&
+        calculateDistance(
+          location.coords.latitude,
+          location.coords.longitude,
+          item.latitude,
+          item.longitude
+        ) > (item.radius || 100);
 
-    const isExpired = item.expires_at && new Date() > new Date(item.expires_at);
+      const isExpired = item.expires_at && new Date() > new Date(item.expires_at);
 
-    return (
-      <TouchableOpacity
-        activeOpacity={0.7}
-        onPress={() => router.push(`/chat/${item.id}`)}
-        className="mb-5 flex-row items-center rounded-[28px] border border-border bg-card p-5 shadow-sm">
-        <View
-          className={`h-16 w-16 items-center justify-center rounded-[20px] overflow-hidden ${
-            item.type === 'private' ? 'bg-primary/10' : 'bg-secondary/50'
-          }`}>
-          {item.type === 'private' ? (
-            item.other_user_avatar ? (
-              <Image source={{ uri: item.other_user_avatar }} className="h-full w-full" />
-            ) : (
-              <MessageCircle size={30} color={theme.primary} />
-            )
-          ) : (
-            <Hash size={30} color={theme.mutedForeground} />
-          )}
-        </View>
-        <View className="ml-4 flex-1">
-          <View className="flex-row items-center justify-between">
-            <Text className="text-xl font-bold text-foreground flex-1 mr-2" numberOfLines={1}>
-              {item.name}
-            </Text>
-            {(isOutOfRange || isExpired) && item.type !== 'private' && (
-              <View className="flex-row items-center bg-zinc-900 px-2 py-0.5 rounded-md border border-zinc-800">
-                <Lock size={10} color={theme.mutedForeground} className="mr-1" />
-                <Text className="text-[10px] font-bold text-muted-foreground uppercase">Read Only</Text>
-              </View>
-            )}
-          </View>
-          <View className="mt-1 flex-row items-center justify-between">
-             <View className="flex-row items-center">
-               <Clock size={12} color={theme.mutedForeground} />
-               <Text className="ml-1.5 text-xs font-semibold text-muted-foreground">
-                 {item.created_at ? new Date(item.created_at).toLocaleDateString() : 'Active'}
-               </Text>
-             </View>
-             <View className={`px-2.5 py-1 rounded-full ${item.type === 'private' ? 'bg-primary/10' : 'bg-secondary'}`}>
-               <Text className={`text-[10px] font-black uppercase tracking-widest ${item.type === 'private' ? 'text-primary' : 'text-muted-foreground'}`}>
-                 {item.type}
-               </Text>
-             </View>
-          </View>
-        </View>
-        <View className="ml-3 h-11 w-11 items-center justify-center rounded-full bg-secondary">
-          <ChevronRight size={18} color={theme.mutedForeground} opacity={0.5} />
-        </View>
-      </TouchableOpacity>
-    );
-  };
+      return (
+        <ChatRoomItem
+          item={item}
+          theme={theme}
+          isOutOfRange={!!isOutOfRange}
+          isExpired={!!isExpired}
+          onPress={() => router.push(`/chat/${item.id}`)}
+        />
+      );
+    },
+    [location, theme, router]
+  );
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top']}>
@@ -183,42 +214,42 @@ export default function ChatsScreen() {
             ))}
           </View>
         ) : (
-          <FlatList
-            data={rooms}
-            keyExtractor={(item) => item.id}
-            onRefresh={refetch}
-            refreshing={isFetching}
-            renderItem={renderRoom}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: 120 }}
-            ListEmptyComponent={
-              !isFetching ? (
-                <View className="mt-10 items-center justify-center rounded-[40px] border-2 border-dashed border-border/60 bg-secondary/50 p-12">
-                  <View className="h-24 w-24 items-center justify-center rounded-full bg-background border border-border mb-8 shadow-sm">
-                    <MessageSquare size={40} color={theme.mutedForeground} opacity={0.4} />
-                  </View>
-                  <Text className="text-center text-2xl font-black text-foreground">
-                    Empty inbox
-                  </Text>
-                  <Text className="mt-3 text-center text-base font-medium text-muted-foreground px-4">
-                    Start a conversation by joining a nearby zone or connecting with friends!
-                  </Text>
-                  <TouchableOpacity
-                    onPress={() => router.push('/home')}
-                    activeOpacity={0.8}
-                    className="mt-8 flex-row items-center gap-2 rounded-2xl bg-primary px-8 py-4">
-                    <Compass size={20} color={theme.primaryForeground} />
-                    <Text className="font-black text-primary-foreground uppercase tracking-widest">
-                      Find Zones
+            <FlashList
+              data={rooms}
+              keyExtractor={(item) => item.id}
+              onRefresh={refetch}
+              refreshing={isFetching}
+              renderItem={renderRoom}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: 120 }}
+              estimatedItemSize={100}
+              ListEmptyComponent={
+                !isFetching ? (
+                  <View className="mt-10 items-center justify-center rounded-[40px] border-2 border-dashed border-border/60 bg-secondary/50 p-12">
+                    <View className="h-24 w-24 items-center justify-center rounded-full bg-background border border-border mb-8 shadow-sm">
+                      <MessageSquare size={40} color={theme.mutedForeground} opacity={0.4} />
+                    </View>
+                    <Text className="text-center text-2xl font-black text-foreground">
+                      Empty inbox
                     </Text>
-                  </TouchableOpacity>
-                </View>
-              ) : null
-            }
-          />
-        )}
-      </View>
-    </SafeAreaView>
-
-  );
-}
+                    <Text className="mt-3 text-center text-base font-medium text-muted-foreground px-4">
+                      Start a conversation by joining a nearby zone or connecting with friends!
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => router.push('/home')}
+                      activeOpacity={0.8}
+                      className="mt-8 flex-row items-center gap-2 rounded-2xl bg-primary px-8 py-4">
+                      <Compass size={20} color={theme.primaryForeground} />
+                      <Text className="font-black text-primary-foreground uppercase tracking-widest">
+                        Find Zones
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : null
+              }
+            />
+          )}
+        </View>
+      </SafeAreaView>
+    );
+  }

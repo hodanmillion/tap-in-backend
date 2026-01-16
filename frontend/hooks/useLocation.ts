@@ -1,22 +1,59 @@
 import * as Location from 'expo-location';
 import { useEffect, useState, useRef } from 'react';
-import { Platform } from 'react-native';
+import { Platform, AppState } from 'react-native';
 import { apiRequest } from '@/lib/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const LOCATION_CACHE_KEY = 'last_known_location';
+const LAST_SYNC_KEY = 'last_sync_data';
+const MIN_DISTANCE_METERS = 25;
+const MIN_SYNC_INTERVAL_MS = 20000;
+
+type LastSyncData = {
+  latitude: number;
+  longitude: number;
+  timestamp: number;
+};
+
+function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371000;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+}
 
 export function useLocation(userId: string | undefined) {
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const lastSyncRef = useRef<number>(0);
+  const lastSyncRef = useRef<LastSyncData | null>(null);
+  const appStateRef = useRef(AppState.currentState);
 
   useEffect(() => {
     let subscription: Location.LocationSubscription | null = null;
 
+    const loadLastSync = async () => {
+      try {
+        const stored = await AsyncStorage.getItem(LAST_SYNC_KEY);
+        if (stored) {
+          lastSyncRef.current = JSON.parse(stored);
+        }
+      } catch {}
+    };
+
+    loadLastSync();
+
+    const appStateSub = AppState.addEventListener('change', (nextState) => {
+      appStateRef.current = nextState;
+    });
+
     (async () => {
       try {
-        // 1. Try to load from persistent cache first (instant)
         if (typeof window !== 'undefined' || Platform.OS !== 'web') {
           const cached = await AsyncStorage.getItem(LOCATION_CACHE_KEY);
           if (cached) {
@@ -31,14 +68,13 @@ export function useLocation(userId: string | undefined) {
           return;
         }
 
-        // 2. Get OS-level last known position (fast)
         let initialLocation = await Location.getLastKnownPositionAsync();
 
         if (initialLocation) {
           setLocation(initialLocation);
           AsyncStorage.setItem(LOCATION_CACHE_KEY, JSON.stringify(initialLocation));
           if (userId) {
-            syncLocationAndRooms(
+            maybeSyncLocation(
               userId,
               initialLocation.coords.latitude,
               initialLocation.coords.longitude
@@ -46,7 +82,6 @@ export function useLocation(userId: string | undefined) {
           }
         }
 
-        // 3. Get fresh current position (most accurate)
         const currentPosition = await Location.getCurrentPositionAsync({
           accuracy: Location.Accuracy.Balanced,
         });
@@ -54,13 +89,8 @@ export function useLocation(userId: string | undefined) {
         setLocation(currentPosition);
         AsyncStorage.setItem(LOCATION_CACHE_KEY, JSON.stringify(currentPosition));
 
-        if (
-          userId &&
-          (!initialLocation ||
-            Math.abs(currentPosition.coords.latitude - initialLocation.coords.latitude) > 0.001 ||
-            Math.abs(currentPosition.coords.longitude - initialLocation.coords.longitude) > 0.001)
-        ) {
-          syncLocationAndRooms(
+        if (userId) {
+          maybeSyncLocation(
             userId,
             currentPosition.coords.latitude,
             currentPosition.coords.longitude
@@ -70,16 +100,13 @@ export function useLocation(userId: string | undefined) {
         subscription = await Location.watchPositionAsync(
           {
             accuracy: Location.Accuracy.High,
-            timeInterval: 30000, // Sync every 30s
-            distanceInterval: 10, // or 10 meters
+            timeInterval: 30000,
+            distanceInterval: 15,
           },
           (newLocation) => {
             setLocation(newLocation);
-            const now = Date.now();
-            // Throttle sync to once per 10 seconds to save battery and data
-            if (userId && now - lastSyncRef.current > 10000) {
-              lastSyncRef.current = now;
-              syncLocationAndRooms(
+            if (userId && appStateRef.current === 'active') {
+              maybeSyncLocation(
                 userId,
                 newLocation.coords.latitude,
                 newLocation.coords.longitude
@@ -95,16 +122,25 @@ export function useLocation(userId: string | undefined) {
 
     return () => {
       if (subscription) subscription.remove();
+      appStateSub.remove();
     };
   }, [userId]);
 
-  async function syncLocationAndRooms(userId: string, latitude: number, longitude: number) {
-    try {
-      // Fire and forget geocoding, don't let it block the sync
-      let address: string | undefined;
+  async function maybeSyncLocation(userId: string, latitude: number, longitude: number) {
+    const now = Date.now();
+    const last = lastSyncRef.current;
 
-      // We only attempt geocoding if we haven't done it recently or for room creation
-      // In low reception, this might time out or fail, but we catch it.
+    if (last) {
+      const timeSinceLastSync = now - last.timestamp;
+      const distanceMoved = haversineDistance(last.latitude, last.longitude, latitude, longitude);
+
+      if (timeSinceLastSync < MIN_SYNC_INTERVAL_MS && distanceMoved < MIN_DISTANCE_METERS) {
+        return;
+      }
+    }
+
+    try {
+      let address: string | undefined;
       try {
         const reverseGeocode = (await Promise.race([
           Location.reverseGeocodeAsync({ latitude, longitude }),
@@ -116,15 +152,16 @@ export function useLocation(userId: string | undefined) {
           const parts = [loc.street, loc.name, loc.city].filter(Boolean);
           address = parts.length > 0 ? parts.join(', ') : undefined;
         }
-      } catch (geoErr) {
-        // Silently fail geocoding, backend will use coordinates as name
-        console.log('Reverse geocode failed or timed out:', geoErr);
-      }
+      } catch {}
 
       await apiRequest('/rooms/sync', {
         method: 'POST',
         body: JSON.stringify({ userId, latitude, longitude, address }),
       });
+
+      const syncData: LastSyncData = { latitude, longitude, timestamp: now };
+      lastSyncRef.current = syncData;
+      AsyncStorage.setItem(LAST_SYNC_KEY, JSON.stringify(syncData));
     } catch (err) {
       console.error('Failed to sync location and rooms:', err);
     }

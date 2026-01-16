@@ -1,13 +1,13 @@
 import {
   View,
   Text,
-  FlatList,
   TouchableOpacity,
   ActivityIndicator,
   Image,
   Alert,
   TextInput,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocation } from '@/hooks/useLocation';
 import { useState, useEffect } from 'react';
@@ -221,36 +221,36 @@ export default function UsersScreen() {
               <Text className="text-sm font-bold text-primary-foreground">Try Again</Text>
             </TouchableOpacity>
           </View>
-        ) : (
-          <FlatList
-            data={displayData}
-            keyExtractor={(item) => item.id}
-            renderItem={renderUser}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: 120 }}
-            ListEmptyComponent={
-              !isLoading ? (
-                <View className="mt-10 items-center justify-center rounded-[40px] border-2 border-dashed border-border/60 bg-secondary/50 p-12">
-                  <View className="h-24 w-24 items-center justify-center rounded-full bg-background border border-border mb-8 shadow-sm">
-                    <Compass size={40} color={theme.mutedForeground} opacity={0.4} />
+          ) : (
+            <FlashList
+              data={displayData}
+              keyExtractor={(item) => item.id}
+              renderItem={renderUser}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: 120 }}
+              estimatedItemSize={80}
+              ListEmptyComponent={
+                !isLoading ? (
+                  <View className="mt-10 items-center justify-center rounded-[40px] border-2 border-dashed border-border/60 bg-secondary/50 p-12">
+                    <View className="h-24 w-24 items-center justify-center rounded-full bg-background border border-border mb-8 shadow-sm">
+                      <Compass size={40} color={theme.mutedForeground} opacity={0.4} />
+                    </View>
+                    <Text className="text-center text-2xl font-black text-foreground">
+                      {debouncedQuery ? 'No users found' : 'Silence is golden'}
+                    </Text>
+                    <Text className="mt-3 text-center text-base font-medium text-muted-foreground px-4">
+                      {debouncedQuery
+                        ? `We couldn't find anyone matching "${debouncedQuery}"`
+                        : "No one else is nearby right now. Be the first to start a conversation!"}
+                    </Text>
                   </View>
-                  <Text className="text-center text-2xl font-black text-foreground">
-                    {debouncedQuery ? 'No users found' : 'Silence is golden'}
-                  </Text>
-                  <Text className="mt-3 text-center text-base font-medium text-muted-foreground px-4">
-                    {debouncedQuery 
-                      ? `We couldn't find anyone matching "${debouncedQuery}"`
-                      : "No one else is nearby right now. Be the first to start a conversation!"}
-                  </Text>
-                </View>
-              ) : null
-            }
-            onRefresh={!debouncedQuery ? refetchNearby : undefined}
-            refreshing={false}
-          />
-        )}
-      </View>
-    </SafeAreaView>
-
-  );
-}
+                ) : null
+              }
+              onRefresh={!debouncedQuery ? refetchNearby : undefined}
+              refreshing={false}
+            />
+          )}
+        </View>
+      </SafeAreaView>
+    );
+  }

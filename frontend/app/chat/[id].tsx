@@ -9,9 +9,9 @@ import {
   Modal,
   ScrollView,
   Pressable,
-  FlatList,
   Alert,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
@@ -97,6 +97,9 @@ export default function ChatScreen() {
   const [gifs, setGifs] = useState<any[]>([]);
   const [gifLoading, setGifLoading] = useState(false);
   const [gifError, setGifError] = useState<string | null>(null);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [hasMoreMessages, setHasMoreMessages] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const { location } = useLocation(user?.id);
 
@@ -195,15 +198,33 @@ export default function ChatScreen() {
     setLoading(false);
   }, [id, user?.id]);
 
-  const fetchMessages = useCallback(async () => {
+  const fetchMessages = useCallback(async (cursor?: string) => {
     if (!id) return;
     try {
-      const data = await apiRequest(`/messages/${id}`);
-      if (data) setMessages([...data].reverse());
+      const url = cursor
+        ? `/messages/${id}?limit=50&cursor=${encodeURIComponent(cursor)}`
+        : `/messages/${id}?limit=50`;
+      const data = await apiRequest(url);
+      if (data) {
+        if (cursor) {
+          setMessages((prev) => [...prev, ...data.messages]);
+        } else {
+          setMessages(data.messages || []);
+        }
+        setNextCursor(data.nextCursor);
+        setHasMoreMessages(data.hasMore);
+      }
     } catch (error) {
       console.error('Error fetching messages:', error);
     }
   }, [id]);
+
+  const loadMoreMessages = useCallback(async () => {
+    if (!hasMoreMessages || loadingMore || !nextCursor) return;
+    setLoadingMore(true);
+    await fetchMessages(nextCursor);
+    setLoadingMore(false);
+  }, [hasMoreMessages, loadingMore, nextCursor, fetchMessages]);
 
   useEffect(() => {
     if (!id) return;
@@ -660,14 +681,24 @@ export default function ChatScreen() {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           className="flex-1"
           keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
-          <FlatList
-            data={messagesWithSeparators}
-            inverted
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={{ padding: 16 }}
-            renderItem={renderMessage}
-            showsVerticalScrollIndicator={false}
-          />
+            <FlashList
+              data={messagesWithSeparators}
+              inverted
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={{ padding: 16 }}
+              renderItem={renderMessage}
+              showsVerticalScrollIndicator={false}
+              estimatedItemSize={80}
+              onEndReached={loadMoreMessages}
+              onEndReachedThreshold={0.5}
+              ListFooterComponent={
+                loadingMore ? (
+                  <View className="py-4 items-center">
+                    <ActivityIndicator size="small" color={theme.primary} />
+                  </View>
+                ) : null
+              }
+            />
 
           {(isOutOfRange || isExpired || roomNotFound) && room?.type !== 'private' ? (
             <View className="border-t border-border bg-card px-4 py-3 pb-10">

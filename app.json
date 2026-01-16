@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "cd9f19cf-25a3-4871-adcb-9d8b61f1c138"
+      }
+    },
+    "ios": {
+      "bundleIdentifier": "com.hodanmo15.tapinroot",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    }
+  }
+}

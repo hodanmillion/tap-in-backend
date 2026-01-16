@@ -1,5 +1,6 @@
-import React, { useMemo } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, FlatList } from 'react-native';
+import React, { useMemo, useCallback, memo } from 'react';
+import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { useQuery } from '@tanstack/react-query';
 import { Image } from 'expo-image';
 import { User, MessageCircle, Heart, UserPlus, Compass, WifiOff, RefreshCw } from 'lucide-react-native';
@@ -101,17 +102,18 @@ export default function FriendsScreen() {
               <Text className="text-sm font-bold text-primary-foreground">Try Again</Text>
             </TouchableOpacity>
           </View>
-        ) : (
-          <View className="flex-1">
-            <FlatList
-              data={friends}
-              keyExtractor={(item: any) => item.id}
-              renderItem={renderFriend}
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingBottom: 120 }}
-              onRefresh={refetch}
-              refreshing={false}
-              ListEmptyComponent={
+          ) : (
+            <View className="flex-1">
+              <FlashList
+                data={friends}
+                keyExtractor={(item: any) => item.id}
+                renderItem={renderFriend}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: 120 }}
+                onRefresh={refetch}
+                refreshing={false}
+                estimatedItemSize={80}
+                ListEmptyComponent={
                 <View className="mt-10 items-center justify-center rounded-[40px] border-2 border-dashed border-border/60 bg-secondary/50 p-12">
                   <View className="h-24 w-24 items-center justify-center rounded-full bg-background border border-border mb-8 shadow-sm">
                     <Heart size={40} color={theme.mutedForeground} opacity={0.4} />

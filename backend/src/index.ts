@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
+import { serve } from '@hono/node-server';
 import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
@@ -265,6 +266,38 @@ app.use('*', cors());
 // --- ROUTES ---
 
 // 3. Profiles
+app.get('/profiles/nearby', async (c) => {
+  const lat = parseFloat(c.req.query('lat') || '0');
+  const lng = parseFloat(c.req.query('lng') || '0');
+  const radius = parseInt(c.req.query('radius') || '5000');
+  const userId = c.req.query('userId');
+
+  const { data, error } = await supabase.rpc('find_nearby_users', {
+    lat,
+    lng,
+    max_dist_meters: radius,
+  });
+
+  if (error) return c.json({ error: error.message }, 500);
+  const filtered = userId ? data.filter((u: any) => u.id !== userId) : data;
+  return c.json(filtered);
+});
+
+app.get('/profiles/search', async (c) => {
+  const q = c.req.query('q') || '';
+  const userId = c.req.query('userId');
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('*')
+    .or(`username.ilike.%${q}%,full_name.ilike.%${q}%`)
+    .neq('id', userId || '')
+    .limit(20);
+
+  if (error) return c.json({ error: error.message }, 500);
+  return c.json(data);
+});
+
 app.get('/profiles/:id', async (c) => {
   const id = c.req.param('id');
   const { data, error } = await supabase
@@ -343,12 +376,11 @@ app.post(
   ),
   async (c) => {
     const { userId, latitude, longitude, address } = c.req.valid('json');
+    const startTime = Date.now();
 
     try {
-      // 1. Cleanup expired rooms
       await supabase.rpc('cleanup_expired_rooms');
 
-      // 2. Update user location
       await supabase
         .from('profiles')
         .update({
@@ -359,7 +391,6 @@ app.post(
         })
         .eq('id', userId);
 
-      // 3. Find nearby rooms (radius 500m)
       const { data: existingRooms, error: searchError } = await supabase.rpc('find_nearby_rooms', {
         lat: latitude,
         lng: longitude,
@@ -368,7 +399,6 @@ app.post(
 
       if (searchError) throw searchError;
 
-      // 4. If no nearby rooms, create a default "Nearby Chat"
       if (!existingRooms || existingRooms.length === 0) {
         const { data: newRoom, error: createError } = await supabase
           .from('chat_rooms')
@@ -378,23 +408,29 @@ app.post(
             latitude,
             longitude,
             radius: 500,
-            expires_at: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(), // 2 hours
+            expires_at: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
           })
-          .select()
+          .select('id')
           .single();
 
         if (createError) throw createError;
 
-        // Auto-join the creator
         await supabase.from('room_participants').insert({
           room_id: newRoom.id,
           user_id: userId,
         });
 
-        return c.json({ rooms: [newRoom] });
+        const dbMs = Date.now() - startTime;
+        c.header('x-db-ms', String(dbMs));
+        c.header('x-total-ms', String(dbMs));
+
+        return c.json({
+          joinedRoomIds: [newRoom.id],
+          leftRoomIds: [],
+          serverTime: new Date().toISOString(),
+        });
       }
 
-      // 5. Auto-join user to all nearby rooms they aren't in
       const roomIds = existingRooms.map((r) => r.id);
       const { data: currentMemberships } = await supabase
         .from('room_participants')
@@ -414,7 +450,15 @@ app.post(
         );
       }
 
-      return c.json({ rooms: existingRooms });
+      const dbMs = Date.now() - startTime;
+      c.header('x-db-ms', String(dbMs));
+      c.header('x-total-ms', String(dbMs));
+
+      return c.json({
+        joinedRoomIds: roomsToJoin,
+        activeRoomIds: roomIds,
+        serverTime: new Date().toISOString(),
+      });
     } catch (err: any) {
       console.error('Sync Error:', err);
       return c.json({ error: err.message }, 500);
@@ -455,17 +499,107 @@ app.get('/users/nearby', async (c) => {
 // 5. Chat & Messages
 app.get('/rooms/:roomId/messages', async (c) => {
   const roomId = c.req.param('roomId');
-  const { data, error } = await supabase
+  const limit = parseInt(c.req.query('limit') || '50');
+  const cursor = c.req.query('cursor');
+
+  let query = supabase
     .from('messages')
     .select(`
       *,
-      sender:profiles(id, username, avatar_url)
+      sender:profiles(id, username, avatar_url, full_name)
     `)
     .eq('room_id', roomId)
-    .order('created_at', { ascending: true });
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (cursor) {
+    query = query.lt('created_at', cursor);
+  }
+
+  const { data, error } = await query;
 
   if (error) return c.json({ error: error.message }, 500);
-  return c.json(data);
+
+  const hasMore = data && data.length === limit;
+  const nextCursor = hasMore && data.length > 0 ? data[data.length - 1].created_at : null;
+
+  return c.json({
+    messages: data || [],
+    nextCursor,
+    hasMore,
+  });
+});
+
+app.get('/messages/:roomId', async (c) => {
+  const roomId = c.req.param('roomId');
+  const limit = parseInt(c.req.query('limit') || '50');
+  const cursor = c.req.query('cursor');
+
+  let query = supabase
+    .from('messages')
+    .select(`
+      *,
+      sender:profiles(id, username, avatar_url, full_name)
+    `)
+    .eq('room_id', roomId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (cursor) {
+    query = query.lt('created_at', cursor);
+  }
+
+  const { data, error } = await query;
+
+  if (error) return c.json({ error: error.message }, 500);
+
+  const hasMore = data && data.length === limit;
+  const nextCursor = hasMore && data.length > 0 ? data[data.length - 1].created_at : null;
+
+  return c.json({
+    messages: data || [],
+    nextCursor,
+    hasMore,
+  });
+});
+
+app.post('/rooms/private', async (c) => {
+  const { user1_id, user2_id } = await c.req.json();
+  
+  const sortedIds = [user1_id, user2_id].sort();
+  const roomName = `private_${sortedIds[0]}_${sortedIds[1]}`;
+  
+  const { data: existingRoom } = await supabase
+    .from('chat_rooms')
+    .select('id')
+    .eq('name', roomName)
+    .eq('type', 'private')
+    .single();
+  
+  if (existingRoom) {
+    return c.json({ room_id: existingRoom.id });
+  }
+  
+  const { data: newRoom, error: createError } = await supabase
+    .from('chat_rooms')
+    .insert({
+      name: roomName,
+      type: 'private',
+      latitude: 0,
+      longitude: 0,
+      radius: 0,
+    })
+    .select()
+    .single();
+  
+  if (createError) return c.json({ error: createError.message }, 400);
+  
+  await supabase.from('room_participants').insert([
+    { room_id: newRoom.id, user_id: user1_id },
+    { room_id: newRoom.id, user_id: user2_id },
+  ]);
+  
+  return c.json({ room_id: newRoom.id });
 });
 
 app.post(
@@ -533,6 +667,35 @@ app.delete('/rooms/:roomId/leave', async (c) => {
   return c.json({ success: true });
 });
 
+// 6b. Create Room
+app.post('/rooms/create', async (c) => {
+  const { name, latitude, longitude, radius, userId } = await c.req.json();
+
+  const { data: room, error } = await supabase
+    .from('chat_rooms')
+    .insert({
+      name,
+      type: 'public',
+      latitude,
+      longitude,
+      radius: radius || 500,
+      expires_at: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+    })
+    .select()
+    .single();
+
+  if (error) return c.json({ error: error.message }, 400);
+
+  if (userId) {
+    await supabase.from('room_participants').insert({
+      room_id: room.id,
+      user_id: userId,
+    });
+  }
+
+  return c.json({ room });
+});
+
 // 7. Notifications
 app.get('/notifications/:userId', async (c) => {
   const userId = c.req.param('userId');
@@ -559,6 +722,22 @@ app.patch('/notifications/:id/read', async (c) => {
   return c.json(data);
 });
 
+app.post('/notifications/read', async (c) => {
+  const { notificationIds } = await c.req.json();
+  
+  if (!notificationIds || !Array.isArray(notificationIds)) {
+    return c.json({ error: 'notificationIds array required' }, 400);
+  }
+
+  const { error } = await supabase
+    .from('notifications')
+    .update({ is_read: true })
+    .in('id', notificationIds);
+
+  if (error) return c.json({ error: error.message }, 400);
+  return c.json({ success: true, updated: notificationIds.length });
+});
+
 // 8. Friends & Social
 app.get('/friends/:userId', async (c) => {
   const userId = c.req.param('userId');
@@ -573,9 +752,29 @@ app.get('/friends/:userId', async (c) => {
 
   if (error) return c.json({ error: error.message }, 500);
 
-  // Map to only return the "friend" profile
   const friends = data.map((f: any) => (f.user_id_1 === userId ? f.user_2 : f.user_1));
   return c.json(friends);
+});
+
+app.post('/friends/request', async (c) => {
+  const { sender_id, receiver_id } = await c.req.json();
+
+  const { data, error } = await supabase
+    .from('friend_requests')
+    .insert({ sender_id, receiver_id, status: 'pending' })
+    .select()
+    .single();
+
+  if (error) return c.json({ error: error.message }, 400);
+
+  await supabase.from('notifications').insert({
+    user_id: receiver_id,
+    type: 'friend_request',
+    title: 'New Friend Request',
+    content: 'You have a new friend request!',
+  });
+
+  return c.json(data);
 });
 
 app.get('/friend-requests/:userId', async (c) => {
@@ -662,8 +861,44 @@ app.post('/email/notification', async (c) => {
   }
 });
 
-const port = process.env.PORT || 3003;
-console.log(`Server is running on port ${port}`);
+// 10. Auth Welcome Email
+app.post('/auth/welcome', async (c) => {
+  const { email, name } = await c.req.json();
+
+  if (!email) {
+    return c.json({ error: 'Email required' }, 400);
+  }
+
+  try {
+    const data = await resend.emails.send({
+      from: 'TapIn <welcome@tapin.pro>',
+      to: [email],
+      subject: 'Welcome to TapIn!',
+      html: `
+        <h1>Welcome${name ? `, ${name}` : ''}!</h1>
+        <p>Thanks for joining TapIn. Start discovering people and conversations near you.</p>
+      `,
+    });
+    return c.json(data);
+  } catch (err: any) {
+    console.error('Welcome email error:', err);
+    return c.json({ success: true });
+  }
+});
+
+const port = Number(process.env.PORT) || 3003;
+
+const isBun = typeof process !== 'undefined' && (process as any).isBun === true;
+
+if (!isBun) {
+  serve({
+    fetch: app.fetch,
+    port,
+  });
+  console.log(`Server is running on port ${port} (Node.js)`);
+} else {
+  console.log(`Server is running on port ${port} (Bun)`);
+}
 
 export default {
   port,

@@ -1,27 +1,25 @@
-/**
- * API Configuration
- *
- * The backend URL is automatically configured:
- * - In development: Read from EXPO_PUBLIC_BACKEND_URL (set by ngrok script)
- * - In production: Use your deployed API URL
- */
+import { logApiCall } from './perf';
 
-// Get the backend URL from environment variables
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:3002';
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1500;
 const FETCH_TIMEOUT = 15000;
 
-/**
- * Simple fetch wrapper with retry logic and timeout for stability on the move
- */
+let lastRequestStatus: { endpoint: string; status: number | 'error'; timestamp: number } | null = null;
+
+export function getLastRequestStatus() {
+  return lastRequestStatus;
+}
+
 export async function apiRequest<T = any>(
-  endpoint: string, 
+  endpoint: string,
   options?: RequestInit,
   retryCount = 0
 ): Promise<T> {
   const url = `${BACKEND_URL}${endpoint}`;
+  const method = options?.method || 'GET';
+  const startTime = performance.now();
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
@@ -39,6 +37,7 @@ export async function apiRequest<T = any>(
     });
 
     clearTimeout(timeoutId);
+      const duration = performance.now() - startTime;
 
       if (!response.ok) {
         let errorMessage = `Error ${response.status}: ${response.statusText}`;
@@ -46,30 +45,32 @@ export async function apiRequest<T = any>(
           const errorBody = await response.json();
           errorMessage = errorBody.error || errorBody.message || errorMessage;
         } catch (e) {
-          // If not JSON, try to get text body
           try {
             const textBody = await response.text();
             if (textBody && textBody.length < 100) errorMessage = textBody;
-          } catch (textErr) {
-            // Ignore
+          } catch {
           }
         }
 
+      logApiCall(endpoint, method, duration, response.status);
+      lastRequestStatus = { endpoint, status: response.status, timestamp: Date.now() };
 
-      // Retry on 5xx errors or 429
       if ((response.status >= 500 || response.status === 429) && retryCount < MAX_RETRIES) {
-        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * (retryCount + 1)));
+        await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY * (retryCount + 1)));
         return apiRequest(endpoint, options, retryCount + 1);
       }
 
       throw new Error(errorMessage);
     }
 
+    logApiCall(endpoint, method, duration, response.status);
+    lastRequestStatus = { endpoint, status: response.status, timestamp: Date.now() };
+
     return response.json();
   } catch (error: any) {
     clearTimeout(timeoutId);
+    const duration = performance.now() - startTime;
 
-    // Categories of network errors that are worth retrying
     const isNetworkError = 
       error.name === 'AbortError' || 
       error.message === 'Network request failed' ||
@@ -81,9 +82,12 @@ export async function apiRequest<T = any>(
       return apiRequest(endpoint, options, retryCount + 1);
     }
 
-    const finalMessage = error.name === 'AbortError' 
-      ? 'Connection timed out. Please check your signal.' 
+    const finalMessage = error.name === 'AbortError'
+      ? 'Connection timed out. Please check your signal.'
       : error.message || 'Unknown network error';
+
+    logApiCall(endpoint, method, duration, 'error');
+    lastRequestStatus = { endpoint, status: 'error', timestamp: Date.now() };
 
     throw new Error(finalMessage);
   }
