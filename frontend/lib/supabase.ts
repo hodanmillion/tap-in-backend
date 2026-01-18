@@ -59,4 +59,9 @@ export const supabase = createClient(validUrl, validKey, {
     persistSession: true,
     detectSessionInUrl: false,
   },
+  realtime: {
+    params: {
+      eventsPerSecond: 10,
+    },
+  },
 });

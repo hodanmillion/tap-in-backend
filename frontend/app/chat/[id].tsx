@@ -480,7 +480,14 @@ export default function ChatScreen() {
           realtimeFlushTimerRef.current = setTimeout(processRealtimeBuffer, REALTIME_BUFFER_MS);
         }
       )
-      .subscribe();
+      .subscribe((status, err) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('Realtime connected to room:', id);
+        }
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.error('Realtime subscription error:', err);
+        }
+      });
     
     return () => {
       supabase.removeChannel(channel);
