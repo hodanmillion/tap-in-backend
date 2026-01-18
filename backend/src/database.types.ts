@@ -123,28 +123,7 @@ export interface Database {
         };
         Relationships: [];
       };
-      room_participants: {
-        Row: {
-          id: string;
-          room_id: string | null;
-          user_id: string | null;
-          joined_at: string | null;
-        };
-        Insert: {
-          id?: string;
-          room_id?: string | null;
-          user_id?: string | null;
-          joined_at?: string | null;
-        };
-        Update: {
-          id?: string;
-          room_id?: string | null;
-          user_id?: string | null;
-          joined_at?: string | null;
-        };
-        Relationships: [];
-      };
-      friend_requests: {
+        friend_requests: {
         Row: {
           id: string;
           sender_id: string | null;
@@ -222,39 +201,90 @@ export interface Database {
           };
           Relationships: [];
         };
-          tapins: {
-            Row: {
-              id: string;
-              sender_id: string;
-              receiver_id: string;
-              image_url: string;
-              caption: string | null;
-              viewed_at: string | null;
-              created_at: string | null;
-              expires_at: string | null;
+            tapins: {
+              Row: {
+                id: string;
+                sender_id: string;
+                receiver_id: string;
+                image_url: string;
+                caption: string | null;
+                viewed_at: string | null;
+                created_at: string | null;
+                expires_at: string | null;
+              };
+              Insert: {
+                id?: string;
+                sender_id: string;
+                receiver_id: string;
+                image_url: string;
+                caption?: string | null;
+                viewed_at?: string | null;
+                created_at?: string | null;
+                expires_at?: string | null;
+              };
+              Update: {
+                id?: string;
+                sender_id?: string;
+                receiver_id?: string;
+                image_url?: string;
+                caption?: string | null;
+                viewed_at?: string | null;
+                created_at?: string | null;
+                expires_at?: string | null;
+              };
+              Relationships: [];
             };
-            Insert: {
-              id?: string;
-              sender_id: string;
-              receiver_id: string;
-              image_url: string;
-              caption?: string | null;
-              viewed_at?: string | null;
-              created_at?: string | null;
-              expires_at?: string | null;
-            };
-            Update: {
-              id?: string;
-              sender_id?: string;
-              receiver_id?: string;
-              image_url?: string;
-              caption?: string | null;
-              viewed_at?: string | null;
-              created_at?: string | null;
-              expires_at?: string | null;
-            };
-            Relationships: [];
+        push_tokens: {
+          Row: {
+            id: string;
+            user_id: string;
+            token: string;
+            platform: string;
+            created_at: string | null;
+            updated_at: string | null;
           };
+          Insert: {
+            id?: string;
+            user_id: string;
+            token: string;
+            platform: string;
+            created_at?: string | null;
+            updated_at?: string | null;
+          };
+          Update: {
+            id?: string;
+            user_id?: string;
+            token?: string;
+            platform?: string;
+            created_at?: string | null;
+            updated_at?: string | null;
+          };
+          Relationships: [];
+        };
+        room_participants: {
+          Row: {
+            id: string;
+            room_id: string | null;
+            user_id: string | null;
+            joined_at: string | null;
+            left_at: string | null;
+          };
+          Insert: {
+            id?: string;
+            room_id?: string | null;
+            user_id?: string | null;
+            joined_at?: string | null;
+            left_at?: string | null;
+          };
+          Update: {
+            id?: string;
+            room_id?: string | null;
+            user_id?: string | null;
+            joined_at?: string | null;
+            left_at?: string | null;
+          };
+          Relationships: [];
+        };
       };
     Views: {
       [_ in never]: never;

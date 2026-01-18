@@ -1047,255 +1047,12 @@ app.post('/friends/request', async (c) => {
     content: 'You have a new friend request!',
   });
 
-  return c.json(data);
-});
-
-app.get('/friend-requests/:userId', async (c) => {
-  const userId = c.req.param('userId');
-  const { data, error } = await supabase
-    .from('friend_requests')
-    .select(`
-      *,
-      sender:profiles!sender_id(*)
-    `)
-    .eq('receiver_id', userId)
-    .eq('status', 'pending');
-
-  if (error) return c.json({ error: error.message }, 500);
-  if (!data || data.length === 0) return c.json([]);
-
-  const { data: friends } = await supabase
-    .from('friends')
-    .select('user_id_1, user_id_2')
-    .or(`user_id_1.eq.${userId},user_id_2.eq.${userId}`);
-
-  const friendIds = new Set<string>();
-  if (friends) {
-    friends.forEach((f: any) => {
-      friendIds.add(f.user_id_1 === userId ? f.user_id_2 : f.user_id_1);
-    });
-  }
-
-  const { data: privateRooms } = await supabase
-    .from('chat_rooms')
-    .select('name')
-    .eq('type', 'private')
-    .like('name', `%${userId}%`);
-
-  const connectedIds = new Set<string>(friendIds);
-  if (privateRooms) {
-    privateRooms.forEach((r: any) => {
-      const parts = r.name.replace('private_', '').split('_');
-      const otherUserId = parts[0] === userId ? parts[1] : parts[0];
-      if (otherUserId) connectedIds.add(otherUserId);
-    });
-  }
-
-  const filteredRequests = data.filter((req: any) => !connectedIds.has(req.sender_id));
-  
-  return c.json(filteredRequests);
-});
-
-app.post('/friend-requests', async (c) => {
-  const body = await c.req.json();
-  const sender_id = body.sender_id || body.senderId;
-  const receiver_id = body.receiver_id || body.receiverId;
-
-  const { data: existingFriend } = await supabase
-    .from('friends')
-    .select('id')
-    .or(`and(user_id_1.eq.${sender_id},user_id_2.eq.${receiver_id}),and(user_id_1.eq.${receiver_id},user_id_2.eq.${sender_id})`)
-    .single();
-
-  if (existingFriend) {
-    return c.json({ error: 'You are already friends with this user' }, 400);
-  }
-
-  const sortedIds = [sender_id, receiver_id].sort();
-  const privateRoomName = `private_${sortedIds[0]}_${sortedIds[1]}`;
-  const { data: hasPrivateRoom } = await supabase
-    .from('chat_rooms')
-    .select('id')
-    .eq('type', 'private')
-    .eq('name', privateRoomName)
-    .single();
-
-  if (hasPrivateRoom) {
-    return c.json({ error: 'You are already connected with this user' }, 400);
-  }
-
-  const { data: existingRequest } = await supabase
-    .from('friend_requests')
-    .select('id')
-    .or(`and(sender_id.eq.${sender_id},receiver_id.eq.${receiver_id}),and(sender_id.eq.${receiver_id},receiver_id.eq.${sender_id})`)
-    .eq('status', 'pending')
-    .single();
-
-  if (existingRequest) {
-    return c.json({ error: 'A friend request already exists' }, 400);
-  }
-
-  const { data, error } = await supabase
-    .from('friend_requests')
-    .insert({ sender_id, receiver_id, status: 'pending' })
-    .select()
-    .single();
-
-  if (error) return c.json({ error: error.message }, 400);
-
-  await supabase.from('notifications').insert({
-    user_id: receiver_id,
-    type: 'friend_request',
-    title: 'New Friend Request',
-    content: 'You have a new friend request!',
-  });
+  const { data: senderProfile2 } = await supabase.from('profiles').select('full_name, username').eq('id', sender_id).single();
+  const senderName2 = senderProfile2?.full_name || senderProfile2?.username || 'Someone';
+  sendPushToUser(receiver_id, 'New Friend Request', `${senderName2} wants to connect with you!`, { type: 'friend_request' });
 
   return c.json(data);
 });
-
-app.post('/friend-requests/:id/respond', async (c) => {
-  const id = c.req.param('id');
-  const { status } = await c.req.json(); // 'accepted' or 'rejected'
-
-  const { data: request, error: fetchError } = await supabase
-    .from('friend_requests')
-    .update({ status })
-    .eq('id', id)
-    .select()
-    .single();
-
-  if (fetchError) return c.json({ error: fetchError.message }, 400);
-
-    if (status === 'accepted') {
-      // Add to friends table
-      await supabase.from('friends').insert({
-        user_id_1: request.sender_id ?? '',
-        user_id_2: request.receiver_id ?? '',
-      });
-
-      // Notify sender
-      await supabase.from('notifications').insert({
-        user_id: request.sender_id ?? '',
-        type: 'friend_request_accepted',
-        title: 'Friend Request Accepted',
-        content: 'Your friend request was accepted!',
-      });
-    }
-
-  return c.json(request);
-});
-
-// 9. Resend Integration (Email Notifications)
-app.post('/email/notification', async (c) => {
-  const { to, subject, body } = await c.req.json();
-
-  try {
-    const data = await resend.emails.send({
-      from: 'TapIn <notifications@tapin.pro>',
-      to: [to],
-      subject,
-      html: body,
-    });
-    return c.json(data);
-  } catch (err: any) {
-    return c.json({ error: err.message }, 500);
-  }
-});
-
-// 10. Tapins (Friend Photo Sharing)
-app.get('/tapins/received/:userId', async (c) => {
-  const userId = c.req.param('userId');
-  
-  const { data, error } = await supabase
-    .from('tapins')
-    .select(`
-      *,
-      sender:profiles!sender_id(id, username, full_name, avatar_url)
-    `)
-    .eq('receiver_id', userId)
-    .gt('expires_at', new Date().toISOString())
-    .order('created_at', { ascending: false });
-
-  if (error) return c.json({ error: error.message }, 500);
-  return c.json(data || []);
-});
-
-app.get('/tapins/sent/:userId', async (c) => {
-  const userId = c.req.param('userId');
-  
-  const { data, error } = await supabase
-    .from('tapins')
-    .select(`
-      *,
-      receiver:profiles!receiver_id(id, username, full_name, avatar_url)
-    `)
-    .eq('sender_id', userId)
-    .gt('expires_at', new Date().toISOString())
-    .order('created_at', { ascending: false });
-
-  if (error) return c.json({ error: error.message }, 500);
-  return c.json(data || []);
-});
-
-app.post(
-  '/tapins',
-  zValidator(
-    'json',
-    z.object({
-      sender_id: z.string().uuid(),
-      receiver_id: z.string().uuid(),
-      image_url: z.string().url(),
-      caption: z.string().optional(),
-    })
-  ),
-  async (c) => {
-    const body = c.req.valid('json');
-    
-      const { data: areFriends } = await supabase
-        .from('friends')
-        .select('id')
-        .or(`and(user_id_1.eq.${body.sender_id},user_id_2.eq.${body.receiver_id}),and(user_id_1.eq.${body.receiver_id},user_id_2.eq.${body.sender_id})`)
-        .single();
-      
-      const sortedIds = [body.sender_id, body.receiver_id].sort();
-      const privateRoomName = `private_${sortedIds[0]}_${sortedIds[1]}`;
-      const { data: hasPrivateRoom } = await supabase
-        .from('chat_rooms')
-        .select('id')
-        .eq('type', 'private')
-        .eq('name', privateRoomName)
-        .single();
-      
-      if (!areFriends && !hasPrivateRoom) {
-        return c.json({ error: 'You can only send tapins to friends' }, 403);
-      }
-
-    const { data, error } = await supabase
-      .from('tapins')
-      .insert({
-        sender_id: body.sender_id,
-        receiver_id: body.receiver_id,
-        image_url: body.image_url,
-        caption: body.caption,
-      })
-      .select(`
-        *,
-        sender:profiles!sender_id(id, username, full_name, avatar_url)
-      `)
-      .single();
-
-    if (error) return c.json({ error: error.message }, 400);
-
-    await supabase.from('notifications').insert({
-      user_id: body.receiver_id,
-      type: 'tapin_received',
-      title: 'New Tapin!',
-      content: 'A friend sent you a photo',
-    });
-
-    return c.json(data);
-  }
-);
 
 app.patch('/tapins/:id/view', async (c) => {
   const id = c.req.param('id');
@@ -1349,6 +1106,146 @@ app.post('/auth/welcome', async (c) => {
     return c.json({ success: true });
   }
 });
+
+// 12. Push Tokens (for push notifications)
+app.post(
+  '/push-tokens',
+  zValidator(
+    'json',
+    z.object({
+      user_id: z.string().uuid(),
+      token: z.string(),
+      platform: z.enum(['ios', 'android', 'web']),
+    })
+  ),
+  async (c) => {
+    const body = c.req.valid('json');
+
+    const { data, error } = await supabase
+      .from('push_tokens')
+      .upsert(
+        {
+          user_id: body.user_id,
+          token: body.token,
+          platform: body.platform,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'user_id,token' }
+      )
+      .select()
+      .single();
+
+    if (error) return c.json({ error: error.message }, 400);
+    return c.json(data);
+  }
+);
+
+app.delete('/push-tokens', async (c) => {
+  const { user_id, token } = await c.req.json();
+
+  const { error } = await supabase
+    .from('push_tokens')
+    .delete()
+    .eq('user_id', user_id)
+    .eq('token', token);
+
+  if (error) return c.json({ error: error.message }, 400);
+  return c.json({ success: true });
+});
+
+app.get('/push-tokens/:userId', async (c) => {
+  const userId = c.req.param('userId');
+
+  const { data, error } = await supabase
+    .from('push_tokens')
+    .select('*')
+    .eq('user_id', userId);
+
+  if (error) return c.json({ error: error.message }, 500);
+  return c.json(data || []);
+});
+
+app.post(
+  '/push/send',
+  zValidator(
+    'json',
+    z.object({
+      user_ids: z.array(z.string().uuid()),
+      title: z.string(),
+      body: z.string(),
+      data: z.record(z.any()).optional(),
+    })
+  ),
+  async (c) => {
+    const { user_ids, title, body, data: notificationData } = c.req.valid('json');
+
+    const { data: tokens, error } = await supabase
+      .from('push_tokens')
+      .select('token')
+      .in('user_id', user_ids);
+
+    if (error) return c.json({ error: error.message }, 500);
+    if (!tokens || tokens.length === 0) {
+      return c.json({ success: true, sent: 0, message: 'No push tokens found' });
+    }
+
+    const messages = tokens.map((t) => ({
+      to: t.token,
+      sound: 'default' as const,
+      title,
+      body,
+      data: notificationData || {},
+    }));
+
+    try {
+      const response = await fetch('https://exp.host/--/api/v2/push/send', {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Accept-encoding': 'gzip, deflate',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(messages),
+      });
+
+      const result = await response.json();
+      return c.json({ success: true, sent: messages.length, result });
+    } catch (err: any) {
+      return c.json({ error: err.message }, 500);
+    }
+  }
+);
+
+async function sendPushToUser(userId: string, title: string, body: string, data?: Record<string, any>) {
+  const { data: tokens } = await supabase
+    .from('push_tokens')
+    .select('token')
+    .eq('user_id', userId);
+
+  if (!tokens || tokens.length === 0) return;
+
+  const messages = tokens.map((t) => ({
+    to: t.token,
+    sound: 'default' as const,
+    title,
+    body,
+    data: data || {},
+  }));
+
+  try {
+    await fetch('https://exp.host/--/api/v2/push/send', {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Accept-encoding': 'gzip, deflate',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(messages),
+    });
+  } catch (err) {
+    console.error('Push notification error:', err);
+  }
+}
 
 const port = Number(process.env.PORT) || 3003;
 

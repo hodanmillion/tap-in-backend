@@ -11,6 +11,7 @@ import { useRouter, useSegments } from 'expo-router';
 import { View, ActivityIndicator, AppState, Platform } from 'react-native';
 import { ErrorBoundary } from './error-boundary';
 import { useLocation } from '@/hooks/useLocation';
+import { useNotifications } from '@/hooks/useNotifications';
 import { mark, measure, PerfMarks } from '@/lib/perf';
 import { useColorScheme } from 'nativewind';
 
@@ -56,6 +57,8 @@ function RootLayoutContent() {
   const segments = useSegments();
   const router = useRouter();
   const { setColorScheme } = useColorScheme();
+
+  useNotifications();
 
   useEffect(() => {
     setColorScheme('dark');

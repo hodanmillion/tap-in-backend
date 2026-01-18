@@ -11,7 +11,7 @@ import {
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { ChevronLeft, Camera, ImageIcon, Send, X, User, Check, Users, Sparkles } from 'lucide-react-native';
+import { ChevronLeft, Camera, ImageIcon, Send, X, User, Check, Users, Sparkles, CheckCircle2 } from 'lucide-react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '@/context/AuthContext';
@@ -19,7 +19,6 @@ import { useColorScheme } from 'nativewind';
 import { THEME } from '@/lib/theme';
 import { apiRequest } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
-import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import Animated, { FadeInDown, FadeIn, FadeInUp } from 'react-native-reanimated';
 
@@ -33,8 +32,11 @@ export default function SendTapinScreen() {
   
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [caption, setCaption] = useState('');
-  const [selectedFriend, setSelectedFriend] = useState<string | null>(params.friendId as string || null);
+  const [selectedFriends, setSelectedFriends] = useState<string[]>(
+    params.friendId ? [params.friendId as string] : []
+  );
   const [uploading, setUploading] = useState(false);
+  const [sendToAll, setSendToAll] = useState(false);
 
   const { data: friendsData, isLoading, error: friendsError } = useQuery({
     queryKey: ['friends', user?.id],
@@ -58,21 +60,14 @@ export default function SendTapinScreen() {
         }),
       });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tapins'] });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert('Sent!', 'Your tapin has been sent', [
-        { text: 'OK', onPress: () => router.back() },
-      ]);
+    onError: (error: any) => {
+      const msg = error.message || 'Failed to send tapin';
+      if (msg.includes('404')) {
+        Alert.alert('Service Unavailable', 'The backend server needs to be updated. Please try again later.');
+      } else {
+        Alert.alert('Error', msg);
+      }
     },
-      onError: (error: any) => {
-        const msg = error.message || 'Failed to send tapin';
-        if (msg.includes('404')) {
-          Alert.alert('Service Unavailable', 'The backend server needs to be updated. Please try again later.');
-        } else {
-          Alert.alert('Error', msg);
-        }
-      },
   });
 
   const pickImage = async (useCamera: boolean) => {
@@ -105,8 +100,30 @@ export default function SendTapinScreen() {
     }
   };
 
+  const toggleFriendSelection = (friendId: string) => {
+    setSelectedFriends(prev => {
+      if (prev.includes(friendId)) {
+        return prev.filter(id => id !== friendId);
+      }
+      return [...prev, friendId];
+    });
+    setSendToAll(false);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  const toggleSendToAll = () => {
+    if (sendToAll) {
+      setSendToAll(false);
+      setSelectedFriends([]);
+    } else {
+      setSendToAll(true);
+      setSelectedFriends(friends.map((f: any) => f.id));
+    }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  };
+
   const uploadAndSend = async () => {
-    if (!selectedImage || !selectedFriend || !user?.id) return;
+    if (!selectedImage || selectedFriends.length === 0 || !user?.id) return;
     
     setUploading(true);
     try {
@@ -126,17 +143,33 @@ export default function SendTapinScreen() {
 
       const { data: urlData } = supabase.storage.from('lockets').getPublicUrl(fileName);
 
-      await sendTapinMutation.mutateAsync({
-        receiver_id: selectedFriend,
-        image_url: urlData.publicUrl,
-        caption: caption.trim() || undefined,
-      });
+      const sendPromises = selectedFriends.map(friendId =>
+        sendTapinMutation.mutateAsync({
+          receiver_id: friendId,
+          image_url: urlData.publicUrl,
+          caption: caption.trim() || undefined,
+        })
+      );
+
+      await Promise.all(sendPromises);
+      
+      queryClient.invalidateQueries({ queryKey: ['tapins'] });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      
+      const recipientCount = selectedFriends.length;
+      Alert.alert(
+        'Sent!', 
+        `Your photo has been sent to ${recipientCount} ${recipientCount === 1 ? 'friend' : 'friends'}`, 
+        [{ text: 'OK', onPress: () => router.back() }]
+      );
     } catch (err: any) {
       Alert.alert('Error', err.message || 'Failed to upload image');
     } finally {
       setUploading(false);
     }
   };
+
+  const selectedCount = selectedFriends.length;
 
 return (
         <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
@@ -153,7 +186,7 @@ return (
           <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
             <Animated.View entering={FadeInDown.springify()} className="p-5">
                 {!selectedImage ? (
-                    <View className="aspect-[3/4] rounded-3xl bg-card border border-border/30 items-center justify-center overflow-hidden">
+                    <View className="aspect-square rounded-3xl bg-card border border-border/30 items-center justify-center overflow-hidden">
                       <View className="items-center gap-5 p-8">
                         <View className="h-16 w-16 rounded-2xl bg-primary/10 items-center justify-center">
                           <Sparkles size={28} color={theme.primary} />
@@ -187,7 +220,7 @@ return (
                       </View>
                     </View>
                   ) : (
-                    <Animated.View entering={FadeIn} className="aspect-[3/4] rounded-3xl overflow-hidden relative bg-neutral-900">
+                    <Animated.View entering={FadeIn} className="aspect-square rounded-3xl overflow-hidden relative bg-neutral-900">
                       <Image
                         source={{ uri: selectedImage }}
                         style={{ width: '100%', height: '100%' }}
@@ -225,7 +258,15 @@ return (
               </Animated.View>
 
               <Animated.View entering={FadeInDown.delay(150).springify()} className="mt-5">
-                <Text className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 ml-1">Send to</Text>
+                <View className="flex-row items-center justify-between mb-2 ml-1">
+                  <Text className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Send to</Text>
+                  {selectedCount > 0 && (
+                    <View className="bg-primary/15 px-2 py-0.5 rounded-md">
+                      <Text className="text-[10px] font-bold text-primary">{selectedCount} selected</Text>
+                    </View>
+                  )}
+                </View>
+                
                 {isLoading ? (
                   <View className="py-8 items-center">
                     <ActivityIndicator color={theme.primary} />
@@ -254,48 +295,79 @@ return (
                   </View>
                 ) : (
                   <View className="gap-2">
-                    {friends.map((friend: any, index: number) => (
-                      <Animated.View key={friend.id} entering={FadeInUp.delay(index * 40).springify()}>
-                        <TouchableOpacity
-                          onPress={() => {
-                            setSelectedFriend(friend.id);
-                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                          }}
-                          activeOpacity={0.8}
-                          className={`flex-row items-center p-3 rounded-xl ${
-                            selectedFriend === friend.id
-                              ? 'bg-primary/10 border-2 border-primary'
-                              : 'bg-card border border-border/40'
-                          }`}>
-                          <View className={`h-11 w-11 rounded-xl overflow-hidden items-center justify-center ${
-                            selectedFriend === friend.id ? 'bg-primary/20' : 'bg-secondary'
-                          }`}>
-                            {friend.avatar_url ? (
-                              <Image
-                                source={{ uri: friend.avatar_url }}
-                                style={{ width: 44, height: 44 }}
-                                contentFit="cover"
-                              />
-                            ) : (
-                              <User size={18} color={selectedFriend === friend.id ? theme.primary : theme.mutedForeground} />
-                            )}
+                    <Animated.View entering={FadeInUp.springify()}>
+                      <TouchableOpacity
+                        onPress={toggleSendToAll}
+                        activeOpacity={0.8}
+                        className={`flex-row items-center p-3 rounded-xl mb-1 ${
+                          sendToAll
+                            ? 'bg-primary/15 border-2 border-primary'
+                            : 'bg-card border border-border/40'
+                        }`}>
+                        <View className={`h-11 w-11 rounded-xl items-center justify-center ${
+                          sendToAll ? 'bg-primary' : 'bg-secondary'
+                        }`}>
+                          <Users size={18} color={sendToAll ? '#fff' : theme.mutedForeground} />
+                        </View>
+                        <View className="ml-3 flex-1">
+                          <Text className={`text-sm font-bold ${sendToAll ? 'text-primary' : 'text-foreground'}`}>
+                            Send to All Friends
+                          </Text>
+                          <Text className="text-xs text-muted-foreground">{friends.length} friends</Text>
+                        </View>
+                        {sendToAll && (
+                          <View className="h-7 w-7 rounded-lg bg-primary items-center justify-center">
+                            <CheckCircle2 size={16} color="#fff" strokeWidth={2.5} />
                           </View>
-                          <View className="ml-3 flex-1">
-                            <Text className={`text-sm font-semibold ${selectedFriend === friend.id ? 'text-primary' : 'text-foreground'}`}>
-                              {friend.full_name || friend.username || 'Friend'}
-                            </Text>
-                            {friend.username && (
-                              <Text className="text-xs text-muted-foreground">@{friend.username}</Text>
-                            )}
-                          </View>
-                          {selectedFriend === friend.id && (
-                            <View className="h-7 w-7 rounded-lg bg-primary items-center justify-center">
-                              <Check size={14} color="#fff" strokeWidth={3} />
+                        )}
+                      </TouchableOpacity>
+                    </Animated.View>
+
+                    <View className="h-px bg-border/50 my-2" />
+                    <Text className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1 ml-1">Or select individually</Text>
+
+                    {friends.map((friend: any, index: number) => {
+                      const isSelected = selectedFriends.includes(friend.id);
+                      return (
+                        <Animated.View key={friend.id} entering={FadeInUp.delay(index * 30).springify()}>
+                          <TouchableOpacity
+                            onPress={() => toggleFriendSelection(friend.id)}
+                            activeOpacity={0.8}
+                            className={`flex-row items-center p-3 rounded-xl ${
+                              isSelected
+                                ? 'bg-primary/10 border-2 border-primary'
+                                : 'bg-card border border-border/40'
+                            }`}>
+                            <View className={`h-11 w-11 rounded-xl overflow-hidden items-center justify-center ${
+                              isSelected ? 'bg-primary/20' : 'bg-secondary'
+                            }`}>
+                              {friend.avatar_url ? (
+                                <Image
+                                  source={{ uri: friend.avatar_url }}
+                                  style={{ width: 44, height: 44 }}
+                                  contentFit="cover"
+                                />
+                              ) : (
+                                <User size={18} color={isSelected ? theme.primary : theme.mutedForeground} />
+                              )}
                             </View>
-                          )}
-                        </TouchableOpacity>
-                      </Animated.View>
-                    ))}
+                            <View className="ml-3 flex-1">
+                              <Text className={`text-sm font-semibold ${isSelected ? 'text-primary' : 'text-foreground'}`}>
+                                {friend.full_name || friend.username || 'Friend'}
+                              </Text>
+                              {friend.username && (
+                                <Text className="text-xs text-muted-foreground">@{friend.username}</Text>
+                              )}
+                            </View>
+                            {isSelected && (
+                              <View className="h-7 w-7 rounded-lg bg-primary items-center justify-center">
+                                <Check size={14} color="#fff" strokeWidth={3} />
+                              </View>
+                            )}
+                          </TouchableOpacity>
+                        </Animated.View>
+                      );
+                    })}
                   </View>
                 )}
               </Animated.View>
@@ -305,27 +377,27 @@ return (
           <View className="px-5 pb-6 pt-3 bg-background border-t border-border/30">
               <TouchableOpacity
                 onPress={uploadAndSend}
-                disabled={!selectedImage || !selectedFriend || uploading}
+                disabled={!selectedImage || selectedFriends.length === 0 || uploading}
                 activeOpacity={0.9}
                 className={`h-14 rounded-2xl flex-row items-center justify-center gap-2 ${
-                  !selectedImage || !selectedFriend
+                  !selectedImage || selectedFriends.length === 0
                     ? 'bg-muted'
                     : 'bg-primary'
                 }`}>
                 {uploading ? (
-                  <ActivityIndicator color={!selectedImage || !selectedFriend ? theme.mutedForeground : '#fff'} size="small" />
+                  <ActivityIndicator color={!selectedImage || selectedFriends.length === 0 ? theme.mutedForeground : '#fff'} size="small" />
                 ) : (
                   <>
                     <Send 
                       size={18} 
-                      color={!selectedImage || !selectedFriend ? theme.mutedForeground : '#fff'} 
+                      color={!selectedImage || selectedFriends.length === 0 ? theme.mutedForeground : '#fff'} 
                       strokeWidth={2.5} 
                     />
                     <Text
                       className={`text-base font-bold ${
-                        !selectedImage || !selectedFriend ? 'text-muted-foreground' : 'text-primary-foreground'
+                        !selectedImage || selectedFriends.length === 0 ? 'text-muted-foreground' : 'text-primary-foreground'
                       }`}>
-                      Send Photo
+                      {selectedCount > 1 ? `Send to ${selectedCount} Friends` : 'Send Photo'}
                     </Text>
                   </>
                 )}
