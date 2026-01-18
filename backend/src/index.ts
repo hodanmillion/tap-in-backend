@@ -563,6 +563,11 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
   return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
 }
 
+function formatDistance(meters: number): string {
+  const km = meters / 1000;
+  return `${km.toFixed(1)}km`;
+}
+
 app.post(
   '/messages',
   zValidator(
@@ -625,14 +630,14 @@ app.post(
             room.longitude ?? 0
           );
         const radius = room.radius || 100;
-        if (distance > radius) {
-          return c.json({ 
-            error: `Out of range. You are ${Math.round(distance)}m away, max is ${radius}m.`,
-            reason: 'OUT_OF_RANGE',
-            distance: Math.round(distance),
-            radius 
-          }, 403);
-        }
+          if (distance > radius) {
+            return c.json({ 
+              error: `Out of range. You are ${formatDistance(distance)} away, max is ${formatDistance(radius)}.`,
+              reason: 'OUT_OF_RANGE',
+              distance: Math.round(distance),
+              radius 
+            }, 403);
+          }
       }
     }
     
@@ -732,18 +737,18 @@ app.get('/rooms/user-rooms', async (c) => {
                 const leftAt = userParticipation?.left_at;
                 if (leftAt) {
                   const hoursSinceLeft = (Date.now() - new Date(leftAt).getTime()) / (1000 * 60 * 60);
-                  if (hoursSinceLeft >= 48 && !hasMessages) {
-                    isExpired = true;
-                    readOnlyReason = 'Expired';
-                  } else if (!hasMessages) {
-                    const hoursRemaining = Math.ceil(48 - hoursSinceLeft);
-                    readOnlyReason = `${Math.round(distance)}m away (${hoursRemaining}hr left)`;
+                    if (hoursSinceLeft >= 48 && !hasMessages) {
+                      isExpired = true;
+                      readOnlyReason = 'Expired';
+                    } else if (!hasMessages) {
+                      const hoursRemaining = Math.ceil(48 - hoursSinceLeft);
+                      readOnlyReason = `${formatDistance(distance)} away (${hoursRemaining}hr left)`;
+                    } else {
+                      readOnlyReason = `${formatDistance(distance)} away`;
+                    }
                   } else {
-                    readOnlyReason = `${Math.round(distance)}m away`;
+                    readOnlyReason = `${formatDistance(distance)} away`;
                   }
-                } else {
-                  readOnlyReason = `${Math.round(distance)}m away`;
-                }
               }
             }
 

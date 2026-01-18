@@ -5,6 +5,14 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+export function formatDistance(meters: number): string {
+  const km = meters / 1000;
+  if (km < 1) {
+    return `${km.toFixed(2)}km`;
+  }
+  return `${km.toFixed(1)}km`;
+}
+
 export function generateUUID(): string {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
     return crypto.randomUUID();

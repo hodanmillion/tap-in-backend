@@ -39,7 +39,7 @@ import { useColorScheme } from 'nativewind';
 import { THEME } from '@/lib/theme';
 import * as Haptics from 'expo-haptics';
 import { apiRequest } from '@/lib/api';
-import { generateUUID } from '@/lib/utils';
+import { generateUUID, formatDistance } from '@/lib/utils';
 
 const CHAT_RADIUS_METERS = 100;
 const GIPHY_API_KEY = process.env.EXPO_PUBLIC_GIPHY_API_KEY || 'l1WfAFgqA5WupWoMaCaWKB12G54J6LtZ';
@@ -568,7 +568,7 @@ export default function ChatScreen() {
       if (isOutOfRange && room?.type !== 'private') {
         Alert.alert(
           'Out of Range',
-          `You need to be within ${room?.radius || CHAT_RADIUS_METERS}m of the room to send messages.`
+          `You need to be within ${formatDistance(room?.radius || CHAT_RADIUS_METERS)} of the room to send messages.`
         );
         return;
       }
@@ -963,11 +963,11 @@ export default function ChatScreen() {
                 <View className="flex-row items-center rounded-2xl bg-secondary/50 px-4 py-3 border border-border/50">
                   <Lock size={18} color={theme.mutedForeground} className="mr-3" />
                   <Text className="flex-1 text-[14px] font-bold text-muted-foreground tracking-tight">
-                    {roomNotFound
-                      ? 'This chat room is no longer active.'
-                      : isExpired
-                        ? 'This chat has expired.'
-                        : `Read only - You've left the ${room?.radius || 20}m area.`}
+                      {roomNotFound
+                        ? 'This chat room is no longer active.'
+                        : isExpired
+                          ? 'This chat has expired.'
+                          : `Read only - You've left the ${formatDistance(room?.radius || 20)} area.`}
                   </Text>
                 </View>
               </View>
