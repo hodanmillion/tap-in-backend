@@ -10,11 +10,14 @@ import {
   ScrollView,
   Pressable,
   Alert,
+  AppState,
+  AppStateStatus,
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import {
   Send,
@@ -80,6 +83,76 @@ function formatDateSeparator(date: Date) {
   return date.toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' });
 }
 
+function mergeMessages(
+  current: Message[],
+  incoming: Message[],
+  senderCache: Map<string, Profile>
+): { merged: Message[]; newSenderIds: string[] } {
+  const byId = new Map<string, Message>();
+  const byClientId = new Map<string, Message>();
+  const newSenderIds: string[] = [];
+
+  const normalizeKey = (key: string | number | undefined | null): string | null => 
+    key != null ? String(key) : null;
+
+  for (const msg of current) {
+    const id = normalizeKey(msg.id);
+    if (id) byId.set(id, msg);
+    const clientId = normalizeKey(msg.client_msg_id);
+    if (clientId) byClientId.set(clientId, msg);
+  }
+
+  for (const msg of incoming) {
+    const id = normalizeKey(msg.id);
+    const clientId = normalizeKey(msg.client_msg_id);
+    const existingById = id ? byId.get(id) : null;
+    const existingByClientId = clientId ? byClientId.get(clientId) : null;
+
+    if (existingById) {
+      const updated = {
+        ...existingById,
+        ...msg,
+        sender: existingById.sender || msg.sender || senderCache.get(msg.sender_id) || null,
+        isOptimistic: false,
+        status: 'sent' as const,
+      };
+      if (id) byId.set(id, updated);
+      if (clientId) byClientId.set(clientId, updated);
+    } else if (existingByClientId && existingByClientId.isOptimistic) {
+      const oldId = normalizeKey(existingByClientId.id);
+      if (oldId) byId.delete(oldId);
+      const updated = {
+        ...msg,
+        sender: existingByClientId.sender || msg.sender || senderCache.get(msg.sender_id) || null,
+        isOptimistic: false,
+        status: 'sent' as const,
+      };
+      if (id) byId.set(id, updated);
+      if (clientId) byClientId.set(clientId, updated);
+    } else if (!existingByClientId) {
+      const cachedSender = senderCache.get(msg.sender_id);
+      if (!cachedSender && !newSenderIds.includes(msg.sender_id)) {
+        newSenderIds.push(msg.sender_id);
+      }
+      const newMsg = {
+        ...msg,
+        sender: msg.sender || cachedSender || null,
+      };
+      if (id) byId.set(id, newMsg);
+      if (clientId) byClientId.set(clientId, newMsg);
+    }
+  }
+
+  const merged = Array.from(byId.values());
+  merged.sort((a, b) => {
+    const timeDiff = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    if (timeDiff !== 0) return timeDiff;
+    return String(b.id).localeCompare(String(a.id));
+  });
+
+  return { merged, newSenderIds };
+}
+
 export default function ChatScreen() {
   const { colorScheme } = useColorScheme();
   const theme = THEME[colorScheme ?? 'light'];
@@ -88,15 +161,17 @@ export default function ChatScreen() {
   const { user } = useAuth();
   const { drafts, setDraft, clearDraft } = useChat();
   const [id, setId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [isResolvingId, setIsResolvingId] = useState(true);
+  const queryClient = useQueryClient();
 
   const senderCacheRef = useRef<Map<string, Profile>>(new Map());
   const pendingSenderIdsRef = useRef<Set<string>>(new Set());
   const profileFetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const realtimeBufferRef = useRef<any[]>([]);
   const realtimeFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSeenCreatedAtRef = useRef<string | null>(null);
+  const appStateRef = useRef(AppState.currentState);
 
   // Restore draft on mount
   useEffect(() => {
@@ -121,16 +196,40 @@ export default function ChatScreen() {
   const [isOutOfRange, setIsOutOfRange] = useState(false);
   const [isExpired, setIsExpired] = useState(false);
   const [gifModalVisible, setGifModalVisible] = useState(false);
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [gifSearch, setGifSearch] = useState('');
   const [gifs, setGifs] = useState<any[]>([]);
   const [gifLoading, setGifLoading] = useState(false);
   const [gifError, setGifError] = useState<string | null>(null);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
 
   const { location } = useLocation(user?.id);
+
+  const { data: messagesData, isLoading: messagesLoading, refetch: refetchMessages } = useQuery({
+    queryKey: ['chatMessages', id],
+    queryFn: async () => {
+      if (!id) return { messages: [], nextCursor: null, hasMore: false };
+      const data = await apiRequest(`/messages/${id}?limit=50`);
+      if (data && data.messages && data.messages.length > 0) {
+        lastSeenCreatedAtRef.current = data.messages[0].created_at;
+      }
+      return data || { messages: [], nextCursor: null, hasMore: false };
+    },
+    enabled: !!id,
+    staleTime: 0,
+    gcTime: 1000 * 60 * 30,
+  });
+
+  const messages = messagesData?.messages || [];
+
+  useEffect(() => {
+    if (messagesData) {
+      setNextCursor(messagesData.nextCursor);
+      setHasMoreMessages(messagesData.hasMore);
+    }
+  }, [messagesData]);
 
   const headerLeftComponent = useMemo(
     () => (
@@ -236,9 +335,13 @@ export default function ChatScreen() {
       const data = await apiRequest(url);
       if (data) {
         if (cursor) {
-          setMessages((prev) => [...prev, ...data.messages]);
-        } else {
-          setMessages(data.messages || []);
+          queryClient.setQueryData(['chatMessages', id], (oldData: any) => {
+            if (!oldData) return data;
+            return {
+              ...data,
+              messages: [...(oldData.messages || []), ...data.messages],
+            };
+          });
         }
         setNextCursor(data.nextCursor);
         setHasMoreMessages(data.hasMore);
@@ -246,7 +349,7 @@ export default function ChatScreen() {
     } catch (error) {
       console.error('Error fetching messages:', error);
     }
-  }, [id]);
+  }, [id, queryClient]);
 
   const loadMoreMessages = useCallback(async () => {
     if (!hasMoreMessages || loadingMore || !nextCursor) return;
@@ -272,15 +375,19 @@ export default function ChatScreen() {
       senderCacheRef.current.set(p.id, p);
     });
     
-    setMessages((current) =>
-      current.map((m) => {
-        if (!m.sender && senderCacheRef.current.has(m.sender_id)) {
-          return { ...m, sender: senderCacheRef.current.get(m.sender_id) };
-        }
-        return m;
-      })
-    );
-  }, []);
+    queryClient.setQueryData(['chatMessages', id], (oldData: any) => {
+      if (!oldData) return oldData;
+      return {
+        ...oldData,
+        messages: oldData.messages.map((m: Message) => {
+          if (!m.sender && senderCacheRef.current.has(m.sender_id)) {
+            return { ...m, sender: senderCacheRef.current.get(m.sender_id) };
+          }
+          return m;
+        }),
+      };
+    });
+  }, [id, queryClient]);
 
   const scheduleFetchProfiles = useCallback((senderIds: string[]) => {
     senderIds.forEach((id) => {
@@ -295,72 +402,60 @@ export default function ChatScreen() {
     profileFetchTimerRef.current = setTimeout(fetchMissingProfiles, PROFILE_FETCH_DEBOUNCE_MS);
   }, [fetchMissingProfiles]);
 
+  const fetchMessagesSince = useCallback(async (since: string) => {
+    if (!id) return;
+    try {
+      const url = `/messages/${id}?limit=50&since=${encodeURIComponent(since)}`;
+      const data = await apiRequest(url);
+      if (data && data.messages && data.messages.length > 0) {
+        const newMessages = data.messages as Message[];
+        
+        queryClient.setQueryData(['chatMessages', id], (oldData: any) => {
+          if (!oldData) return { messages: newMessages, nextCursor: null, hasMore: false };
+          const { merged, newSenderIds } = mergeMessages(oldData.messages || [], newMessages, senderCacheRef.current);
+          if (newSenderIds.length > 0) {
+            setTimeout(() => scheduleFetchProfiles(newSenderIds), 0);
+          }
+          return { ...oldData, messages: merged };
+        });
+        
+        lastSeenCreatedAtRef.current = newMessages[0].created_at;
+      }
+    } catch (error) {
+      console.error('Error fetching messages since:', error);
+    }
+  }, [id, queryClient, scheduleFetchProfiles]);
+
   const processRealtimeBuffer = useCallback(() => {
     const buffer = realtimeBufferRef.current;
     if (buffer.length === 0) return;
     
     realtimeBufferRef.current = [];
-    const senderIdsToFetch: string[] = [];
+    const incoming = buffer.map((payload) => payload.new as Message);
     
-    setMessages((current) => {
-      let updated = [...current];
-      
-      for (const payload of buffer) {
-        const newMsg = payload.new as Message;
-        
-        if (updated.some((m) => m.id === newMsg.id)) {
-          continue;
-        }
-        
-        if (newMsg.client_msg_id) {
-          const optimisticIndex = updated.findIndex(
-            (m) => m.isOptimistic && m.client_msg_id === newMsg.client_msg_id
-          );
-          
-          if (optimisticIndex > -1) {
-            const existingSender = updated[optimisticIndex].sender;
-            updated[optimisticIndex] = {
-              ...newMsg,
-              sender: existingSender || senderCacheRef.current.get(newMsg.sender_id) || null,
-              isOptimistic: false,
-              status: 'sent',
-            };
-            continue;
-          }
-        }
-        
-        const cachedSender = senderCacheRef.current.get(newMsg.sender_id);
-        if (!cachedSender) {
-          senderIdsToFetch.push(newMsg.sender_id);
-        }
-        
-        const messageWithSender: Message = {
-          ...newMsg,
-          sender: cachedSender || null,
-        };
-        
-        const insertIndex = updated.findIndex(
-          (m) => new Date(m.created_at) < new Date(newMsg.created_at)
-        );
-        if (insertIndex === -1) {
-          updated.push(messageWithSender);
-        } else {
-          updated.splice(insertIndex, 0, messageWithSender);
-        }
+    queryClient.setQueryData(['chatMessages', id], (oldData: any) => {
+      if (!oldData) return { messages: incoming, nextCursor: null, hasMore: false };
+      const { merged, newSenderIds } = mergeMessages(oldData.messages || [], incoming, senderCacheRef.current);
+      if (newSenderIds.length > 0) {
+        setTimeout(() => scheduleFetchProfiles(newSenderIds), 0);
       }
-      
-      return updated;
+      return { ...oldData, messages: merged };
     });
     
-    if (senderIdsToFetch.length > 0) {
-      scheduleFetchProfiles(senderIdsToFetch);
+    if (incoming.length > 0) {
+      const latestCreatedAt = incoming.reduce((latest, msg) => 
+        new Date(msg.created_at) > new Date(latest) ? msg.created_at : latest,
+        incoming[0].created_at
+      );
+      if (!lastSeenCreatedAtRef.current || new Date(latestCreatedAt) > new Date(lastSeenCreatedAtRef.current)) {
+        lastSeenCreatedAtRef.current = latestCreatedAt;
+      }
     }
-  }, [scheduleFetchProfiles]);
+  }, [id, queryClient, scheduleFetchProfiles]);
 
   useEffect(() => {
     if (!id) return;
     fetchRoomAndUser();
-    fetchMessages();
     
     if (user) {
       senderCacheRef.current.set(user.id, {
@@ -396,7 +491,23 @@ export default function ChatScreen() {
         clearTimeout(realtimeFlushTimerRef.current);
       }
     };
-  }, [id, user?.id, fetchRoomAndUser, fetchMessages, processRealtimeBuffer]);
+    }, [id, user?.id, fetchRoomAndUser, processRealtimeBuffer]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      if (
+        appStateRef.current.match(/inactive|background/) && 
+        nextAppState === 'active' &&
+        lastSeenCreatedAtRef.current &&
+        id
+      ) {
+        fetchMessagesSince(lastSeenCreatedAtRef.current);
+      }
+      appStateRef.current = nextAppState;
+    });
+
+    return () => subscription.remove();
+  }, [id, fetchMessagesSince]);
 
   function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
     const R = 6371000;
@@ -490,7 +601,10 @@ export default function ChatScreen() {
         },
       };
 
-      setMessages((current) => [optimisticMessage, ...current]);
+      queryClient.setQueryData(['chatMessages', id], (oldData: any) => {
+        if (!oldData) return { messages: [optimisticMessage], nextCursor: null, hasMore: false };
+        return { ...oldData, messages: [optimisticMessage, ...(oldData.messages || [])] };
+      });
 
       if (type === 'text') {
         setNewMessage('');
@@ -506,6 +620,8 @@ export default function ChatScreen() {
             content: finalContent,
             type: type,
             client_msg_id,
+            sender_lat: location?.coords.latitude,
+            sender_lng: location?.coords.longitude,
           }),
         });
 
@@ -513,21 +629,29 @@ export default function ChatScreen() {
           throw new Error(data?.message || data?.error || 'Failed to send');
         }
 
-        setMessages((current) =>
-          current.map((m) =>
-            m.client_msg_id === client_msg_id
-              ? { ...m, id: data.id, isOptimistic: false, status: 'sent' as const }
-              : m
-          )
-        );
+        queryClient.setQueryData(['chatMessages', id], (oldData: any) => {
+          if (!oldData) return oldData;
+          return {
+            ...oldData,
+            messages: oldData.messages.map((m: Message) =>
+              m.client_msg_id === client_msg_id
+                ? { ...m, id: data.id, isOptimistic: false, status: 'sent' as const }
+                : m
+            ),
+          };
+        });
       } catch (error: any) {
         console.error('Error sending message:', error);
 
-        setMessages((current) =>
-          current.map((m) =>
-            m.client_msg_id === client_msg_id ? { ...m, status: 'failed' as const } : m
-          )
-        );
+        queryClient.setQueryData(['chatMessages', id], (oldData: any) => {
+          if (!oldData) return oldData;
+          return {
+            ...oldData,
+            messages: oldData.messages.map((m: Message) =>
+              m.client_msg_id === client_msg_id ? { ...m, status: 'failed' as const } : m
+            ),
+          };
+        });
 
         if (type === 'text') {
           setNewMessage(finalContent);
@@ -546,7 +670,7 @@ export default function ChatScreen() {
         }
       }
     },
-    [id, user, newMessage, roomNotFound, isExpired, isOutOfRange, room?.type, isResolvingId, clearDraft, setDraft]
+    [id, user, newMessage, roomNotFound, isExpired, isOutOfRange, room?.type, isResolvingId, clearDraft, setDraft, queryClient, location?.coords]
   );
 
   const pickImage = useCallback(async () => {
@@ -554,7 +678,8 @@ export default function ChatScreen() {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsEditing: true,
-      quality: 0.5,
+      quality: 0.3,
+      exif: false,
     });
     if (!result.canceled) uploadImage(result.assets[0].uri);
   }, [isOutOfRange, room?.type]);
@@ -563,7 +688,7 @@ export default function ChatScreen() {
     if (isOutOfRange && room?.type !== 'private') return;
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') return;
-    const result = await ImagePicker.launchCameraAsync({ allowsEditing: true, quality: 0.5 });
+    const result = await ImagePicker.launchCameraAsync({ allowsEditing: true, quality: 0.3, exif: false });
     if (!result.canceled) uploadImage(result.assets[0].uri);
   }, [isOutOfRange, room?.type]);
 
@@ -571,10 +696,14 @@ export default function ChatScreen() {
     async (uri: string) => {
       setUploading(true);
       try {
+        const response = await fetch(uri);
+        const blob = await response.blob();
+        const arrayBuffer = await new Response(blob).arrayBuffer();
         const fileName = `${id}/${Date.now()}.jpg`;
-        const formData = new FormData();
-        formData.append('file', { uri, name: 'image.jpg', type: 'image/jpeg' } as any);
-        const { error } = await supabase.storage.from('chat-images').upload(fileName, formData);
+        const { error } = await supabase.storage.from('chat-images').upload(fileName, arrayBuffer, {
+          contentType: 'image/jpeg',
+          upsert: false,
+        });
         if (error) throw error;
         const {
           data: { publicUrl },
@@ -582,6 +711,7 @@ export default function ChatScreen() {
         await sendMessage(publicUrl, 'image');
       } catch (error) {
         console.error('Upload failed:', error);
+        Alert.alert('Upload Failed', 'Could not upload image. Please try again.');
       } finally {
         setUploading(false);
       }
@@ -653,6 +783,8 @@ export default function ChatScreen() {
     }, 500);
     return () => clearTimeout(timer);
   }, [gifSearch, gifModalVisible, searchGifs, fetchTrendingGifs]);
+
+
 
   const defaultHeaderOptions = useMemo(
     () => ({
@@ -726,20 +858,30 @@ export default function ChatScreen() {
                 {item.sender?.full_name || item.sender?.username || 'User'}
               </Text>
             )}
-            {item.type === 'image' || item.type === 'gif' ? (
-              <TouchableOpacity
-                activeOpacity={0.9}
-                onPress={() => setSelectedImage(item.content)}
-                className="overflow-hidden rounded-lg">
-                <Image
-                  source={{ uri: item.content }}
-                  className="h-48 w-64"
-                  contentFit="cover"
-                  cachePolicy="memory-disk"
-                  transition={150}
-                />
-              </TouchableOpacity>
-            ) : (
+            {item.type === 'image' ? (
+                    <TouchableOpacity onPress={() => setSelectedImage(item.content)} activeOpacity={0.9}>
+                      <View className="overflow-hidden rounded-lg">
+                        <Image
+                          source={{ uri: item.content }}
+                          style={{ width: 256, height: 192 }}
+                          contentFit="cover"
+                          cachePolicy="memory-disk"
+                          transition={150}
+                        />
+                      </View>
+                    </TouchableOpacity>
+                  ) : item.type === 'gif' ? (
+                    <TouchableOpacity onPress={() => setSelectedImage(item.content)} activeOpacity={0.9}>
+                      <View className="overflow-hidden rounded-lg">
+                        <Image
+                          source={{ uri: item.content }}
+                          style={{ width: 256, height: 192 }}
+                          contentFit="cover"
+                          cachePolicy="memory-disk"
+                        />
+                      </View>
+                    </TouchableOpacity>
+                  ) : (
               <Text
                 className={`text-[16px] font-medium leading-5 ${
                   isMine ? 'text-primary-foreground' : 'text-foreground'
@@ -809,166 +951,175 @@ export default function ChatScreen() {
               }
             />
 
-          {(isOutOfRange || isExpired || roomNotFound) && room?.type !== 'private' ? (
-            <View className="border-t border-border bg-card px-4 py-3 pb-10">
-              <View className="flex-row items-center rounded-2xl bg-secondary/50 px-4 py-3 border border-border/50">
-                <Lock size={18} color={theme.mutedForeground} className="mr-3" />
-                <Text className="flex-1 text-[14px] font-bold text-muted-foreground tracking-tight">
-                  {roomNotFound
-                    ? 'This chat room is no longer active.'
-                    : isExpired
-                      ? 'This chat has expired.'
-                      : `Read only - You've left the ${room?.radius || 20}m area.`}
-                </Text>
+{(isOutOfRange || isExpired || roomNotFound) && room?.type !== 'private' ? (
+              <View className="border-t border-border bg-card px-4 py-3">
+                <View className="flex-row items-center rounded-2xl bg-secondary/50 px-4 py-3 border border-border/50">
+                  <Lock size={18} color={theme.mutedForeground} className="mr-3" />
+                  <Text className="flex-1 text-[14px] font-bold text-muted-foreground tracking-tight">
+                    {roomNotFound
+                      ? 'This chat room is no longer active.'
+                      : isExpired
+                        ? 'This chat has expired.'
+                        : `Read only - You've left the ${room?.radius || 20}m area.`}
+                  </Text>
+                </View>
               </View>
-            </View>
-          ) : (
-            <View className="flex-row items-center border-t border-border bg-card px-4 py-3 pb-10">
-              <TouchableOpacity onPress={() => setGifModalVisible(true)} className="mr-3 p-1">
-                <Smile size={24} color={theme.mutedForeground} />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={takePicture} className="mr-3 p-1" disabled={uploading}>
-                <Camera size={24} color={theme.mutedForeground} />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={pickImage} className="mr-3 p-1" disabled={uploading}>
-                {uploading ? (
-                  <ActivityIndicator size="small" color={theme.primary} />
-                ) : (
-                  <ImageIcon size={24} color={theme.mutedForeground} />
-                )}
-              </TouchableOpacity>
-              <View className="mr-3 flex-1 rounded-2xl bg-secondary/50 px-4 py-2 border border-border/50">
-                <TextInput
-                  placeholder="Type a message..."
-                  placeholderTextColor={theme.mutedForeground}
-                  value={newMessage}
-                  onChangeText={setNewMessage}
-                  className="max-h-24 text-[16px] text-foreground font-medium"
-                  multiline
-                />
+            ) : (
+<View className="flex-row items-center border-t border-border bg-card px-4 py-3">
+                <TouchableOpacity onPress={() => setGifModalVisible(true)} className="mr-3 p-1">
+                  <Smile size={24} color={theme.mutedForeground} />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={takePicture} className="mr-3 p-1" disabled={uploading}>
+                  <Camera size={24} color={theme.mutedForeground} />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={pickImage} className="mr-3 p-1" disabled={uploading}>
+                  {uploading ? (
+                    <ActivityIndicator size="small" color={theme.primary} />
+                  ) : (
+                    <ImageIcon size={24} color={theme.mutedForeground} />
+                  )}
+                </TouchableOpacity>
+                <View className="mr-3 flex-1 rounded-2xl bg-secondary/50 px-4 py-2 border border-border/50">
+                  <TextInput
+                    placeholder="Type a message..."
+                    placeholderTextColor={theme.mutedForeground}
+                    value={newMessage}
+                    onChangeText={setNewMessage}
+                    className="max-h-24 text-[16px] text-foreground font-medium"
+                    multiline
+                  />
+                </View>
+                <TouchableOpacity
+                  onPress={() => sendMessage()}
+                  className={`h-11 w-11 items-center justify-center rounded-full shadow-sm ${
+                    newMessage.trim() ? 'bg-primary' : 'bg-secondary/80'
+                  }`}
+                  disabled={!newMessage.trim()}>
+                  <Send
+                    size={20}
+                    color={newMessage.trim() ? theme.primaryForeground : theme.mutedForeground}
+                  />
+                </TouchableOpacity>
               </View>
-              <TouchableOpacity
-                onPress={() => sendMessage()}
-                className={`h-11 w-11 items-center justify-center rounded-full shadow-sm ${
-                  newMessage.trim() ? 'bg-primary' : 'bg-secondary/80'
-                }`}
-                disabled={!newMessage.trim()}>
-                <Send
-                  size={20}
-                  color={newMessage.trim() ? theme.primaryForeground : theme.mutedForeground}
-                />
-              </TouchableOpacity>
-            </View>
           )}
         </KeyboardAvoidingView>
       </SafeAreaView>
 
-      <Modal
-        visible={gifModalVisible}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setGifModalVisible(false)}>
-        <View className="flex-1 bg-background p-4">
-          <View className="mb-6 flex-row items-center justify-between">
-            <Text className="text-2xl font-black text-foreground uppercase tracking-tighter">
-              GIF Search
-            </Text>
-            <TouchableOpacity
-              onPress={() => setGifModalVisible(false)}
-              className="h-10 w-10 items-center justify-center rounded-full bg-secondary">
-              <X size={24} color={theme.foreground} />
-            </TouchableOpacity>
-          </View>
-          <View className="mb-6 flex-row items-center rounded-2xl bg-secondary/50 px-4 py-3 border border-border/50">
-            <Search size={20} color={theme.mutedForeground} />
-            <TextInput
-              placeholder="Search Giphy..."
-              placeholderTextColor={theme.mutedForeground}
-              value={gifSearch}
-              onChangeText={setGifSearch}
-              className="ml-2 flex-1 text-foreground font-bold"
-              autoFocus
-            />
-            {gifSearch.length > 0 && (
-              <TouchableOpacity onPress={() => setGifSearch('')}>
-                <X size={18} color={theme.mutedForeground} />
+        <Modal
+          visible={gifModalVisible}
+          animationType="slide"
+          presentationStyle="pageSheet"
+          onRequestClose={() => {
+            setGifModalVisible(false);
+          }}>
+          <View className="flex-1 bg-background p-4">
+            <View className="mb-4 flex-row items-center justify-between">
+              <Text className="text-2xl font-black text-foreground uppercase tracking-tighter">
+                GIFs
+              </Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setGifModalVisible(false);
+                }}
+                className="h-10 w-10 items-center justify-center rounded-full bg-secondary">
+                <X size={24} color={theme.foreground} />
               </TouchableOpacity>
+            </View>
+
+            <View className="mb-4 flex-row items-center rounded-2xl bg-secondary/50 px-4 py-3 border border-border/50">
+              <Search size={20} color={theme.mutedForeground} />
+              <TextInput
+                placeholder="Search Giphy..."
+                placeholderTextColor={theme.mutedForeground}
+                value={gifSearch}
+                onChangeText={setGifSearch}
+                className="ml-2 flex-1 text-foreground font-bold"
+              />
+              {gifSearch.length > 0 && (
+                <TouchableOpacity onPress={() => setGifSearch('')}>
+                  <X size={18} color={theme.mutedForeground} />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {gifLoading ? (
+              <View className="flex-1 items-center justify-center">
+                <ActivityIndicator size="large" color={theme.primary} />
+              </View>
+            ) : (
+              <ScrollView
+                className="flex-1"
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{
+                  flexDirection: 'row',
+                  flexWrap: 'wrap',
+                  justifyContent: 'space-between',
+                  paddingBottom: 40,
+                }}>
+                  {gifError ? (
+                    <View className="flex-1 items-center justify-center px-10 pt-20">
+                      <Text className="mb-2 text-center font-bold text-red-500 uppercase tracking-widest">
+                        API Error
+                      </Text>
+                      <Text className="text-center text-sm font-medium text-muted-foreground px-4">
+                        Please ensure EXPO_PUBLIC_GIPHY_API_KEY is configured in your settings.
+                      </Text>
+                    </View>
+                    ) : gifs.length > 0 ? (
+                      gifs.map((gif) => (
+                        <TouchableOpacity
+                          key={gif.id}
+                          onPress={() => {
+                            sendMessage(gif.images.fixed_height.url, 'gif');
+                            setGifModalVisible(false);
+                            setGifSearch('');
+                          }}
+                          activeOpacity={0.8}
+                          className="mb-3 w-[48%] overflow-hidden rounded-2xl border border-border/40">
+                          <Image
+                            source={{ uri: gif.images.fixed_height_small?.url || gif.images.fixed_height.url }}
+                            style={{ height: 128, width: '100%' }}
+                            contentFit="cover"
+                            cachePolicy="memory-disk"
+                          />
+                        </TouchableOpacity>
+                      ))
+                    ) : (
+                  <View className="flex-1 items-center justify-center pt-20">
+                    <Text className="text-base font-bold text-muted-foreground/60 uppercase tracking-widest">
+                      No results found
+                    </Text>
+                  </View>
+                )}
+              </ScrollView>
             )}
           </View>
-          {gifLoading ? (
-            <View className="flex-1 items-center justify-center">
-              <ActivityIndicator size="large" color={theme.primary} />
-            </View>
-          ) : (
-            <ScrollView
-              className="flex-1"
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{
-                flexDirection: 'row',
-                flexWrap: 'wrap',
-                justifyContent: 'space-between',
-                paddingBottom: 40,
-              }}>
-              {gifError ? (
-                <View className="flex-1 items-center justify-center px-10 pt-20">
-                  <Text className="mb-2 text-center font-bold text-red-500 uppercase tracking-widest">
-                    API Error
-                  </Text>
-                  <Text className="text-center text-sm font-medium text-muted-foreground px-4">
-                    Please ensure EXPO_PUBLIC_GIPHY_API_KEY is configured in your settings.
-                  </Text>
-                </View>
-              ) : gifs.length > 0 ? (
-                gifs.map((gif) => (
-                  <TouchableOpacity
-                    key={gif.id}
-                    onPress={() => {
-                      sendMessage(gif.images.fixed_height.url, 'gif');
-                      setGifModalVisible(false);
-                      setGifSearch('');
-                    }}
-                    activeOpacity={0.8}
-                    className="mb-3 w-[48%] overflow-hidden rounded-2xl border border-border/40">
-                    <Image
-                      source={{
-                        uri: gif.images.preview_gif?.url || gif.images.fixed_height_small.url,
-                      }}
-                      className="h-32 w-full bg-secondary/30"
-                      contentFit="cover"
-                      cachePolicy="memory"
-                    />
-                  </TouchableOpacity>
-                ))
-              ) : (
-                <View className="flex-1 items-center justify-center pt-20">
-                  <Text className="text-base font-bold text-muted-foreground/60 uppercase tracking-widest">
-                    No results found
-                  </Text>
-                </View>
-              )}
-            </ScrollView>
-          )}
-        </View>
-      </Modal>
+          </Modal>
 
-      <Modal
-        visible={!!selectedImage}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setSelectedImage(null)}>
-        <Pressable
-          className="flex-1 items-center justify-center bg-black/95"
-          onPress={() => setSelectedImage(null)}>
-          <TouchableOpacity
-            className="absolute right-6 top-16 z-10 h-12 w-12 items-center justify-center rounded-full bg-zinc-900/80 border border-zinc-800"
+        <Modal
+          visible={!!selectedImage}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setSelectedImage(null)}>
+          <Pressable 
+            className="flex-1 bg-black/95 items-center justify-center"
             onPress={() => setSelectedImage(null)}>
-            <X size={28} color="white" />
-          </TouchableOpacity>
-          {selectedImage && (
-            <Image source={{ uri: selectedImage }} className="h-full w-full" contentFit="contain" />
-          )}
-        </Pressable>
-      </Modal>
-    </View>
-  );
-}
+            <TouchableOpacity 
+              onPress={() => setSelectedImage(null)}
+              className="absolute top-14 right-4 z-10 h-10 w-10 items-center justify-center rounded-full bg-white/20">
+              <X size={24} color="#fff" />
+            </TouchableOpacity>
+            {selectedImage && (
+              <Image
+                source={{ uri: selectedImage }}
+                style={{ width: '100%', height: '80%' }}
+                contentFit="contain"
+                cachePolicy="memory-disk"
+              />
+            )}
+          </Pressable>
+        </Modal>
+
+        </View>
+    );
+  }

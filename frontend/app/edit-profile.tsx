@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ChevronLeft, Camera, User, MapPin } from 'lucide-react-native';
+import { ChevronLeft, Camera, User, MapPin, Linkedin, Instagram } from 'lucide-react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { apiRequest } from '@/lib/api';
@@ -20,20 +20,6 @@ import { THEME } from '@/lib/theme';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { Image } from 'expo-image';
-
-const decodeBase64 = (base64: string) => {
-  try {
-    const binaryString = atob(base64);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
-    }
-    return bytes.buffer;
-  } catch (e) {
-    console.error('Base64 decode error:', e);
-    throw new Error('Failed to process image data');
-  }
-};
 
 export default function EditProfileScreen() {
   const { user } = useAuth();
@@ -66,6 +52,8 @@ export default function EditProfileScreen() {
     occupation: '',
     location_name: '',
     website: '',
+    linkedin_url: '',
+    instagram_url: '',
   });
 
   const getCurrentLocation = async () => {
@@ -105,6 +93,8 @@ export default function EditProfileScreen() {
         occupation: profile.occupation || '',
         location_name: profile.location_name || '',
         website: profile.website || '',
+        linkedin_url: profile.linkedin_url || '',
+        instagram_url: profile.instagram_url || '',
       });
     }
   }, [profile]);
@@ -138,26 +128,31 @@ export default function EditProfileScreen() {
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.5,
-        base64: true,
+        quality: 0.7,
+        base64: false,
       });
 
-      if (!result.canceled && result.assets[0].base64) {
-        uploadAvatar(result.assets[0].base64);
+      if (!result.canceled && result.assets[0].uri) {
+        uploadAvatar(result.assets[0].uri);
       }
     } catch (error) {
       Alert.alert('Error', 'Failed to pick image');
     }
   };
 
-  const uploadAvatar = async (base64: string) => {
+  const uploadAvatar = async (uri: string) => {
     if (!user?.id) return;
     setUploading(true);
     try {
       const filePath = `${user.id}/${Date.now()}.jpg`;
+      
+      const response = await fetch(uri);
+      const blob = await response.blob();
+      const arrayBuffer = await new Response(blob).arrayBuffer();
+      
       const { error } = await supabase.storage
         .from('avatars')
-        .upload(filePath, decodeBase64(base64), {
+        .upload(filePath, arrayBuffer, {
           contentType: 'image/jpeg',
           upsert: true,
         });
@@ -168,7 +163,7 @@ export default function EditProfileScreen() {
         .from('avatars')
         .getPublicUrl(filePath);
 
-      await updateProfileMutation.mutateAsync({ avatar_url: publicUrl });
+      await updateProfileMutation.mutateAsync({ avatar_url: `${publicUrl}?v=${Date.now()}` });
     } catch (error: any) {
       Alert.alert('Error', error.message);
     } finally {
@@ -187,6 +182,8 @@ export default function EditProfileScreen() {
         if (formData.occupation !== (profile.occupation || '')) updates.occupation = formData.occupation;
         if (formData.location_name !== (profile.location_name || '')) updates.location_name = formData.location_name;
         if (formData.website !== (profile.website || '')) updates.website = formData.website;
+        if (formData.linkedin_url !== (profile.linkedin_url || '')) updates.linkedin_url = formData.linkedin_url;
+        if (formData.instagram_url !== (profile.instagram_url || '')) updates.instagram_url = formData.instagram_url;
 
         // If location name changed, try to geocode it to update coordinates
         if (updates.location_name) {
@@ -340,6 +337,36 @@ export default function EditProfileScreen() {
                 value={formData.website}
                 onChangeText={(text) => setFormData({ ...formData, website: text })}
                 placeholder="https://..."
+                placeholderTextColor={theme.mutedForeground}
+                autoCapitalize="none"
+              />
+            </View>
+
+            <View>
+              <View className="flex-row items-center mb-2 ml-1">
+                <Linkedin size={14} color={theme.primary} className="mr-2" />
+                <Text className="text-xs font-black text-muted-foreground uppercase tracking-widest">LinkedIn</Text>
+              </View>
+              <TextInput
+                className="bg-card border border-border rounded-2xl px-5 py-4 text-foreground font-bold text-lg"
+                value={formData.linkedin_url}
+                onChangeText={(text) => setFormData({ ...formData, linkedin_url: text })}
+                placeholder="linkedin.com/in/username"
+                placeholderTextColor={theme.mutedForeground}
+                autoCapitalize="none"
+              />
+            </View>
+
+            <View>
+              <View className="flex-row items-center mb-2 ml-1">
+                <Instagram size={14} color="#E4405F" className="mr-2" />
+                <Text className="text-xs font-black text-muted-foreground uppercase tracking-widest">Instagram</Text>
+              </View>
+              <TextInput
+                className="bg-card border border-border rounded-2xl px-5 py-4 text-foreground font-bold text-lg"
+                value={formData.instagram_url}
+                onChangeText={(text) => setFormData({ ...formData, instagram_url: text })}
+                placeholder="@username"
                 placeholderTextColor={theme.mutedForeground}
                 autoCapitalize="none"
               />

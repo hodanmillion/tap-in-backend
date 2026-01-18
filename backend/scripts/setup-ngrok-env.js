@@ -25,10 +25,21 @@ async function getNgrokUrl() {
 
 async function writeBackendUrlToEnv(url) {
   try {
-    const envPath = path.join(__dirname, '../../frontend/.env.local');
-    const envContent = `EXPO_PUBLIC_BACKEND_URL=${url}\n`;
+    const envPath = path.join(__dirname, '../../frontend/.env');
+    let envContent = '';
+    
+    if (fs.existsSync(envPath)) {
+      envContent = fs.readFileSync(envPath, 'utf-8');
+      envContent = envContent.replace(/^EXPO_PUBLIC_BACKEND_URL=.*$/m, `EXPO_PUBLIC_BACKEND_URL=${url}`);
+      if (!envContent.includes('EXPO_PUBLIC_BACKEND_URL=')) {
+        envContent += `\nEXPO_PUBLIC_BACKEND_URL=${url}`;
+      }
+    } else {
+      envContent = `EXPO_PUBLIC_BACKEND_URL=${url}\n`;
+    }
+    
     fs.writeFileSync(envPath, envContent, 'utf-8');
-    console.log(`✅ Backend URL written to .env.local: ${url}`);
+    console.log(`✅ Backend URL written to .env: ${url}`);
   } catch (error) {
     console.error('Failed to write env file:', error);
   }

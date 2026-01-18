@@ -23,18 +23,19 @@ export default function RegisterScreen() {
   async function signUpWithEmail() {
     setLoading(true);
     try {
-      const {
-        data: { user },
-        error,
-      } = await supabase.auth.signUp({
-        email: email,
-        password: password,
-        options: {
-          data: {
-            full_name: fullName,
+const {
+          data: { user },
+          error,
+        } = await supabase.auth.signUp({
+          email: email,
+          password: password,
+          options: {
+            data: {
+              full_name: fullName,
+            },
+            emailRedirectTo: 'tapin://auth/callback',
           },
-        },
-      });
+        });
 
       if (error) {
         Alert.alert('Error', error.message);

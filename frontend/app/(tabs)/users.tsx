@@ -17,6 +17,8 @@ import { useAuth } from '@/context/AuthContext';
 import { useColorScheme } from 'nativewind';
 import { THEME } from '@/lib/theme';
 import { apiRequest } from '@/lib/api';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
 
 const UserItemSkeleton = () => (
   <View className="mb-4 flex-row items-center rounded-3xl border border-border bg-card p-4 opacity-50">
@@ -37,6 +39,8 @@ export default function UsersScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [sentRequests, setSentRequests] = useState<Set<string>>(new Set());
+  const router = useRouter();
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -64,11 +68,11 @@ export default function UsersScreen() {
           `/profiles/nearby?lat=${latitude}&lng=${longitude}&radius=5000&userId=${user.id}`
         );
       },
-      enabled: !!location && !!user?.id && !debouncedQuery,
-      staleTime: 60000 * 2,
-      gcTime: 1000 * 60 * 15,
-      placeholderData: (prev) => prev,
-    });
+    enabled: !!location && !!user?.id && !debouncedQuery,
+    staleTime: 30000,
+    gcTime: 1000 * 60 * 5,
+    refetchOnMount: true,
+  });
   
     const { data: searchResults, isLoading: loadingSearch, isError: searchError, error: searchErrorMsg } = useQuery({
       queryKey: ['userSearch', debouncedQuery],
@@ -78,84 +82,121 @@ export default function UsersScreen() {
           `/profiles/search?q=${encodeURIComponent(debouncedQuery)}&userId=${user.id}`
         );
       },
-      enabled: !!debouncedQuery && !!user?.id,
-      staleTime: 60000 * 1,
-      gcTime: 1000 * 60 * 5,
-    });
+    enabled: !!debouncedQuery && !!user?.id,
+    staleTime: 30000,
+    gcTime: 1000 * 60 * 5,
+  });
+
 
 
   const sendRequestMutation = useMutation({
     mutationFn: async (receiverId: string) => {
-      await apiRequest('/friends/request', {
+      const res = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/friends/request`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sender_id: user?.id, receiver_id: receiverId }),
       });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to send request');
+      }
       return receiverId;
     },
     onSuccess: (receiverId) => {
       setSentRequests((prev) => new Set([...prev, receiverId]));
       Alert.alert('Success', 'Friend request sent!');
+      queryClient.invalidateQueries({ queryKey: ['nearbyUsers'] });
+      queryClient.invalidateQueries({ queryKey: ['userSearch'] });
     },
     onError: (error: Error) => {
-      Alert.alert('Error', error.message);
+      Alert.alert('Cannot Connect', error.message);
+      queryClient.invalidateQueries({ queryKey: ['nearbyUsers'] });
+      queryClient.invalidateQueries({ queryKey: ['userSearch'] });
     },
   });
 
-  const renderUser = ({ item }: { item: any }) => (
-    <View className="mb-4 flex-row items-center rounded-3xl border border-border bg-card p-4 shadow-sm">
-      <View className="h-14 w-14 items-center justify-center overflow-hidden rounded-2xl bg-primary/5">
-        {item.avatar_url ? (
-          <Image 
-            source={{ uri: item.avatar_url }} 
-            style={{ width: 56, height: 56 }}
-            contentFit="cover"
-            cachePolicy="memory-disk"
-            transition={150}
-          />
-        ) : (
-          <Users size={24} color={theme.primary} />
-        )}
-      </View>
-      <View className="ml-4 flex-1">
-        <Text className="text-lg font-bold text-foreground leading-tight" numberOfLines={1}>
-          {item.full_name || item.username || 'Anonymous'}
-        </Text>
-        <View className="mt-1 flex-row items-center">
-          {item.latitude ? (
-            <View className="flex-row items-center bg-green-500/10 px-2 py-0.5 rounded-full">
-              <View className="h-1.5 w-1.5 rounded-full bg-green-500 mr-1.5" />
-              <Text className="text-[9px] font-bold uppercase text-green-600 tracking-wider">Nearby</Text>
-            </View>
-          ) : (
-            <Text className="text-xs font-semibold text-muted-foreground">@{item.username}</Text>
-          )}
-        </View>
-      </View>
+  const renderUser = ({ item }: { item: any }) => {
+    const isSent = sentRequests.has(item.id) || item.connection_status === 'pending';
+    const isConnected = item.connection_status === 'accepted' || item.has_private_room === true;
 
-      {sentRequests.has(item.id) ? (
-        <View className="flex-row items-center rounded-xl bg-secondary/50 px-3 py-2 border border-border/50">
-          <Clock size={14} color={theme.mutedForeground} />
-          <Text className="ml-1.5 text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Sent</Text>
-        </View>
-      ) : (
-        <TouchableOpacity
-          onPress={() => sendRequestMutation.mutate(item.id)}
-          disabled={sendRequestMutation.isPending}
-          activeOpacity={0.7}
-          className="rounded-xl bg-primary px-4 py-2.5 shadow-md shadow-primary/20 active:opacity-90">
-          {sendRequestMutation.isPending ? (
-            <ActivityIndicator size="small" color={theme.primaryForeground} />
-          ) : (
-            <Text className="text-[11px] font-bold uppercase tracking-wider text-primary-foreground">
-              Connect
+    return (
+      <View className="mb-4 flex-row items-center rounded-3xl border border-border bg-card p-4 shadow-sm">
+        <TouchableOpacity 
+          onPress={() => router.push(`/user/${item.id}`)}
+          className="flex-row items-center flex-1">
+          <View className="h-14 w-14 items-center justify-center overflow-hidden rounded-2xl bg-primary/5">
+            {item.avatar_url ? (
+              <Image 
+                source={{ uri: item.avatar_url }} 
+                style={{ width: 56, height: 56 }}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+                transition={150}
+              />
+            ) : (
+              <Users size={24} color={theme.primary} />
+            )}
+          </View>
+          <View className="ml-4 flex-1">
+            <Text className="text-lg font-bold text-foreground leading-tight" numberOfLines={1}>
+              {item.full_name || item.username || 'Anonymous'}
             </Text>
-          )}
+            <View className="mt-1 flex-row items-center">
+              {item.latitude ? (
+                <View className="flex-row items-center bg-green-500/10 px-2 py-0.5 rounded-full">
+                  <View className="h-1.5 w-1.5 rounded-full bg-green-500 mr-1.5" />
+                  <Text className="text-[9px] font-bold uppercase text-green-600 tracking-wider">Nearby</Text>
+                </View>
+              ) : (
+                <Text className="text-xs font-semibold text-muted-foreground">@{item.username}</Text>
+              )}
+            </View>
+          </View>
         </TouchableOpacity>
-      )}
-    </View>
-  );
 
-  const displayData = debouncedQuery ? searchResults : nearbyUsers;
+        {isConnected ? (
+          <TouchableOpacity
+            onPress={() => router.push(`/chat/private_${item.id}`)}
+            activeOpacity={0.7}
+            className="rounded-xl bg-secondary px-4 py-2.5 shadow-sm border border-border/50">
+            <View className="flex-row items-center">
+              <MessageCircle size={14} color={theme.primary} />
+              <Text className="ml-1.5 text-[11px] font-bold uppercase tracking-wider text-primary">Chat</Text>
+            </View>
+          </TouchableOpacity>
+        ) : isSent ? (
+          <View className="flex-row items-center rounded-xl bg-secondary/50 px-3 py-2 border border-border/50">
+            <Clock size={14} color={theme.mutedForeground} />
+            <Text className="ml-1.5 text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Sent</Text>
+          </View>
+          ) : (
+            <TouchableOpacity
+              onPress={() => sendRequestMutation.mutate(item.id)}
+              disabled={sendRequestMutation.isPending}
+              activeOpacity={0.8}
+              className="rounded-xl overflow-hidden shadow-md shadow-primary/30">
+              <LinearGradient
+                colors={['#8b5cf6', '#6d28d9']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                className="px-5 py-2.5 items-center justify-center">
+                {sendRequestMutation.isPending ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text className="text-[11px] font-black uppercase tracking-wider text-white">
+                    Connect
+                  </Text>
+                )}
+              </LinearGradient>
+            </TouchableOpacity>
+          )}
+      </View>
+    );
+  };
+
+  const filteredNearbyUsers = nearbyUsers || [];
+  const filteredSearchResults = searchResults || [];
+  const displayData = debouncedQuery ? filteredSearchResults : filteredNearbyUsers;
   const isLoading = debouncedQuery ? loadingSearch : loadingNearby;
   const isError = debouncedQuery ? searchError : nearbyError;
   const errorMsg = debouncedQuery ? searchErrorMsg : nearbyErrorMsg;

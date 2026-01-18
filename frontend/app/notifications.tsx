@@ -65,13 +65,15 @@ export default function NotificationsScreen() {
       }
     };
 
-    const handlePress = () => {
-      if (item.data?.room_id) {
-        router.push(`/chat/${item.data.room_id}`);
-      } else if (item.type === 'friend_request' || item.type === 'friend_accept') {
-        router.push('/(tabs)/friends');
-      }
-    };
+      const handlePress = () => {
+        if (item.data?.room_id) {
+          router.push(`/chat/${item.data.room_id}`);
+        } else if (item.type === 'friend_request') {
+          router.push('/friend-requests');
+        } else if (item.type === 'friend_request_accepted') {
+          router.push('/(tabs)/friends');
+        }
+      };
 
     return (
       <TouchableOpacity

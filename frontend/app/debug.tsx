@@ -81,7 +81,7 @@ export default function DebugScreen() {
             apiLogs.map((log, i) => (
               <View key={i} className="mb-3 p-3 bg-muted rounded-lg">
                 <View className="flex-row justify-between mb-1">
-                  <Text className="font-bold text-xs uppercase" style={{ color: log.status < 400 ? '#10b981' : '#ef4444' }}>
+                  <Text className="font-bold text-xs uppercase" style={{ color: typeof log.status === 'number' && log.status < 400 ? '#10b981' : '#ef4444' }}>
                     {log.method} {log.status}
                   </Text>
                   <Text className="text-xs font-mono">{log.duration.toFixed(0)}ms</Text>

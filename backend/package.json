@@ -4,7 +4,7 @@
   "scripts": {
     "dev": "bun --watch src/index.ts",
     "dev:tunnel": "concurrently \"bun run dev\" \"node scripts/start-ngrok-cli.js\" \"node scripts/setup-ngrok-env.js\"",
-    "build": "bun build.js",
+    "build": "node build.js",
     "start": "node dist/index.js",
     "lint": "eslint \"**/*.{js,ts}\" && prettier -c \"**/*.{js,ts,json}\"",
     "format": "eslint \"**/*.{js,ts}\" --fix && prettier \"**/*.{js,ts,json}\" --write",

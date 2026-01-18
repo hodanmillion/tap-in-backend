@@ -1,6 +1,9 @@
 import '@/global.css';
 import { Stack } from 'expo-router';
-import { QueryClient, QueryClientProvider, focusManager } from '@tanstack/react-query';
+import { QueryClient, focusManager } from '@tanstack/react-query';
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
+import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { ChatProvider } from '@/context/ChatContext';
 import { useEffect } from 'react';
@@ -9,6 +12,7 @@ import { View, ActivityIndicator, AppState, Platform } from 'react-native';
 import { ErrorBoundary } from './error-boundary';
 import { useLocation } from '@/hooks/useLocation';
 import { mark, measure, PerfMarks } from '@/lib/perf';
+import { useColorScheme } from 'nativewind';
 
 mark(PerfMarks.APP_START);
 
@@ -25,7 +29,7 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 1000 * 60 * 2,
-      gcTime: 1000 * 60 * 30,
+      gcTime: 1000 * 60 * 60 * 24,
       refetchOnWindowFocus: false,
       refetchOnMount: false,
       refetchOnReconnect: 'always',
@@ -41,10 +45,21 @@ const queryClient = new QueryClient({
   },
 });
 
+const asyncStoragePersister = createAsyncStoragePersister({
+  storage: AsyncStorage,
+  key: 'TAPIN_QUERY_CACHE',
+  throttleTime: 1000,
+});
+
 function RootLayoutContent() {
   const { session, loading, user } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+  const { setColorScheme } = useColorScheme();
+
+  useEffect(() => {
+    setColorScheme('dark');
+  }, []);
 
   useLocation(user?.id);
 
@@ -97,13 +112,24 @@ function RootLayoutContent() {
 export default function RootLayout() {
   return (
     <ErrorBoundary>
-      <QueryClientProvider client={queryClient}>
+      <PersistQueryClientProvider
+        client={queryClient}
+        persistOptions={{
+          persister: asyncStoragePersister,
+          maxAge: 1000 * 60 * 60 * 24,
+          dehydrateOptions: {
+            shouldDehydrateQuery: (query) => {
+              const key = query.queryKey[0];
+              return key === 'chatMessages' || key === 'chatRooms';
+            },
+          },
+        }}>
         <AuthProvider>
           <ChatProvider>
             <RootLayoutContent />
           </ChatProvider>
         </AuthProvider>
-      </QueryClientProvider>
+      </PersistQueryClientProvider>
     </ErrorBoundary>
   );
 }

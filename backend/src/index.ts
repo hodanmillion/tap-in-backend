@@ -5,6 +5,8 @@ import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
 import { Resend } from 'resend';
+import { randomUUID } from 'crypto';
+import type { Database } from './database.types';
 
 // 1. Error Handling & Logging Setup
 process.on('uncaughtException', (err) => {
@@ -21,241 +23,6 @@ console.log('Environment:', process.env.NODE_ENV || 'development');
 console.log('Port:', process.env.PORT || 3003);
 
 // 2. Supabase & Resend Configuration
-interface Database {
-  public: {
-    Tables: {
-      profiles: {
-        Row: {
-          id: string;
-          username: string | null;
-          full_name: string | null;
-          avatar_url: string | null;
-          latitude: number | null;
-          longitude: number | null;
-          location: unknown | null;
-          last_seen: string | null;
-          bio: string | null;
-          website: string | null;
-          location_name: string | null;
-          occupation: string | null;
-          created_at: string;
-        };
-        Insert: {
-          id: string;
-          username?: string | null;
-          full_name?: string | null;
-          avatar_url?: string | null;
-          latitude?: number | null;
-          longitude?: number | null;
-          location?: unknown | null;
-          last_seen?: string | null;
-          bio?: string | null;
-          website?: string | null;
-          location_name?: string | null;
-          occupation?: string | null;
-          created_at?: string;
-        };
-        Update: {
-          id?: string;
-          username?: string | null;
-          full_name?: string | null;
-          avatar_url?: string | null;
-          latitude?: number | null;
-          longitude?: number | null;
-          location?: unknown | null;
-          last_seen?: string | null;
-          bio?: string | null;
-          website?: string | null;
-          location_name?: string | null;
-          occupation?: string | null;
-          created_at?: string;
-        };
-      };
-        messages: {
-          Row: {
-            id: string;
-            room_id: string;
-            sender_id: string;
-            content: string;
-            type: string;
-            created_at: string;
-            client_msg_id: string | null;
-          };
-          Insert: {
-            id?: string;
-            room_id: string;
-            sender_id: string;
-            content: string;
-            type?: string;
-            created_at?: string;
-            client_msg_id?: string | null;
-          };
-          Update: {
-            id?: string;
-            room_id?: string;
-            sender_id?: string;
-            content?: string;
-            type?: string;
-            created_at?: string;
-            client_msg_id?: string | null;
-          };
-        };
-      chat_rooms: {
-        Row: {
-          id: string;
-          name: string;
-          type: string;
-          latitude: number;
-          longitude: number;
-          radius: number;
-          created_at: string;
-          expires_at: string | null;
-          location: unknown | null;
-        };
-        Insert: {
-          id?: string;
-          name: string;
-          type: string;
-          latitude: number;
-          longitude: number;
-          radius: number;
-          created_at?: string;
-          expires_at?: string | null;
-          location?: unknown | null;
-        };
-        Update: {
-          id?: string;
-          name?: string;
-          type?: string;
-          latitude?: number;
-          longitude?: number;
-          radius?: number;
-          created_at?: string;
-          expires_at?: string | null;
-          location?: unknown | null;
-        };
-      };
-      room_participants: {
-        Row: {
-          id: string;
-          room_id: string;
-          user_id: string;
-          joined_at: string;
-        };
-        Insert: {
-          id?: string;
-          room_id: string;
-          user_id: string;
-          joined_at?: string;
-        };
-        Update: {
-          id?: string;
-          room_id?: string;
-          user_id?: string;
-          joined_at?: string;
-        };
-      };
-      friend_requests: {
-        Row: {
-          id: string;
-          sender_id: string;
-          receiver_id: string;
-          status: string;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          sender_id: string;
-          receiver_id: string;
-          status: string;
-          created_at?: string;
-        };
-        Update: {
-          id?: string;
-          sender_id?: string;
-          receiver_id?: string;
-          status?: string;
-          created_at?: string;
-        };
-      };
-      friends: {
-        Row: {
-          id: string;
-          user_id_1: string;
-          user_id_2: string;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          user_id_1: string;
-          user_id_2: string;
-          created_at?: string;
-        };
-        Update: {
-          id?: string;
-          user_id_1?: string;
-          user_id_2?: string;
-          created_at?: string;
-        };
-      };
-      notifications: {
-        Row: {
-          id: string;
-          user_id: string;
-          type: string;
-          title: string | null;
-          content: string;
-          data: any | null;
-          is_read: boolean;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          type: string;
-          title?: string | null;
-          content: string;
-          data?: any | null;
-          is_read?: boolean;
-          created_at?: string;
-        };
-        Update: {
-          id?: string;
-          user_id?: string;
-          type?: string;
-          title?: string | null;
-          content?: string;
-          data?: any | null;
-          is_read?: boolean;
-          created_at?: string;
-        };
-      };
-    };
-    Functions: {
-      cleanup_expired_rooms: {
-        Args: Record<string, never>;
-        Returns: undefined;
-      };
-      find_nearby_rooms: {
-        Args: {
-          lat: number;
-          lng: number;
-          max_dist_meters: number;
-        };
-        Returns: Array<Database['public']['Tables']['chat_rooms']['Row'] & { distance: number }>;
-      };
-      find_nearby_users: {
-        Args: {
-          lat: number;
-          lng: number;
-          max_dist_meters: number;
-        };
-        Returns: Array<Database['public']['Tables']['profiles']['Row'] & { distance: number }>;
-      };
-    };
-  };
-}
-
 const supabase = createClient<Database>(
   process.env.SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -316,9 +83,60 @@ app.get('/profiles/nearby', async (c) => {
   });
 
   if (error) return c.json({ error: error.message }, 500);
-  const filtered = userId ? data.filter((u: any) => u.id !== userId) : data;
-  return c.json(filtered);
-});
+  
+  let filtered = userId ? data.filter((u: any) => u.id !== userId) : data;
+  
+  if (userId && filtered.length > 0) {
+    const { data: friends } = await supabase
+      .from('friends')
+      .select('user_id_1, user_id_2')
+      .or(`user_id_1.eq.${userId},user_id_2.eq.${userId}`);
+    
+    const { data: pendingRequests } = await supabase
+      .from('friend_requests')
+      .select('sender_id, receiver_id')
+      .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
+      .eq('status', 'pending');
+    
+    const { data: privateRooms } = await supabase
+      .from('chat_rooms')
+      .select('name')
+      .eq('type', 'private')
+      .like('name', `%${userId}%`);
+    
+    const friendIds = new Set<string>();
+    const pendingIds = new Set<string>();
+    const privateRoomUserIds = new Set<string>();
+    
+    if (friends) {
+      friends.forEach((f: any) => {
+        friendIds.add(f.user_id_1 === userId ? f.user_id_2 : f.user_id_1);
+      });
+    }
+    
+    if (pendingRequests) {
+      pendingRequests.forEach((r: any) => {
+        pendingIds.add(r.sender_id === userId ? r.receiver_id : r.sender_id);
+      });
+    }
+    
+    if (privateRooms) {
+      privateRooms.forEach((r: any) => {
+        const parts = r.name.replace('private_', '').split('_');
+        const otherUserId = parts[0] === userId ? parts[1] : parts[0];
+        if (otherUserId) privateRoomUserIds.add(otherUserId);
+      });
+    }
+    
+      filtered = filtered.map((u: any) => ({
+        ...u,
+        connection_status: friendIds.has(u.id) || privateRoomUserIds.has(u.id) ? 'accepted' : pendingIds.has(u.id) ? 'pending' : 'none',
+        has_private_room: privateRoomUserIds.has(u.id)
+      }));
+    }
+    
+    return c.json(filtered);
+  });
 
 app.get('/profiles/search', async (c) => {
   const q = c.req.query('q') || '';
@@ -332,7 +150,59 @@ app.get('/profiles/search', async (c) => {
     .limit(20);
 
   if (error) return c.json({ error: error.message }, 500);
-  return c.json(data);
+  
+  let filtered = data || [];
+  
+  if (userId && filtered.length > 0) {
+    const { data: friends } = await supabase
+      .from('friends')
+      .select('user_id_1, user_id_2')
+      .or(`user_id_1.eq.${userId},user_id_2.eq.${userId}`);
+    
+    const { data: pendingRequests } = await supabase
+      .from('friend_requests')
+      .select('sender_id, receiver_id')
+      .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
+      .eq('status', 'pending');
+    
+    const { data: privateRooms } = await supabase
+      .from('chat_rooms')
+      .select('name')
+      .eq('type', 'private')
+      .like('name', `%${userId}%`);
+    
+    const friendIds = new Set<string>();
+    const pendingIds = new Set<string>();
+    const privateRoomUserIds = new Set<string>();
+    
+    if (friends) {
+      friends.forEach((f: any) => {
+        friendIds.add(f.user_id_1 === userId ? f.user_id_2 : f.user_id_1);
+      });
+    }
+    
+    if (pendingRequests) {
+      pendingRequests.forEach((r: any) => {
+        pendingIds.add(r.sender_id === userId ? r.receiver_id : r.sender_id);
+      });
+    }
+    
+    if (privateRooms) {
+      privateRooms.forEach((r: any) => {
+        const parts = r.name.replace('private_', '').split('_');
+        const otherUserId = parts[0] === userId ? parts[1] : parts[0];
+        if (otherUserId) privateRoomUserIds.add(otherUserId);
+      });
+    }
+    
+      filtered = filtered.map((u: any) => ({
+        ...u,
+        connection_status: friendIds.has(u.id) || privateRoomUserIds.has(u.id) ? 'accepted' : pendingIds.has(u.id) ? 'pending' : 'none',
+        has_private_room: privateRoomUserIds.has(u.id)
+      }));
+    }
+    
+    return c.json(filtered);
 });
 
 app.get('/profiles/:id', async (c) => {
@@ -428,6 +298,36 @@ app.post(
         })
         .eq('id', userId);
 
+      const { data: userRooms } = await supabase
+        .from('room_participants')
+        .select('room_id, left_at, chat_rooms(id, type, latitude, longitude, radius)')
+        .eq('user_id', userId);
+
+      if (userRooms) {
+        for (const participation of userRooms) {
+          const room = (participation as any).chat_rooms;
+          if (room && room.type !== 'private') {
+            const distance = calculateDistance(latitude, longitude, room.latitude, room.longitude);
+            const radius = room.radius || 100;
+            const isInZone = distance <= radius;
+
+            if (isInZone && participation.left_at) {
+              await supabase
+                .from('room_participants')
+                .update({ left_at: null })
+                .eq('room_id', participation.room_id)
+                .eq('user_id', userId);
+            } else if (!isInZone && !participation.left_at) {
+              await supabase
+                .from('room_participants')
+                .update({ left_at: new Date().toISOString() })
+                .eq('room_id', participation.room_id)
+                .eq('user_id', userId);
+            }
+          }
+        }
+      }
+
       const { data: existingRooms, error: searchError } = await supabase.rpc('find_nearby_rooms', {
         lat: latitude,
         lng: longitude,
@@ -436,55 +336,33 @@ app.post(
 
       if (searchError) throw searchError;
 
-      if (!existingRooms || existingRooms.length === 0) {
-        const { data: newRoom, error: createError } = await supabase
-          .from('chat_rooms')
-          .insert({
-            name: address || `Chat near ${latitude.toFixed(2)}, ${longitude.toFixed(2)}`,
-            type: 'public',
-            latitude,
-            longitude,
-            radius: 500,
-            expires_at: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
-          })
+      if (existingRooms && existingRooms.length > 0) {
+        const nearestRoom = existingRooms[0];
+        
+        const { data: existingMembership } = await supabase
+          .from('room_participants')
           .select('id')
+          .eq('room_id', nearestRoom.id)
+          .eq('user_id', userId)
           .single();
 
-        if (createError) throw createError;
-
-        await supabase.from('room_participants').insert({
-          room_id: newRoom.id,
-          user_id: userId,
-        });
+        if (!existingMembership) {
+          await supabase.from('room_participants').upsert({
+            room_id: nearestRoom.id,
+            user_id: userId,
+            left_at: null,
+          }, { onConflict: 'room_id,user_id' });
+        }
 
         const dbMs = Date.now() - startTime;
         c.header('x-db-ms', String(dbMs));
         c.header('x-total-ms', String(dbMs));
 
         return c.json({
-          joinedRoomIds: [newRoom.id],
-          leftRoomIds: [],
+          joinedRoomIds: existingMembership ? [] : [nearestRoom.id],
+          activeRoomIds: existingRooms.map((r: any) => r.id),
           serverTime: new Date().toISOString(),
         });
-      }
-
-      const roomIds = existingRooms.map((r) => r.id);
-      const { data: currentMemberships } = await supabase
-        .from('room_participants')
-        .select('room_id')
-        .eq('user_id', userId)
-        .in('room_id', roomIds);
-
-      const joinedRoomIds = currentMemberships?.map((m) => m.room_id) || [];
-      const roomsToJoin = roomIds.filter((id) => !joinedRoomIds.includes(id));
-
-      if (roomsToJoin.length > 0) {
-        await supabase.from('room_participants').insert(
-          roomsToJoin.map((id) => ({
-            room_id: id,
-            user_id: userId,
-          }))
-        );
       }
 
       const dbMs = Date.now() - startTime;
@@ -492,8 +370,8 @@ app.post(
       c.header('x-total-ms', String(dbMs));
 
       return c.json({
-        joinedRoomIds: roomsToJoin,
-        activeRoomIds: roomIds,
+        joinedRoomIds: [],
+        activeRoomIds: [],
         serverTime: new Date().toISOString(),
       });
     } catch (err: any) {
@@ -515,7 +393,15 @@ app.get('/rooms/nearby', async (c) => {
   });
 
   if (error) return c.json({ error: error.message }, 500);
-  return c.json(rooms);
+  
+  const seenNames = new Set<string>();
+  const dedupedRooms = (rooms || []).filter((room: any) => {
+    if (seenNames.has(room.name)) return false;
+    seenNames.add(room.name);
+    return true;
+  });
+  
+  return c.json(dedupedRooms);
 });
 
 app.get('/users/nearby', async (c) => {
@@ -571,6 +457,7 @@ app.get('/messages/:roomId', async (c) => {
   const roomId = c.req.param('roomId');
   const limit = parseInt(c.req.query('limit') || '50');
   const cursor = c.req.query('cursor');
+  const since = c.req.query('since');
 
   let query = supabase
     .from('messages')
@@ -582,7 +469,9 @@ app.get('/messages/:roomId', async (c) => {
     .order('created_at', { ascending: false })
     .limit(limit);
 
-  if (cursor) {
+  if (since) {
+    query = query.gt('created_at', since);
+  } else if (cursor) {
     query = query.lt('created_at', cursor);
   }
 
@@ -590,7 +479,7 @@ app.get('/messages/:roomId', async (c) => {
 
   if (error) return c.json({ error: error.message }, 500);
 
-  const hasMore = data && data.length === limit;
+  const hasMore = !since && data && data.length === limit;
   const nextCursor = hasMore && data.length > 0 ? data[data.length - 1].created_at : null;
 
   return c.json({
@@ -639,6 +528,19 @@ app.post('/rooms/private', async (c) => {
   return c.json({ room_id: newRoom.id });
 });
 
+function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) *
+      Math.cos(lat2 * (Math.PI / 180)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+}
+
 app.post(
   '/messages',
   zValidator(
@@ -649,16 +551,70 @@ app.post(
       content: z.string(),
       type: z.string().default('text'),
       client_msg_id: z.string().uuid().optional(),
+      sender_lat: z.number().optional(),
+      sender_lng: z.number().optional(),
     })
   ),
   async (c) => {
     const body = c.req.valid('json');
     
     if (!checkRateLimit(body.sender_id)) {
-      return c.json({ error: 'Rate limit exceeded. Max 5 messages per 2 seconds.' }, 429);
+      return c.json({ error: 'Rate limit exceeded. Max 5 messages per 2 seconds.', reason: 'RATE_LIMITED' }, 429);
+    }
+
+    const { data: room, error: roomError } = await supabase
+      .from('chat_rooms')
+      .select('id, type, latitude, longitude, radius')
+      .eq('id', body.room_id)
+      .single();
+
+    if (roomError || !room) {
+      return c.json({ error: 'Room not found', reason: 'ROOM_NOT_FOUND' }, 404);
+    }
+
+    if (room.type !== 'private') {
+      const { data: participation } = await supabase
+        .from('room_participants')
+        .select('left_at')
+        .eq('room_id', body.room_id)
+        .eq('user_id', body.sender_id)
+        .single();
+
+      if (participation?.left_at) {
+          const hoursSinceLeft = (Date.now() - new Date(participation.left_at).getTime()) / (1000 * 60 * 60);
+          
+          const { count: msgCount } = await supabase
+            .from('messages')
+            .select('id', { count: 'exact', head: true })
+            .eq('room_id', body.room_id);
+          
+          const hasMessages = (msgCount ?? 0) > 0;
+          
+          if (hoursSinceLeft >= 48 && !hasMessages) {
+            return c.json({ error: 'This chat has expired (48hrs since you left)', reason: 'EXPIRED' }, 403);
+          }
+        }
+
+        if (body.sender_lat !== undefined && body.sender_lng !== undefined) {
+          const distance = calculateDistance(
+            body.sender_lat,
+            body.sender_lng,
+            room.latitude ?? 0,
+            room.longitude ?? 0
+          );
+        const radius = room.radius || 100;
+        if (distance > radius) {
+          return c.json({ 
+            error: `Out of range. You are ${Math.round(distance)}m away, max is ${radius}m.`,
+            reason: 'OUT_OF_RANGE',
+            distance: Math.round(distance),
+            radius 
+          }, 403);
+        }
+      }
     }
     
-    const client_msg_id = body.client_msg_id || crypto.randomUUID();
+    const client_msg_id = body.client_msg_id || randomUUID();
     
     const { data, error } = await supabase
       .from('messages')
@@ -678,6 +634,139 @@ app.post(
 );
 
 // 6. Room Management
+app.get('/rooms/user-rooms', async (c) => {
+  const userId = c.req.query('userId');
+  const lat = parseFloat(c.req.query('lat') || '0');
+  const lng = parseFloat(c.req.query('lng') || '0');
+
+  if (!userId) {
+    return c.json({ error: 'userId required' }, 400);
+  }
+
+  const { data: participations, error: partError } = await supabase
+    .from('room_participants')
+    .select('room_id')
+    .eq('user_id', userId);
+
+  if (partError) return c.json({ error: partError.message }, 500);
+  if (!participations || participations.length === 0) return c.json([]);
+
+    const roomIds = participations.map(p => p.room_id).filter((id): id is string => id !== null);
+
+  const { data: rooms, error: roomsError } = await supabase
+    .from('chat_rooms')
+    .select(`
+      id,
+      name,
+      type,
+      latitude,
+      longitude,
+      radius,
+      expires_at,
+      created_at,
+      room_participants(
+        user_id,
+        left_at,
+        profiles(id, full_name, username, avatar_url)
+      )
+    `)
+    .in('id', roomIds);
+
+  if (roomsError) return c.json({ error: roomsError.message }, 500);
+  if (!rooms) return c.json([]);
+
+  const { data: lastMessages } = await supabase
+    .from('messages')
+    .select('room_id, content, created_at, type')
+    .in('room_id', roomIds)
+    .order('created_at', { ascending: false });
+
+  const lastMessageMap = new Map<string, any>();
+  if (lastMessages) {
+    for (const msg of lastMessages) {
+    if (!lastMessageMap.has(msg.room_id ?? '')) {
+          lastMessageMap.set(msg.room_id ?? '', msg);
+      }
+    }
+  }
+
+        const enrichedRooms = rooms.map((room: any) => {
+          const lastMsg = lastMessageMap.get(room.id);
+          let distance: number | null = null;
+          let isExpired = false;
+          let readOnlyReason: string | null = null;
+          let isCurrentlyInZone = false;
+
+          const userParticipation = room.room_participants?.find((p: any) => p.user_id === userId);
+          const hasMessages = !!lastMsg;
+
+            if (room.type !== 'private' && lat && lng) {
+              distance = calculateDistance(lat, lng, room.latitude, room.longitude);
+              const radius = room.radius || 100;
+              
+              if (distance <= radius) {
+                isCurrentlyInZone = true;
+              } else {
+                const leftAt = userParticipation?.left_at;
+                if (leftAt) {
+                  const hoursSinceLeft = (Date.now() - new Date(leftAt).getTime()) / (1000 * 60 * 60);
+                  if (hoursSinceLeft >= 48 && !hasMessages) {
+                    isExpired = true;
+                    readOnlyReason = 'Expired';
+                  } else if (!hasMessages) {
+                    const hoursRemaining = Math.ceil(48 - hoursSinceLeft);
+                    readOnlyReason = `${Math.round(distance)}m away (${hoursRemaining}hr left)`;
+                  } else {
+                    readOnlyReason = `${Math.round(distance)}m away`;
+                  }
+                } else {
+                  readOnlyReason = `${Math.round(distance)}m away`;
+                }
+              }
+            }
+
+      let displayName = room.name;
+      let otherUserAvatar: string | null = null;
+
+      if (room.type === 'private') {
+        const otherParticipant = room.room_participants?.find(
+          (p: any) => p.user_id !== userId
+        );
+        const profile = otherParticipant?.profiles;
+        if (profile) {
+          displayName = profile.full_name || `@${profile.username}` || 'Private Chat';
+          otherUserAvatar = profile.avatar_url;
+        }
+      }
+
+      return {
+        id: room.id,
+        name: displayName,
+        type: room.type,
+        latitude: room.latitude,
+        longitude: room.longitude,
+        radius: room.radius,
+        expires_at: room.expires_at,
+        created_at: room.created_at,
+        other_user_avatar: otherUserAvatar,
+        last_message_at: lastMsg?.created_at || null,
+        last_message_preview: lastMsg ? (lastMsg.type === 'text' ? lastMsg.content.substring(0, 50) : `[${lastMsg.type}]`) : null,
+        distance: distance !== null ? Math.round(distance) : null,
+        is_expired: isExpired,
+        read_only_reason: readOnlyReason,
+        is_currently_in_zone: isCurrentlyInZone,
+      };
+    });
+
+  enrichedRooms.sort((a, b) => {
+    const aTime = a.last_message_at || a.created_at || '';
+    const bTime = b.last_message_at || b.created_at || '';
+    return new Date(bTime).getTime() - new Date(aTime).getTime();
+  });
+
+  return c.json(enrichedRooms);
+});
+
 app.get('/users/:userId/rooms', async (c) => {
   const userId = c.req.param('userId');
   const { data, error } = await supabase
@@ -697,7 +786,12 @@ app.post('/rooms/:roomId/join', async (c) => {
   const { userId } = await c.req.json();
   const { data, error } = await supabase
     .from('room_participants')
-    .insert({ room_id: roomId, user_id: userId })
+    .upsert({ 
+      room_id: roomId, 
+      user_id: userId,
+      left_at: null,
+      joined_at: new Date().toISOString()
+    }, { onConflict: 'room_id,user_id' })
     .select()
     .single();
 
@@ -710,7 +804,7 @@ app.delete('/rooms/:roomId/leave', async (c) => {
   const { userId } = await c.req.json();
   const { error } = await supabase
     .from('room_participants')
-    .delete()
+    .update({ left_at: new Date().toISOString() })
     .eq('room_id', roomId)
     .eq('user_id', userId);
 
@@ -718,33 +812,100 @@ app.delete('/rooms/:roomId/leave', async (c) => {
   return c.json({ success: true });
 });
 
-// 6b. Create Room
+// 6b. Create Room (checks for existing nearby room first with race condition protection)
+const roomCreationLocks = new Map<string, Promise<any>>();
+
 app.post('/rooms/create', async (c) => {
   const { name, latitude, longitude, radius, userId } = await c.req.json();
-
-  const { data: room, error } = await supabase
-    .from('chat_rooms')
-    .insert({
-      name,
-      type: 'public',
-      latitude,
-      longitude,
-      radius: radius || 500,
-      expires_at: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
-    })
-    .select()
-    .single();
-
-  if (error) return c.json({ error: error.message }, 400);
-
-  if (userId) {
-    await supabase.from('room_participants').insert({
-      room_id: room.id,
-      user_id: userId,
-    });
+  
+  const lockKey = `${latitude.toFixed(3)}_${longitude.toFixed(3)}`;
+  
+  const existingLock = roomCreationLocks.get(lockKey);
+  if (existingLock) {
+    try {
+      const existingResult = await existingLock;
+      if (existingResult?.room && userId) {
+        await supabase.from('room_participants').upsert({
+          room_id: existingResult.room.id,
+          user_id: userId,
+        }, { onConflict: 'room_id,user_id' });
+      }
+      return c.json({ room: existingResult?.room, existing: true });
+    } catch {}
   }
+  
+  const createRoomPromise = (async () => {
+    try {
+      const { data: existingRooms } = await supabase.rpc('find_nearby_rooms', {
+        lat: latitude,
+        lng: longitude,
+        max_dist_meters: 300,
+      });
 
-  return c.json({ room });
+      if (existingRooms && existingRooms.length > 0) {
+        const existingRoom = existingRooms[0];
+        
+        if (userId) {
+          await supabase.from('room_participants').upsert({
+            room_id: existingRoom.id,
+            user_id: userId,
+          }, { onConflict: 'room_id,user_id' });
+        }
+
+        return { room: existingRoom, existing: true };
+      }
+
+      const { data: room, error } = await supabase
+          .from('chat_rooms')
+          .insert({
+            name,
+            type: 'public',
+            latitude,
+            longitude,
+            radius: radius || 500,
+          })
+          .select()
+          .single();
+
+      if (error) {
+        const { data: retryRooms } = await supabase.rpc('find_nearby_rooms', {
+          lat: latitude,
+          lng: longitude,
+          max_dist_meters: 300,
+        });
+        if (retryRooms && retryRooms.length > 0) {
+          if (userId) {
+            await supabase.from('room_participants').upsert({
+              room_id: retryRooms[0].id,
+              user_id: userId,
+            }, { onConflict: 'room_id,user_id' });
+          }
+          return { room: retryRooms[0], existing: true };
+        }
+        throw error;
+      }
+
+      if (userId) {
+        await supabase.from('room_participants').insert({
+          room_id: room.id,
+          user_id: userId,
+        });
+      }
+
+      return { room, existing: false };
+    } finally {
+      setTimeout(() => roomCreationLocks.delete(lockKey), 2000);
+    }
+  })();
+  
+  roomCreationLocks.set(lockKey, createRoomPromise);
+  
+  try {
+    const result = await createRoomPromise;
+    return c.json(result);
+  } catch (err: any) {
+    return c.json({ error: err.message }, 400);
+  }
 });
 
 // 7. Notifications
@@ -810,6 +971,40 @@ app.get('/friends/:userId', async (c) => {
 app.post('/friends/request', async (c) => {
   const { sender_id, receiver_id } = await c.req.json();
 
+  const { data: existingFriend } = await supabase
+    .from('friends')
+    .select('id')
+    .or(`and(user_id_1.eq.${sender_id},user_id_2.eq.${receiver_id}),and(user_id_1.eq.${receiver_id},user_id_2.eq.${sender_id})`)
+    .single();
+
+  if (existingFriend) {
+    return c.json({ error: 'You are already friends with this user' }, 400);
+  }
+
+  const sortedIds = [sender_id, receiver_id].sort();
+  const privateRoomName = `private_${sortedIds[0]}_${sortedIds[1]}`;
+  const { data: hasPrivateRoom } = await supabase
+    .from('chat_rooms')
+    .select('id')
+    .eq('type', 'private')
+    .eq('name', privateRoomName)
+    .single();
+
+  if (hasPrivateRoom) {
+    return c.json({ error: 'You are already connected with this user' }, 400);
+  }
+
+  const { data: existingRequest } = await supabase
+    .from('friend_requests')
+    .select('id')
+    .or(`and(sender_id.eq.${sender_id},receiver_id.eq.${receiver_id}),and(sender_id.eq.${receiver_id},receiver_id.eq.${sender_id})`)
+    .eq('status', 'pending')
+    .single();
+
+  if (existingRequest) {
+    return c.json({ error: 'A friend request already exists' }, 400);
+  }
+
   const { data, error } = await supabase
     .from('friend_requests')
     .insert({ sender_id, receiver_id, status: 'pending' })
@@ -840,11 +1035,78 @@ app.get('/friend-requests/:userId', async (c) => {
     .eq('status', 'pending');
 
   if (error) return c.json({ error: error.message }, 500);
-  return c.json(data);
+  if (!data || data.length === 0) return c.json([]);
+
+  const { data: friends } = await supabase
+    .from('friends')
+    .select('user_id_1, user_id_2')
+    .or(`user_id_1.eq.${userId},user_id_2.eq.${userId}`);
+
+  const friendIds = new Set<string>();
+  if (friends) {
+    friends.forEach((f: any) => {
+      friendIds.add(f.user_id_1 === userId ? f.user_id_2 : f.user_id_1);
+    });
+  }
+
+  const { data: privateRooms } = await supabase
+    .from('chat_rooms')
+    .select('name')
+    .eq('type', 'private')
+    .like('name', `%${userId}%`);
+
+  const connectedIds = new Set<string>(friendIds);
+  if (privateRooms) {
+    privateRooms.forEach((r: any) => {
+      const parts = r.name.replace('private_', '').split('_');
+      const otherUserId = parts[0] === userId ? parts[1] : parts[0];
+      if (otherUserId) connectedIds.add(otherUserId);
+    });
+  }
+
+  const filteredRequests = data.filter((req: any) => !connectedIds.has(req.sender_id));
+  
+  return c.json(filteredRequests);
 });
 
 app.post('/friend-requests', async (c) => {
-  const { sender_id, receiver_id } = await c.req.json();
+  const body = await c.req.json();
+  const sender_id = body.sender_id || body.senderId;
+  const receiver_id = body.receiver_id || body.receiverId;
+
+  const { data: existingFriend } = await supabase
+    .from('friends')
+    .select('id')
+    .or(`and(user_id_1.eq.${sender_id},user_id_2.eq.${receiver_id}),and(user_id_1.eq.${receiver_id},user_id_2.eq.${sender_id})`)
+    .single();
+
+  if (existingFriend) {
+    return c.json({ error: 'You are already friends with this user' }, 400);
+  }
+
+  const sortedIds = [sender_id, receiver_id].sort();
+  const privateRoomName = `private_${sortedIds[0]}_${sortedIds[1]}`;
+  const { data: hasPrivateRoom } = await supabase
+    .from('chat_rooms')
+    .select('id')
+    .eq('type', 'private')
+    .eq('name', privateRoomName)
+    .single();
+
+  if (hasPrivateRoom) {
+    return c.json({ error: 'You are already connected with this user' }, 400);
+  }
+
+  const { data: existingRequest } = await supabase
+    .from('friend_requests')
+    .select('id')
+    .or(`and(sender_id.eq.${sender_id},receiver_id.eq.${receiver_id}),and(sender_id.eq.${receiver_id},receiver_id.eq.${sender_id})`)
+    .eq('status', 'pending')
+    .single();
+
+  if (existingRequest) {
+    return c.json({ error: 'A friend request already exists' }, 400);
+  }
 
   const { data, error } = await supabase
     .from('friend_requests')
@@ -854,10 +1116,10 @@ app.post('/friend-requests', async (c) => {
 
   if (error) return c.json({ error: error.message }, 400);
 
-  // Notify receiver
   await supabase.from('notifications').insert({
     user_id: receiver_id,
     type: 'friend_request',
+    title: 'New Friend Request',
     content: 'You have a new friend request!',
   });
 
@@ -877,20 +1139,21 @@ app.post('/friend-requests/:id/respond', async (c) => {
 
   if (fetchError) return c.json({ error: fetchError.message }, 400);
 
-  if (status === 'accepted') {
-    // Add to friends table
-    await supabase.from('friends').insert({
-      user_id_1: request.sender_id,
-      user_id_2: request.receiver_id,
-    });
+    if (status === 'accepted') {
+      // Add to friends table
+      await supabase.from('friends').insert({
+        user_id_1: request.sender_id ?? '',
+        user_id_2: request.receiver_id ?? '',
+      });
 
-    // Notify sender
-    await supabase.from('notifications').insert({
-      user_id: request.sender_id,
-      type: 'friend_request_accepted',
-      content: 'Your friend request was accepted!',
-    });
-  }
+      // Notify sender
+      await supabase.from('notifications').insert({
+        user_id: request.sender_id ?? '',
+        type: 'friend_request_accepted',
+        title: 'Friend Request Accepted',
+        content: 'Your friend request was accepted!',
+      });
+    }
 
   return c.json(request);
 });
@@ -912,7 +1175,130 @@ app.post('/email/notification', async (c) => {
   }
 });
 
-// 10. Auth Welcome Email
+// 10. Tapins (Friend Photo Sharing)
+app.get('/tapins/received/:userId', async (c) => {
+  const userId = c.req.param('userId');
+  
+  const { data, error } = await supabase
+    .from('tapins')
+    .select(`
+      *,
+      sender:profiles!sender_id(id, username, full_name, avatar_url)
+    `)
+    .eq('receiver_id', userId)
+    .gt('expires_at', new Date().toISOString())
+    .order('created_at', { ascending: false });
+
+  if (error) return c.json({ error: error.message }, 500);
+  return c.json(data || []);
+});
+
+app.get('/tapins/sent/:userId', async (c) => {
+  const userId = c.req.param('userId');
+  
+  const { data, error } = await supabase
+    .from('tapins')
+    .select(`
+      *,
+      receiver:profiles!receiver_id(id, username, full_name, avatar_url)
+    `)
+    .eq('sender_id', userId)
+    .gt('expires_at', new Date().toISOString())
+    .order('created_at', { ascending: false });
+
+  if (error) return c.json({ error: error.message }, 500);
+  return c.json(data || []);
+});
+
+app.post(
+  '/tapins',
+  zValidator(
+    'json',
+    z.object({
+      sender_id: z.string().uuid(),
+      receiver_id: z.string().uuid(),
+      image_url: z.string().url(),
+      caption: z.string().optional(),
+    })
+  ),
+  async (c) => {
+    const body = c.req.valid('json');
+    
+      const { data: areFriends } = await supabase
+        .from('friends')
+        .select('id')
+        .or(`and(user_id_1.eq.${body.sender_id},user_id_2.eq.${body.receiver_id}),and(user_id_1.eq.${body.receiver_id},user_id_2.eq.${body.sender_id})`)
+        .single();
+      
+      const sortedIds = [body.sender_id, body.receiver_id].sort();
+      const privateRoomName = `private_${sortedIds[0]}_${sortedIds[1]}`;
+      const { data: hasPrivateRoom } = await supabase
+        .from('chat_rooms')
+        .select('id')
+        .eq('type', 'private')
+        .eq('name', privateRoomName)
+        .single();
+      
+      if (!areFriends && !hasPrivateRoom) {
+        return c.json({ error: 'You can only send tapins to friends' }, 403);
+      }
+
+    const { data, error } = await supabase
+      .from('tapins')
+      .insert({
+        sender_id: body.sender_id,
+        receiver_id: body.receiver_id,
+        image_url: body.image_url,
+        caption: body.caption,
+      })
+      .select(`
+        *,
+        sender:profiles!sender_id(id, username, full_name, avatar_url)
+      `)
+      .single();
+
+    if (error) return c.json({ error: error.message }, 400);
+
+    await supabase.from('notifications').insert({
+      user_id: body.receiver_id,
+      type: 'tapin_received',
+      title: 'New Tapin!',
+      content: 'A friend sent you a photo',
+    });
+
+    return c.json(data);
+  }
+);
+
+app.patch('/tapins/:id/view', async (c) => {
+  const id = c.req.param('id');
+  
+  const { data, error } = await supabase
+    .from('tapins')
+    .update({ viewed_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) return c.json({ error: error.message }, 400);
+  return c.json(data);
+});
+
+app.delete('/tapins/:id', async (c) => {
+  const id = c.req.param('id');
+  const userId = c.req.query('userId');
+  
+  const { error } = await supabase
+    .from('tapins')
+    .delete()
+    .eq('id', id)
+    .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`);
+
+  if (error) return c.json({ error: error.message }, 400);
+  return c.json({ success: true });
+});
+
+// 11. Auth Welcome Email
 app.post('/auth/welcome', async (c) => {
   const { email, name } = await c.req.json();
 
