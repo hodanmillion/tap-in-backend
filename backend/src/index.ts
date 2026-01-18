@@ -328,41 +328,30 @@ app.post(
         }
       }
 
-      const { data: existingRooms, error: searchError } = await supabase.rpc('find_nearby_rooms', {
-        lat: latitude,
-        lng: longitude,
-        max_dist_meters: 500,
-      });
+    const { data: existingRooms, error: searchError } = await supabase.rpc('find_nearby_rooms', {
+      lat: latitude,
+      lng: longitude,
+      max_dist_meters: 500,
+    });
 
-      if (searchError) throw searchError;
+    if (searchError) throw searchError;
 
-      if (existingRooms && existingRooms.length > 0) {
-        const nearestRoom = existingRooms[0];
-        
-        const { data: existingMembership } = await supabase
-          .from('room_participants')
-          .select('id')
-          .eq('room_id', nearestRoom.id)
-          .eq('user_id', userId)
-          .single();
+    if (existingRooms && existingRooms.length > 0) {
+      const nearestRoom = existingRooms[0];
+      
+      const { data: existingMembership } = await supabase
+        .from('room_participants')
+        .select('id')
+        .eq('room_id', nearestRoom.id)
+        .eq('user_id', userId)
+        .single();
 
-        if (!existingMembership) {
-          await supabase.from('room_participants').upsert({
-            room_id: nearestRoom.id,
-            user_id: userId,
-            left_at: null,
-          }, { onConflict: 'room_id,user_id' });
-        }
-
-        const dbMs = Date.now() - startTime;
-        c.header('x-db-ms', String(dbMs));
-        c.header('x-total-ms', String(dbMs));
-
-        return c.json({
-          joinedRoomIds: existingMembership ? [] : [nearestRoom.id],
-          activeRoomIds: existingRooms.map((r: any) => r.id),
-          serverTime: new Date().toISOString(),
-        });
+      if (!existingMembership) {
+        await supabase.from('room_participants').upsert({
+          room_id: nearestRoom.id,
+          user_id: userId,
+          left_at: null,
+        }, { onConflict: 'room_id,user_id' });
       }
 
       const dbMs = Date.now() - startTime;
@@ -370,10 +359,41 @@ app.post(
       c.header('x-total-ms', String(dbMs));
 
       return c.json({
-        joinedRoomIds: [],
-        activeRoomIds: [],
+        joinedRoomIds: existingMembership ? [] : [nearestRoom.id],
+        activeRoomIds: existingRooms.map((r: any) => r.id),
         serverTime: new Date().toISOString(),
       });
+    }
+
+    const roomName = address || `Chat Zone (${latitude.toFixed(3)}, ${longitude.toFixed(3)})`;
+    const { data: newRoom, error: createError } = await supabase
+      .from('chat_rooms')
+      .insert({
+        name: roomName,
+        type: 'public',
+        latitude,
+        longitude,
+        radius: 500,
+      })
+      .select()
+      .single();
+
+    if (newRoom) {
+      await supabase.from('room_participants').insert({
+        room_id: newRoom.id,
+        user_id: userId,
+      });
+    }
+
+    const dbMs = Date.now() - startTime;
+    c.header('x-db-ms', String(dbMs));
+    c.header('x-total-ms', String(dbMs));
+
+    return c.json({
+      joinedRoomIds: newRoom ? [newRoom.id] : [],
+      activeRoomIds: newRoom ? [newRoom.id] : [],
+      serverTime: new Date().toISOString(),
+    });
     } catch (err: any) {
       console.error('Sync Error:', err);
       return c.json({ error: err.message }, 500);
