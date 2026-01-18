@@ -331,13 +331,15 @@ app.post(
     const { data: existingRooms, error: searchError } = await supabase.rpc('find_nearby_rooms', {
       lat: latitude,
       lng: longitude,
-      max_dist_meters: 500,
+      max_dist_meters: 1000,
     });
 
     if (searchError) throw searchError;
 
-    if (existingRooms && existingRooms.length > 0) {
-      const nearestRoom = existingRooms[0];
+    const publicRooms = (existingRooms || []).filter((r: any) => r.type === 'public');
+
+    if (publicRooms.length > 0) {
+      const nearestRoom = publicRooms[0];
       
       const { data: existingMembership } = await supabase
         .from('room_participants')
@@ -360,7 +362,7 @@ app.post(
 
       return c.json({
         joinedRoomIds: existingMembership ? [] : [nearestRoom.id],
-        activeRoomIds: existingRooms.map((r: any) => r.id),
+        activeRoomIds: publicRooms.map((r: any) => r.id),
         serverTime: new Date().toISOString(),
       });
     }

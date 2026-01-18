@@ -73,12 +73,12 @@ export default function HomeScreen() {
   const { user } = useAuth();
   const { colorScheme } = useColorScheme();
   const theme = THEME[colorScheme ?? 'dark'];
-  const { location, errorMsg } = useLocation(user?.id);
-  const router = useRouter();
-  const queryClient = useQueryClient();
-  const [isCreating, setIsCreating] = useState(false);
-
-  const { data: notifications } = useQuery({
+    const { location, errorMsg, lastSyncTime } = useLocation(user?.id);
+    const router = useRouter();
+    const queryClient = useQueryClient();
+    const [isCreating, setIsCreating] = useState(false);
+  
+    const { data: notifications } = useQuery({
     queryKey: ['notifications', user?.id],
     queryFn: async () => {
       return apiRequest(`/notifications/${user?.id}`);
@@ -91,20 +91,21 @@ export default function HomeScreen() {
 
   const unreadCount = notifications?.filter((n: any) => !n.is_read).length || 0;
 
-  const {
-    data: nearbyRooms,
-    isLoading,
-    isFetching,
-    isError,
-    error,
-    refetch,
-  } = useQuery({
-    queryKey: [
-      'nearbyRooms',
-      location?.coords.latitude.toFixed(2),
-      location?.coords.longitude.toFixed(2),
-    ],
-    queryFn: async () => {
+    const {
+      data: nearbyRooms,
+      isLoading,
+      isFetching,
+      isError,
+      error,
+      refetch,
+    } = useQuery({
+      queryKey: [
+        'nearbyRooms',
+        location?.coords.latitude.toFixed(2),
+        location?.coords.longitude.toFixed(2),
+        lastSyncTime,
+      ],
+      queryFn: async () => {
       if (!location) return [];
       const { latitude, longitude } = location.coords;
       return apiRequest(`/rooms/nearby?lat=${latitude}&lng=${longitude}`);

@@ -31,6 +31,7 @@ function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
 export function useLocation(userId: string | undefined) {
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [lastSyncTime, setLastSyncTime] = useState<number>(0);
   const lastSyncRef = useRef<LastSyncData | null>(null);
   const appStateRef = useRef(AppState.currentState);
 
@@ -161,11 +162,12 @@ export function useLocation(userId: string | undefined) {
 
       const syncData: LastSyncData = { latitude, longitude, timestamp: now };
       lastSyncRef.current = syncData;
+      setLastSyncTime(now);
       AsyncStorage.setItem(LAST_SYNC_KEY, JSON.stringify(syncData));
     } catch (err) {
       console.error('Failed to sync location and rooms:', err);
     }
   }
 
-  return { location, errorMsg };
+  return { location, errorMsg, lastSyncTime };
 }
