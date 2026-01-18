@@ -1,18 +1,20 @@
-import React, { useMemo, useCallback, memo, useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Modal, Pressable } from 'react-native';
+import React, { useMemo, useCallback, memo, useState, useRef } from 'react';
+import { View, Text, TouchableOpacity, ScrollView, Modal, Pressable, Dimensions, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Image } from 'expo-image';
-import { User, MessageCircle, Heart, UserPlus, Compass, WifiOff, RefreshCw, Users, ChevronRight, Camera, X, Plus, ImageIcon, Send } from 'lucide-react-native';
+import { User, MessageCircle, Heart, UserPlus, Compass, WifiOff, RefreshCw, Users, ChevronRight, Camera, X, Plus, ImageIcon, Send, ChevronLeft } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/context/AuthContext';
 import { useColorScheme } from 'nativewind';
 import { THEME } from '@/lib/theme';
 import { apiRequest } from '@/lib/api';
-import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeIn, FadeInUp, SlideInRight, SlideOutLeft } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 const FriendItemSkeleton = () => (
   <View className="mb-3 flex-row items-center rounded-3xl border border-border/50 bg-card p-4">
@@ -66,51 +68,20 @@ const TapinItem = memo(({ tapin, theme, onPress, index }: { tapin: any; theme: a
   return (
     <Animated.View entering={FadeInDown.delay(index * 60).springify()}>
       <TouchableOpacity onPress={onPress} activeOpacity={0.85} className="items-center mr-3">
-        <View className="relative">
-          {!isViewed ? (
-            <LinearGradient
-              colors={['#ec4899', '#f472b6', '#fb7185']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              className="p-[3px] rounded-[22px] shadow-lg shadow-pink-500/30">
-              <View className="h-[68px] w-[68px] rounded-[20px] overflow-hidden bg-card">
-                {tapin.sender?.avatar_url ? (
-                  <Image
-                    source={{ uri: tapin.sender.avatar_url }}
-                    style={{ width: 68, height: 68 }}
-                    contentFit="cover"
-                  />
-                ) : (
-                  <View className="flex-1 items-center justify-center bg-secondary">
-                    <User size={26} color={theme.primary} />
-                  </View>
-                )}
-              </View>
-            </LinearGradient>
+        <View className={`h-16 w-16 rounded-2xl overflow-hidden ${!isViewed ? 'border-2 border-primary' : 'border border-border/50'}`}>
+          {tapin.sender?.avatar_url ? (
+            <Image
+              source={{ uri: tapin.sender.avatar_url }}
+              style={{ width: 64, height: 64 }}
+              contentFit="cover"
+            />
           ) : (
-            <View className="p-[2px] rounded-[22px] bg-border/50">
-              <View className="h-[68px] w-[68px] rounded-[20px] overflow-hidden bg-card">
-                {tapin.sender?.avatar_url ? (
-                  <Image
-                    source={{ uri: tapin.sender.avatar_url }}
-                    style={{ width: 68, height: 68 }}
-                    contentFit="cover"
-                  />
-                ) : (
-                  <View className="flex-1 items-center justify-center bg-secondary">
-                    <User size={26} color={theme.mutedForeground} />
-                  </View>
-                )}
-              </View>
+            <View className="flex-1 items-center justify-center bg-secondary">
+              <User size={22} color={!isViewed ? theme.primary : theme.mutedForeground} />
             </View>
           )}
-          {!isViewed && (
-              <View className="absolute -bottom-1 -right-1 bg-pink-500 rounded-full p-1 border-2 border-background">
-                <ImageIcon size={10} color="#fff" />
-              </View>
-            )}
         </View>
-        <Text className={`text-[11px] mt-2 text-center w-[72px] ${!isViewed ? 'font-bold text-foreground' : 'font-medium text-muted-foreground'}`} numberOfLines={1}>
+        <Text className={`text-[10px] mt-1.5 text-center w-16 ${!isViewed ? 'font-semibold text-foreground' : 'font-medium text-muted-foreground'}`} numberOfLines={1}>
           {tapin.sender?.full_name?.split(' ')[0] || tapin.sender?.username || 'Friend'}
         </Text>
       </TouchableOpacity>
@@ -124,7 +95,9 @@ export default function FriendsScreen() {
   const theme = THEME[colorScheme ?? 'light'];
   const router = useRouter();
   const queryClient = useQueryClient();
-  const [selectedTapin, setSelectedTapin] = useState<any>(null);
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [currentTapinIndex, setCurrentTapinIndex] = useState(0);
+  const [replyText, setReplyText] = useState('');
 
     const { data: friendsData, isLoading, isError, error, refetch } = useQuery({
       queryKey: ['friends', user?.id],
@@ -160,13 +133,36 @@ export default function FriendsScreen() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tapins'] }),
   });
 
-  const handleTapinPress = (tapin: any) => {
-    setSelectedTapin(tapin);
+  const handleTapinPress = (tapin: any, index: number) => {
+    setCurrentTapinIndex(index);
+    setViewerOpen(true);
     if (!tapin.viewed_at) {
       viewTapinMutation.mutate(tapin.id);
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   };
+
+  const goToNextTapin = () => {
+    if (tapins && currentTapinIndex < tapins.length - 1) {
+      const nextIndex = currentTapinIndex + 1;
+      setCurrentTapinIndex(nextIndex);
+      if (!tapins[nextIndex].viewed_at) {
+        viewTapinMutation.mutate(tapins[nextIndex].id);
+      }
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } else {
+      setViewerOpen(false);
+    }
+  };
+
+  const goToPrevTapin = () => {
+    if (currentTapinIndex > 0) {
+      setCurrentTapinIndex(currentTapinIndex - 1);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+  };
+
+  const currentTapin = tapins?.[currentTapinIndex];
 
   const pendingCount = pendingRequests?.length || 0;
 
@@ -201,17 +197,17 @@ export default function FriendsScreen() {
           </Animated.View>
 
 <Animated.View entering={FadeInDown.delay(25).springify()} className="mb-5">
-              <View className="bg-card/50 border border-border/30 rounded-3xl p-4">
-                <View className="flex-row items-center justify-between mb-4">
+              <View className="bg-card/50 border border-border/30 rounded-2xl p-4">
+                <View className="flex-row items-center justify-between mb-3">
                   <View className="flex-row items-center gap-2">
-                    <View className="h-8 w-8 rounded-xl bg-pink-500/15 items-center justify-center">
-                      <ImageIcon size={16} color="#ec4899" />
+                    <View className="h-7 w-7 rounded-lg bg-primary/15 items-center justify-center">
+                      <ImageIcon size={14} color={theme.primary} />
                     </View>
-                    <Text className="text-sm font-bold text-foreground">Images</Text>
+                    <Text className="text-sm font-semibold text-foreground">Photos</Text>
                   </View>
-                  {tapins && tapins.length > 0 && (
-                    <View className="bg-pink-500/15 px-2.5 py-1 rounded-full">
-                      <Text className="text-[10px] font-bold text-pink-500">{tapins.filter((t: any) => !t.viewed_at).length} NEW</Text>
+                  {tapins && tapins.filter((t: any) => !t.viewed_at).length > 0 && (
+                    <View className="bg-primary/15 px-2 py-0.5 rounded-md">
+                      <Text className="text-[10px] font-bold text-primary">{tapins.filter((t: any) => !t.viewed_at).length} NEW</Text>
                     </View>
                   )}
                 </View>
@@ -220,28 +216,20 @@ export default function FriendsScreen() {
                     onPress={() => router.push('/send-tapin')}
                     activeOpacity={0.8}
                     className="items-center mr-3">
-                    <View className="relative">
-                      <LinearGradient
-                        colors={['#ec4899', '#f472b6', '#fb7185']}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                        className="h-[74px] w-[74px] rounded-[22px] items-center justify-center shadow-xl shadow-pink-500/40">
-                        <View className="h-10 w-10 rounded-xl bg-white/20 items-center justify-center">
-                          <Camera size={22} color="#fff" strokeWidth={2.5} />
-                        </View>
-                      </LinearGradient>
+                    <View className="h-16 w-16 rounded-2xl bg-primary items-center justify-center">
+                      <Camera size={24} color="#fff" strokeWidth={2} />
                     </View>
-                    <Text className="text-[11px] font-bold text-pink-500 mt-2">Send Img</Text>
+                    <Text className="text-[10px] font-semibold text-primary mt-1.5">Send</Text>
                   </TouchableOpacity>
-                  {tapins?.map((tapin: any, index: number) => (
-                    <TapinItem
-                      key={tapin.id}
-                      tapin={tapin}
-                      theme={theme}
-                      onPress={() => handleTapinPress(tapin)}
-                      index={index}
-                    />
-                  ))}
+                    {tapins?.map((tapin: any, index: number) => (
+                      <TapinItem
+                        key={tapin.id}
+                        tapin={tapin}
+                        theme={theme}
+                        onPress={() => handleTapinPress(tapin, index)}
+                        index={index}
+                      />
+                    ))}
                   {(!tapins || tapins.length === 0) && (
                     <View className="items-center justify-center pl-4 pr-8">
                       <Text className="text-xs text-muted-foreground">No tapins yet</Text>
@@ -331,93 +319,140 @@ export default function FriendsScreen() {
         </View>
 
 <Modal
-            visible={!!selectedTapin}
-            animationType="fade"
-            transparent
-            onRequestClose={() => setSelectedTapin(null)}>
-            <Pressable
-              onPress={() => setSelectedTapin(null)}
-              className="flex-1 bg-black items-center justify-center">
-              {selectedTapin && (
-                <Animated.View entering={FadeIn} className="w-full h-full">
-                  <SafeAreaView className="flex-1">
-                    <View className="flex-row items-center px-5 py-4">
-                      <TouchableOpacity
-                        onPress={() => setSelectedTapin(null)}
-                        className="h-11 w-11 rounded-full bg-white/10 items-center justify-center">
-                        <X size={22} color="#fff" />
-                      </TouchableOpacity>
-                      <View className="flex-1 items-center">
-                        <Text className="text-white font-bold text-base">
-                          {selectedTapin.sender?.full_name || selectedTapin.sender?.username}
-                        </Text>
-                        <Text className="text-white/50 text-xs mt-0.5">
-                          {new Date(selectedTapin.created_at).toLocaleDateString('en-US', { 
-                            weekday: 'short',
-                            hour: 'numeric', 
-                            minute: '2-digit'
-                          })}
-                        </Text>
-                      </View>
-                      <View className="h-11 w-11 rounded-full overflow-hidden bg-white/10">
-                        {selectedTapin.sender?.avatar_url ? (
-                          <Image
-                            source={{ uri: selectedTapin.sender.avatar_url }}
-                            style={{ width: 44, height: 44 }}
-                            contentFit="cover"
-                          />
-                        ) : (
-                          <View className="flex-1 items-center justify-center">
-                            <User size={20} color="#fff" />
-                          </View>
-                        )}
-                      </View>
-                    </View>
-
-                    <View className="flex-1 px-4 justify-center">
-                      <View className="aspect-[3/4] w-full rounded-[40px] overflow-hidden bg-neutral-900">
-                        <Image
-                          source={{ uri: selectedTapin.image_url }}
-                          style={{ width: '100%', height: '100%' }}
-                          contentFit="cover"
-                          transition={200}
+        visible={viewerOpen}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setViewerOpen(false)}>
+        <View className="flex-1 bg-black">
+          <SafeAreaView className="flex-1">
+            {currentTapin && (
+              <>
+                <View className="flex-row items-center px-4 py-3">
+                  <TouchableOpacity
+                    onPress={() => setViewerOpen(false)}
+                    className="h-10 w-10 rounded-full bg-white/10 items-center justify-center">
+                    <X size={20} color="#fff" />
+                  </TouchableOpacity>
+                  
+                  {tapins && tapins.length > 1 && (
+                    <View className="flex-1 flex-row items-center justify-center gap-1.5 px-4">
+                      {tapins.map((_: any, idx: number) => (
+                        <View
+                          key={idx}
+                          className={`h-1 flex-1 rounded-full max-w-8 ${
+                            idx === currentTapinIndex ? 'bg-white' : 'bg-white/30'
+                          }`}
                         />
-                        {selectedTapin.caption && (
-                          <View className="absolute bottom-0 left-0 right-0 p-6">
-                            <LinearGradient
-                              colors={['transparent', 'rgba(0,0,0,0.8)']}
-                              className="absolute inset-0"
-                            />
-                            <Text className="text-white text-center text-lg font-semibold relative z-10">
-                              {selectedTapin.caption}
-                            </Text>
-                          </View>
-                        )}
-                      </View>
+                      ))}
                     </View>
+                  )}
+                  
+                  <TouchableOpacity
+                    onPress={() => router.push(`/user/${currentTapin.sender?.id}`)}
+                    className="flex-row items-center gap-2">
+                    <Text className="text-white font-semibold text-sm">
+                      {currentTapin.sender?.full_name?.split(' ')[0] || currentTapin.sender?.username}
+                    </Text>
+                    <View className="h-9 w-9 rounded-full overflow-hidden bg-white/10">
+                      {currentTapin.sender?.avatar_url ? (
+                        <Image
+                          source={{ uri: currentTapin.sender.avatar_url }}
+                          style={{ width: 36, height: 36 }}
+                          contentFit="cover"
+                        />
+                      ) : (
+                        <View className="flex-1 items-center justify-center">
+                          <User size={16} color="#fff" />
+                        </View>
+                      )}
+                    </View>
+                  </TouchableOpacity>
+                </View>
 
-                    <View className="px-6 pb-8 pt-4">
-                      <TouchableOpacity
-                        onPress={() => {
-                          setSelectedTapin(null);
-                          router.push(`/send-tapin?friendId=${selectedTapin.sender.id}`);
-                        }}
-                        activeOpacity={0.9}>
+                <Pressable
+                  onPress={(e) => {
+                    const touchX = e.nativeEvent.locationX;
+                    if (touchX < SCREEN_WIDTH / 3) {
+                      goToPrevTapin();
+                    } else {
+                      goToNextTapin();
+                    }
+                  }}
+                  className="flex-1 px-3">
+                  <View className="flex-1 rounded-3xl overflow-hidden bg-neutral-900">
+                    <Image
+                      source={{ uri: currentTapin.image_url }}
+                      style={{ width: '100%', height: '100%' }}
+                      contentFit="cover"
+                      transition={150}
+                    />
+                    {currentTapin.caption && (
+                      <View className="absolute bottom-0 left-0 right-0 p-5">
                         <LinearGradient
-                          colors={['#fcd34d', '#f59e0b', '#d97706']}
-                          start={{ x: 0, y: 0 }}
-                          end={{ x: 1, y: 1 }}
-                          className="h-14 rounded-full flex-row items-center justify-center gap-2.5">
-                          <Camera size={20} color="#000" strokeWidth={2.5} />
-                          <Text className="text-black font-bold text-base">Send one back</Text>
-                        </LinearGradient>
-                      </TouchableOpacity>
-                    </View>
-                  </SafeAreaView>
-                </Animated.View>
-              )}
-            </Pressable>
-          </Modal>
+                          colors={['transparent', 'rgba(0,0,0,0.8)']}
+                          className="absolute inset-0"
+                        />
+                        <Text className="text-white text-center text-base font-medium relative z-10">
+                          {currentTapin.caption}
+                        </Text>
+                      </View>
+                    )}
+                    
+                    {currentTapinIndex > 0 && (
+                      <View className="absolute left-3 top-1/2 -translate-y-1/2">
+                        <ChevronLeft size={28} color="rgba(255,255,255,0.5)" />
+                      </View>
+                    )}
+                    {tapins && currentTapinIndex < tapins.length - 1 && (
+                      <View className="absolute right-3 top-1/2 -translate-y-1/2">
+                        <ChevronRight size={28} color="rgba(255,255,255,0.5)" />
+                      </View>
+                    )}
+                  </View>
+                </Pressable>
+
+                <View className="px-4 pt-3 pb-2">
+                  <Text className="text-white/40 text-[10px] text-center mb-3">
+                    {new Date(currentTapin.created_at).toLocaleDateString('en-US', { 
+                      weekday: 'short',
+                      hour: 'numeric', 
+                      minute: '2-digit'
+                    })}
+                  </Text>
+                  
+                  <TouchableOpacity
+                    onPress={() => {
+                      setViewerOpen(false);
+                      router.push(`/send-tapin?friendId=${currentTapin.sender.id}`);
+                    }}
+                    activeOpacity={0.9}
+                    className="mb-2">
+                    <LinearGradient
+                      colors={['#8b5cf6', '#7c3aed']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      className="h-12 rounded-2xl flex-row items-center justify-center gap-2">
+                      <Camera size={18} color="#fff" strokeWidth={2.5} />
+                      <Text className="text-white font-bold text-sm">Reply with Photo</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity
+                    onPress={() => {
+                      setViewerOpen(false);
+                      router.push(`/chat/private_${currentTapin.sender.id}`);
+                    }}
+                    activeOpacity={0.8}
+                    className="h-12 rounded-2xl bg-white/10 flex-row items-center justify-center gap-2">
+                    <MessageCircle size={18} color="#fff" />
+                    <Text className="text-white font-semibold text-sm">Message</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+          </SafeAreaView>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
