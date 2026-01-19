@@ -1,0 +1,6 @@
+module Pods_TapInPro {
+  umbrella header "Pods-TapInPro-umbrella.h"
+
+  export *
+  module * { export * }
+}

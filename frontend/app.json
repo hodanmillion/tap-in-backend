@@ -18,7 +18,9 @@
         "backgroundColor": "#1e1b4b"
       }
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.TapIn.myapp",
@@ -77,7 +79,9 @@
           "sounds": [],
           "enableBackgroundRemoteNotifications": true
         }
-      ]
+      ],
+      "expo-font",
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true
