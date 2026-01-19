@@ -7,7 +7,9 @@
  */
 
 // Get the backend URL from environment variables
-const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:3002';
+// Production: https://tap-in-backend.onrender.com (set in eas.json)
+// Development: ngrok URL (set by backend dev:tunnel script)
+const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://tap-in-backend.onrender.com';
 
 /**
  * Simple fetch wrapper for API calls

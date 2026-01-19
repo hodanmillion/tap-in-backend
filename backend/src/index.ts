@@ -1054,6 +1054,68 @@ app.post('/friends/request', async (c) => {
   return c.json(data);
 });
 
+app.get('/tapins/:userId', async (c) => {
+  const userId = c.req.param('userId');
+  
+  const { data, error } = await supabase
+    .from('tapins')
+    .select(`
+      *,
+      sender:profiles!sender_id(id, username, full_name, avatar_url)
+    `)
+    .eq('receiver_id', userId)
+    .is('viewed_at', null)
+    .gt('expires_at', new Date().toISOString())
+    .order('created_at', { ascending: false });
+
+  if (error) return c.json({ error: error.message }, 500);
+  return c.json(data || []);
+});
+
+app.post(
+  '/tapins',
+  zValidator(
+    'json',
+    z.object({
+      sender_id: z.string().uuid(),
+      receiver_id: z.string().uuid(),
+      image_url: z.string().url(),
+      caption: z.string().optional(),
+    })
+  ),
+  async (c) => {
+    const body = c.req.valid('json');
+    
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 24);
+    
+    const { data, error } = await supabase
+      .from('tapins')
+      .insert({
+        sender_id: body.sender_id,
+        receiver_id: body.receiver_id,
+        image_url: body.image_url,
+        caption: body.caption || null,
+        expires_at: expiresAt.toISOString(),
+      })
+      .select()
+      .single();
+
+    if (error) return c.json({ error: error.message }, 400);
+
+    const { data: senderProfile } = await supabase
+      .from('profiles')
+      .select('full_name, username')
+      .eq('id', body.sender_id)
+      .single();
+    
+    const senderName = senderProfile?.full_name || senderProfile?.username || 'Someone';
+    sendPushToUser(body.receiver_id, 'New Photo!', `${senderName} sent you a photo`, { type: 'tapin', tapin_id: data.id });
+
+    return c.json(data);
+  }
+);
+
 app.patch('/tapins/:id/view', async (c) => {
   const id = c.req.param('id');
   

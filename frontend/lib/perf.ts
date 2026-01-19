@@ -10,8 +10,8 @@ export function mark(name: string): void {
   marks[name] = performance.now();
 }
 
-export function measure(name: string, startMark: string, endMark?: string): number {
-  const start = marks[startMark];
+export function measure(name: string, startMark?: string, endMark?: string): number {
+  const start = marks[startMark ?? name] ?? 0;
   const end = endMark ? marks[endMark] : performance.now();
   const duration = end - start;
   return duration;
