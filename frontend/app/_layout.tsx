@@ -1,9 +1,6 @@
 import '@/global.css';
 import { Stack } from 'expo-router';
-import { QueryClient, focusManager } from '@tanstack/react-query';
-import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
-import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { QueryClient, QueryClientProvider, focusManager } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { ChatProvider } from '@/context/ChatContext';
 import { useEffect } from 'react';
@@ -17,14 +14,20 @@ import { useColorScheme } from 'nativewind';
 
 mark(PerfMarks.APP_START);
 
-focusManager.setEventListener((handleFocus) => {
-  const subscription = AppState.addEventListener('change', (state) => {
-    if (Platform.OS !== 'web') {
-      handleFocus(state === 'active');
-    }
-  });
-  return () => subscription.remove();
-});
+try {
+  if (typeof focusManager?.setEventListener === 'function') {
+    focusManager.setEventListener((handleFocus) => {
+      const subscription = AppState.addEventListener('change', (state) => {
+        if (Platform.OS !== 'web') {
+          handleFocus(state === 'active');
+        }
+      });
+      return () => subscription.remove();
+    });
+  }
+} catch (e) {
+  console.warn('Failed to set focus manager:', e);
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -36,20 +39,12 @@ const queryClient = new QueryClient({
       refetchOnReconnect: 'always',
       retry: 2,
       retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
-      networkMode: 'offlineFirst',
     },
     mutations: {
       retry: 1,
       retryDelay: 1000,
-      networkMode: 'offlineFirst',
     },
   },
-});
-
-const asyncStoragePersister = createAsyncStoragePersister({
-  storage: AsyncStorage,
-  key: 'TAPIN_QUERY_CACHE',
-  throttleTime: 1000,
 });
 
 function RootLayoutContent() {
@@ -115,24 +110,13 @@ function RootLayoutContent() {
 export default function RootLayout() {
   return (
     <ErrorBoundary>
-      <PersistQueryClientProvider
-        client={queryClient}
-        persistOptions={{
-          persister: asyncStoragePersister,
-          maxAge: 1000 * 60 * 60 * 24,
-          dehydrateOptions: {
-            shouldDehydrateQuery: (query) => {
-              const key = query.queryKey[0];
-              return key === 'chatMessages' || key === 'chatRooms';
-            },
-          },
-        }}>
+      <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <ChatProvider>
             <RootLayoutContent />
           </ChatProvider>
         </AuthProvider>
-      </PersistQueryClientProvider>
+      </QueryClientProvider>
     </ErrorBoundary>
   );
 }
