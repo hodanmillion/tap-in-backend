@@ -6,13 +6,20 @@ export const PerfMarks = {
 
 const marks: Record<string, number> = {};
 
+function getTimestamp(): number {
+  if (typeof performance !== 'undefined' && typeof performance.now === 'function') {
+    return performance.now();
+  }
+  return Date.now();
+}
+
 export function mark(name: string): void {
-  marks[name] = performance.now();
+  marks[name] = getTimestamp();
 }
 
 export function measure(name: string, startMark?: string, endMark?: string): number {
   const start = marks[startMark ?? name] ?? 0;
-  const end = endMark ? marks[endMark] : performance.now();
+  const end = endMark ? marks[endMark] : getTimestamp();
   const duration = end - start;
   return duration;
 }
