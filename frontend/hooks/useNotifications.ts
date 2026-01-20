@@ -6,15 +6,25 @@ import Constants from 'expo-constants';
 import { useAuth } from '@/context/AuthContext';
 import { apiRequest } from '@/lib/api';
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+let notificationHandlerSet = false;
+
+function setupNotificationHandler() {
+  if (notificationHandlerSet) return;
+  try {
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      }),
+    });
+    notificationHandlerSet = true;
+  } catch (e) {
+    console.warn('Failed to set notification handler:', e);
+  }
+}
 
 export function useNotifications() {
   const { user } = useAuth();
@@ -98,6 +108,8 @@ export function useNotifications() {
   }, [registerForPushNotificationsAsync, savePushTokenToServer]);
 
   useEffect(() => {
+    setupNotificationHandler();
+    
     if (user?.id) {
       requestPermissions();
     }
