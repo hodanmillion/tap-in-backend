@@ -3,31 +3,13 @@ import { Stack } from 'expo-router';
 import { QueryClient, QueryClientProvider, focusManager } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { ChatProvider } from '@/context/ChatContext';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useRouter, useSegments } from 'expo-router';
 import { View, ActivityIndicator, AppState, Platform } from 'react-native';
 import { ErrorBoundary } from './error-boundary';
 import { useLocation } from '@/hooks/useLocation';
 import { useNotifications } from '@/hooks/useNotifications';
-import { mark, measure, PerfMarks } from '@/lib/perf';
 import { useColorScheme } from 'nativewind';
-
-mark(PerfMarks.APP_START);
-
-try {
-  if (typeof focusManager?.setEventListener === 'function') {
-    focusManager.setEventListener((handleFocus) => {
-      const subscription = AppState.addEventListener('change', (state) => {
-        if (Platform.OS !== 'web') {
-          handleFocus(state === 'active');
-        }
-      });
-      return () => subscription.remove();
-    });
-  }
-} catch (e) {
-  console.warn('Failed to set focus manager:', e);
-}
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -52,6 +34,7 @@ function RootLayoutContent() {
   const segments = useSegments();
   const router = useRouter();
   const { setColorScheme } = useColorScheme();
+  const focusManagerSetup = useRef(false);
 
   useNotifications();
 
@@ -59,13 +42,30 @@ function RootLayoutContent() {
     setColorScheme('dark');
   }, []);
 
+  useEffect(() => {
+    if (focusManagerSetup.current) return;
+    focusManagerSetup.current = true;
+
+    try {
+      if (Platform.OS !== 'web' && focusManager && typeof focusManager.setEventListener === 'function') {
+        focusManager.setEventListener((handleFocus) => {
+          if (typeof handleFocus !== 'function') return () => {};
+          const subscription = AppState.addEventListener('change', (state) => {
+            handleFocus(state === 'active');
+          });
+          return () => {
+            try {
+              subscription.remove();
+            } catch {}
+          };
+        });
+      }
+    } catch {}
+  }, []);
+
   useLocation(user?.id);
 
-  useEffect(() => {
-    if (!loading) {
-      measure(PerfMarks.APP_START);
-    }
-  }, [loading]);
+
 
   useEffect(() => {
     if (loading) return;

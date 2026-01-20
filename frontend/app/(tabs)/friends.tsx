@@ -361,7 +361,6 @@ export default function FriendsScreen() {
                 contentContainerStyle={{ paddingBottom: 120 }}
                 onRefresh={refetch}
                 refreshing={false}
-                estimatedItemSize={80}
                 ListEmptyComponent={
                 <Animated.View entering={FadeIn} className="mt-4 items-center justify-center rounded-3xl border border-border/50 bg-card p-8">
                   <View className="h-16 w-16 items-center justify-center rounded-2xl bg-secondary mb-4">

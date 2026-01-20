@@ -249,7 +249,6 @@ export default function HomeScreen() {
                 renderItem={({ item, index }: { item: any; index: number }) => (
                   <RoomItem item={item} theme={theme} index={index} onPress={() => handleRoomPress(item.id)} />
                 )}
-                estimatedItemSize={84}
                 ListEmptyComponent={
                   !isFetching ? (
                       <Animated.View entering={FadeIn} className="items-center justify-center py-32 px-8">

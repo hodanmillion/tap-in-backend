@@ -20,15 +20,15 @@ export default function Index() {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator size="large" color="#3B82F6" />
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#000' }}>
+        <ActivityIndicator size="large" color="#fff" />
       </View>
     );
   }
 
   if (session) {
-    return <Redirect href="/home" />;
+    return <Redirect href="/(tabs)/home" />;
   }
 
-  return <Redirect href="/onboarding" />;
+  return <Redirect href="/(auth)/login" />;
 }

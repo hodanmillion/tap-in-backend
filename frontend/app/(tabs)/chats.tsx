@@ -254,7 +254,6 @@ export default function ChatsScreen() {
               renderItem={renderRoom}
               showsVerticalScrollIndicator={false}
               contentContainerStyle={{ paddingBottom: 120 }}
-              estimatedItemSize={85}
               ListEmptyComponent={
                 !isFetching ? (
                   <Animated.View entering={FadeIn} className="mt-4 items-center justify-center rounded-3xl border border-border/50 bg-card p-8">

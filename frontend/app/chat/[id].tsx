@@ -940,23 +940,21 @@ export default function ChatScreen() {
           className="flex-1"
           keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
             <FlashList
-              data={messagesWithSeparators}
-              inverted
-              keyExtractor={(item) => item.id}
-              contentContainerStyle={{ padding: 16 }}
-              renderItem={renderMessage}
-              showsVerticalScrollIndicator={false}
-              estimatedItemSize={80}
-              onEndReached={loadMoreMessages}
-              onEndReachedThreshold={0.5}
-              ListFooterComponent={
-                loadingMore ? (
-                  <View className="py-4 items-center">
-                    <ActivityIndicator size="small" color={theme.primary} />
-                  </View>
-                ) : null
-              }
-            />
+                data={messagesWithSeparators}
+                keyExtractor={(item) => item.id}
+                contentContainerStyle={{ padding: 16 }}
+                renderItem={renderMessage}
+                showsVerticalScrollIndicator={false}
+                onEndReached={loadMoreMessages}
+                onEndReachedThreshold={0.5}
+                ListFooterComponent={
+                  loadingMore ? (
+                    <View className="py-4 items-center">
+                      <ActivityIndicator size="small" color={theme.primary} />
+                    </View>
+                  ) : null
+                }
+              />
 
 {(isOutOfRange || isExpired || roomNotFound) && room?.type !== 'private' ? (
               <View className="border-t border-border bg-card px-4 py-3">

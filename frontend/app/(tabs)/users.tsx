@@ -275,7 +275,6 @@ export default function UsersScreen() {
               renderItem={renderUser}
               showsVerticalScrollIndicator={false}
               contentContainerStyle={{ paddingBottom: 120 }}
-              estimatedItemSize={80}
               ListEmptyComponent={
                 !isLoading ? (
                   <View className="mt-10 items-center justify-center rounded-[40px] border-2 border-dashed border-border/60 bg-secondary/50 p-12">

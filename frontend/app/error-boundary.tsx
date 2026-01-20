@@ -41,37 +41,39 @@ function sendErrorToIframeParent(error: any, errorInfo?: any) {
   }
 }
 
-if (Platform.OS === 'web' && typeof window !== 'undefined') {
-  window.addEventListener(
-    'error',
-    (event) => {
-      event.preventDefault();
-      const errorDetails = event.error ?? {
-        message: event.message ?? 'Unknown error',
-        filename: event.filename ?? 'Unknown file',
-        lineno: event.lineno ?? 'Unknown line',
-        colno: event.colno ?? 'Unknown column',
-      };
-      sendErrorToIframeParent(errorDetails);
-    },
-    true
-  );
+try {
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    window.addEventListener(
+      'error',
+      (event) => {
+        event.preventDefault();
+        const errorDetails = event.error ?? {
+          message: event.message ?? 'Unknown error',
+          filename: event.filename ?? 'Unknown file',
+          lineno: event.lineno ?? 'Unknown line',
+          colno: event.colno ?? 'Unknown column',
+        };
+        sendErrorToIframeParent(errorDetails);
+      },
+      true
+    );
 
-  window.addEventListener(
-    'unhandledrejection',
-    (event) => {
-      event.preventDefault();
-      sendErrorToIframeParent(event.reason);
-    },
-    true
-  );
+    window.addEventListener(
+      'unhandledrejection',
+      (event) => {
+        event.preventDefault();
+        sendErrorToIframeParent(event.reason);
+      },
+      true
+    );
 
-  const originalConsoleError = console.error;
-  console.error = (...args) => {
-    sendErrorToIframeParent(args.join(' '));
-    originalConsoleError.apply(console, args);
-  };
-}
+    const originalConsoleError = console.error;
+    console.error = (...args) => {
+      sendErrorToIframeParent(args.join(' '));
+      originalConsoleError.apply(console, args);
+    };
+  }
+} catch {}
 
 export class ErrorBoundary extends React.Component<Props, State> {
   constructor(props: Props) {

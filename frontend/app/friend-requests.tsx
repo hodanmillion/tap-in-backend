@@ -124,7 +124,6 @@ export default function FriendRequestsScreen() {
             data={requests || []}
             keyExtractor={(item: any) => item.id}
             renderItem={renderRequest}
-            estimatedItemSize={80}
             showsVerticalScrollIndicator={false}
             onRefresh={refetch}
             refreshing={false}
