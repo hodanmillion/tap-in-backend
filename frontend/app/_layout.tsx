@@ -36,7 +36,13 @@ function RootLayoutContent() {
   const { setColorScheme } = useColorScheme();
   const focusManagerSetup = useRef(false);
 
-  useNotifications();
+  const { requestPermissions } = useNotifications();
+
+  useEffect(() => {
+    if (user?.id && !loading) {
+      requestPermissions();
+    }
+  }, [user?.id, loading]);
 
   useEffect(() => {
     setColorScheme('dark');

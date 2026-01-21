@@ -1,27 +1,42 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Platform } from 'react-native';
-import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import { useAuth } from '@/context/AuthContext';
 import { apiRequest } from '@/lib/api';
 
+type NotificationsModuleType = typeof import('expo-notifications');
+type NotificationSubscription = { remove: () => void };
+
+let NotificationsModule: NotificationsModuleType | null = null;
 let notificationHandlerSet = false;
 
-function setupNotificationHandler() {
-  if (notificationHandlerSet) return;
+async function getNotifications(): Promise<NotificationsModule | null> {
+  if (NotificationsModule) return NotificationsModule;
+  if (Platform.OS === 'web') return null;
   try {
-    Notifications.setNotificationHandler({
-      handleNotification: async () => ({
-        shouldShowAlert: true,
-        shouldPlaySound: true,
-        shouldSetBadge: true,
-        shouldShowBanner: true,
-        shouldShowList: true,
-      }),
-    });
-    notificationHandlerSet = true;
+    NotificationsModule = await import('expo-notifications');
+    return NotificationsModule;
   } catch (e) {
+    console.warn('Failed to load expo-notifications:', e);
+    return null;
+  }
+}
+
+async function setupNotificationHandler() {
+  if (notificationHandlerSet) return;
+  const Notifications = await getNotifications();
+  if (!Notifications) return;
+    try {
+      Notifications.setNotificationHandler({
+        handleNotification: async () => ({
+          shouldShowAlert: true,
+          shouldPlaySound: true,
+          shouldSetBadge: true,
+        }),
+      });
+      notificationHandlerSet = true;
+    } catch (e) {
     console.warn('Failed to set notification handler:', e);
   }
 }
@@ -29,48 +44,52 @@ function setupNotificationHandler() {
 export function useNotifications() {
   const { user } = useAuth();
   const [expoPushToken, setExpoPushToken] = useState<string>('');
-  const [notification, setNotification] = useState<Notifications.Notification | null>(null);
+  const [notification, setNotification] = useState<unknown>(null);
   const [permissionStatus, setPermissionStatus] = useState<string>('undetermined');
-  const notificationListener = useRef<Notifications.Subscription | null>(null);
-  const responseListener = useRef<Notifications.Subscription | null>(null);
+  const notificationListener = useRef<NotificationSubscription | null>(null);
+  const responseListener = useRef<NotificationSubscription | null>(null);
+  const initialized = useRef(false);
 
   const registerForPushNotificationsAsync = useCallback(async () => {
+    const Notifications = await getNotifications();
+    if (!Notifications) return null;
+
     if (!Device.isDevice) {
       console.log('Push notifications are not available on simulator/emulator');
       return null;
     }
 
-    if (Platform.OS === 'android') {
-      await Notifications.setNotificationChannelAsync('default', {
-        name: 'default',
-        importance: Notifications.AndroidImportance.MAX,
-        vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#6366f1',
-      });
-    }
-
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
-    setPermissionStatus(existingStatus);
-
-    if (existingStatus !== 'granted') {
-      const { status } = await Notifications.requestPermissionsAsync();
-      finalStatus = status;
-      setPermissionStatus(status);
-    }
-
-    if (finalStatus !== 'granted') {
-      console.log('Failed to get push token for push notification');
-      return null;
-    }
-
-    const projectId = Constants.expoConfig?.extra?.eas?.projectId;
-    if (!projectId) {
-      console.log('No projectId found in eas config');
-      return null;
-    }
-
     try {
+      if (Platform.OS === 'android') {
+        await Notifications.setNotificationChannelAsync('default', {
+          name: 'default',
+          importance: Notifications.AndroidImportance.MAX,
+          vibrationPattern: [0, 250, 250, 250],
+          lightColor: '#6366f1',
+        });
+      }
+
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
+      setPermissionStatus(existingStatus);
+
+      if (existingStatus !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+        setPermissionStatus(status);
+      }
+
+      if (finalStatus !== 'granted') {
+        console.log('Failed to get push token for push notification');
+        return null;
+      }
+
+      const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+      if (!projectId) {
+        console.log('No projectId found in eas config');
+        return null;
+      }
+
       const token = await Notifications.getExpoPushTokenAsync({
         projectId,
       });
@@ -108,41 +127,68 @@ export function useNotifications() {
   }, [registerForPushNotificationsAsync, savePushTokenToServer]);
 
   useEffect(() => {
-    setupNotificationHandler();
+    if (initialized.current) return;
+    if (Platform.OS === 'web') return;
     
-    if (user?.id) {
-      requestPermissions();
-    }
+    let isMounted = true;
 
-    notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
-      setNotification(notification);
-    });
+    const initNotifications = async () => {
+      try {
+        await setupNotificationHandler();
+        
+        if (!isMounted) return;
 
-    responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
-      const data = response.notification.request.content.data;
-      console.log('Notification response data:', data);
-    });
+        const Notifications = await getNotifications();
+        if (!Notifications || !isMounted) return;
 
-    return () => {
-      if (notificationListener.current) {
-        notificationListener.current.remove();
-      }
-      if (responseListener.current) {
-        responseListener.current.remove();
+        notificationListener.current = Notifications.addNotificationReceivedListener(notif => {
+          if (isMounted) setNotification(notif);
+        });
+
+        responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
+          const data = response.notification.request.content.data;
+          console.log('Notification response data:', data);
+        });
+      } catch (e) {
+        console.warn('Failed to initialize notifications:', e);
       }
     };
-  }, [user?.id, requestPermissions]);
+
+    initNotifications();
+    initialized.current = true;
+
+    return () => {
+      isMounted = false;
+      try {
+        if (notificationListener.current) {
+          notificationListener.current.remove();
+        }
+        if (responseListener.current) {
+          responseListener.current.remove();
+        }
+      } catch (e) {
+        console.warn('Failed to remove notification listeners:', e);
+      }
+    };
+  }, []);
 
   const schedulePushNotification = useCallback(async (title: string, body: string, data?: Record<string, unknown>) => {
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title,
-        body,
-        data: data || {},
-        sound: true,
-      },
-      trigger: null,
-    });
+    const Notifications = await getNotifications();
+    if (!Notifications) return;
+
+    try {
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title,
+          body,
+          data: data || {},
+          sound: true,
+        },
+        trigger: null,
+      });
+    } catch (e) {
+      console.warn('Failed to schedule notification:', e);
+    }
   }, []);
 
   return {
