@@ -12,6 +12,7 @@ import {
   Alert,
   AppState,
   AppStateStatus,
+  FlatList,
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Image } from 'expo-image';
@@ -27,7 +28,9 @@ import {
   X,
   Search,
   ChevronLeft,
+  ChevronRight,
   Camera,
+  User,
 } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
@@ -43,7 +46,7 @@ import { generateUUID, formatDistance } from '@/lib/utils';
 
 const CHAT_RADIUS_METERS = 100;
 const GIPHY_API_KEY = process.env.EXPO_PUBLIC_GIPHY_API_KEY || 'l1WfAFgqA5WupWoMaCaWKB12G54J6LtZ';
-const REALTIME_BUFFER_MS = 50;
+const REALTIME_BUFFER_MS = 100;
 const PROFILE_FETCH_DEBOUNCE_MS = 100;
 
 type Profile = {
@@ -145,8 +148,9 @@ function mergeMessages(
 
   const merged = Array.from(byId.values());
   merged.sort((a, b) => {
-    const timeDiff = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-    if (timeDiff !== 0) return timeDiff;
+    const timeA = new Date(a.created_at).getTime();
+    const timeB = new Date(b.created_at).getTime();
+    if (timeA !== timeB) return timeB - timeA;
     return String(b.id).localeCompare(String(a.id));
   });
 
@@ -172,6 +176,7 @@ export default function ChatScreen() {
   const realtimeFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSeenCreatedAtRef = useRef<string | null>(null);
   const appStateRef = useRef(AppState.currentState);
+  const listRef = useRef<any>(null);
 
   // Restore draft on mount
   useEffect(() => {
@@ -295,7 +300,7 @@ export default function ChatScreen() {
     if (data.type === 'private') {
       const { data: participants } = await supabase
         .from('room_participants')
-        .select('profiles(full_name, username)')
+        .select('profiles(id, full_name, username)')
         .eq('room_id', id)
         .neq('user_id', user?.id)
         .single();
@@ -303,6 +308,7 @@ export default function ChatScreen() {
       setRoom({
         ...data,
         name: otherUser?.full_name || `@${otherUser?.username}` || 'Private Chat',
+        otherUserId: otherUser?.id,
       });
     } else {
       let updatedRoom = { ...data };
@@ -431,10 +437,12 @@ export default function ChatScreen() {
     if (buffer.length === 0) return;
     
     realtimeBufferRef.current = [];
-    const incoming = buffer.map((payload) => payload.new as Message);
+    const incoming = buffer
+      .map((payload) => payload.new as Message)
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
     
     queryClient.setQueryData(['chatMessages', id], (oldData: any) => {
-      if (!oldData) return { messages: incoming, nextCursor: null, hasMore: false };
+      if (!oldData) return { messages: incoming.reverse(), nextCursor: null, hasMore: false };
       const { merged, newSenderIds } = mergeMessages(oldData.messages || [], incoming, senderCacheRef.current);
       if (newSenderIds.length > 0) {
         setTimeout(() => scheduleFetchProfiles(newSenderIds), 0);
@@ -443,10 +451,7 @@ export default function ChatScreen() {
     });
     
     if (incoming.length > 0) {
-      const latestCreatedAt = incoming.reduce((latest, msg) => 
-        new Date(msg.created_at) > new Date(latest) ? msg.created_at : latest,
-        incoming[0].created_at
-      );
+      const latestCreatedAt = incoming[incoming.length - 1].created_at;
       if (!lastSeenCreatedAtRef.current || new Date(latestCreatedAt) > new Date(lastSeenCreatedAtRef.current)) {
         lastSeenCreatedAtRef.current = latestCreatedAt;
       }
@@ -609,11 +614,13 @@ export default function ChatScreen() {
       };
 
       queryClient.setQueryData(['chatMessages', id], (oldData: any) => {
-        if (!oldData) return { messages: [optimisticMessage], nextCursor: null, hasMore: false };
-        return { ...oldData, messages: [optimisticMessage, ...(oldData.messages || [])] };
-      });
+          if (!oldData) return { messages: [optimisticMessage], nextCursor: null, hasMore: false };
+          return { ...oldData, messages: [optimisticMessage, ...(oldData.messages || [])] };
+        });
 
-      if (type === 'text') {
+
+
+        if (type === 'text') {
         setNewMessage('');
         clearDraft(id);
       }
@@ -810,11 +817,32 @@ export default function ChatScreen() {
       title: room?.name || 'Chat',
       headerShown: true,
       headerLeft: () => headerLeftComponent,
+    headerTitle: () => (
+      <TouchableOpacity
+        onPress={() => {
+          if (room?.type === 'private' && room?.otherUserId) {
+            router.push(`/user/${room.otherUserId}`);
+          }
+        }}
+        disabled={room?.type !== 'private' || !room?.otherUserId}
+        style={{ flexDirection: 'row', alignItems: 'center' }}
+        activeOpacity={0.7}
+      >
+        <Text
+          style={{ color: theme.foreground, fontSize: 17, fontWeight: '700' }}
+          numberOfLines={1}>
+          {room?.name || 'Chat'}
+        </Text>
+        {room?.type === 'private' && room?.otherUserId && (
+          <ChevronRight size={14} color={theme.mutedForeground} style={{ marginLeft: 4 }} />
+        )}
+      </TouchableOpacity>
+    ),
       headerStyle: { backgroundColor: theme.background },
       headerTitleStyle: { color: theme.foreground, fontSize: 17, fontWeight: '600' as any },
       headerShadowVisible: false,
     }),
-    [room?.name, headerLeftComponent, theme.background, theme.foreground]
+    [room?.name, room?.type, room?.otherUserId, headerLeftComponent, theme.background, theme.foreground, router]
   );
 
   const messagesWithSeparators = useMemo(() => {
@@ -855,15 +883,36 @@ export default function ChatScreen() {
 
       const isMine = item.sender_id === user?.id;
       return (
-        <View className={`mb-4 flex-row ${isMine ? 'justify-end' : 'justify-start'}`}>
+        <View className={`mb-4 flex-row ${isMine ? 'justify-end' : 'justify-start items-end'}`}>
+          {!isMine && (
+            <TouchableOpacity 
+              onPress={() => router.push(`/user/${item.sender_id}`)}
+              activeOpacity={0.7}
+              className="mr-2 mb-1"
+            >
+              <View className="h-8 w-8 items-center justify-center rounded-full bg-secondary overflow-hidden">
+                {item.sender?.avatar_url ? (
+                  <Image
+                    source={{ uri: item.sender.avatar_url }}
+                    style={{ width: 32, height: 32 }}
+                    contentFit="cover"
+                  />
+                ) : (
+                  <User size={16} color={theme.mutedForeground} />
+                )}
+              </View>
+            </TouchableOpacity>
+          )}
           <View
-            className={`max-w-[80%] rounded-2xl px-4 py-2 ${
+            className={`max-w-[75%] rounded-2xl px-4 py-2 ${
               isMine ? 'rounded-br-none bg-primary' : 'rounded-bl-none bg-secondary/80'
             }`}>
-            {!isMine && (
-              <Text className="mb-1 text-[11px] font-black text-primary uppercase tracking-wider">
-                {item.sender?.full_name || item.sender?.username || 'User'}
-              </Text>
+            {!isMine && room?.type !== 'private' && (
+              <TouchableOpacity onPress={() => router.push(`/user/${item.sender_id}`)}>
+                <Text className="mb-1 text-[11px] font-black text-primary uppercase tracking-wider">
+                  {item.sender?.full_name || item.sender?.username || 'User'}
+                </Text>
+              </TouchableOpacity>
             )}
             {item.type === 'image' ? (
                     <TouchableOpacity onPress={() => setSelectedImage(item.content)} activeOpacity={0.9}>
@@ -939,22 +988,24 @@ export default function ChatScreen() {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           className="flex-1"
           keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
-            <FlashList
-                data={messagesWithSeparators}
-                keyExtractor={(item) => item.id}
-                contentContainerStyle={{ padding: 16 }}
-                renderItem={renderMessage}
-                showsVerticalScrollIndicator={false}
-                onEndReached={loadMoreMessages}
-                onEndReachedThreshold={0.5}
-                ListFooterComponent={
-                  loadingMore ? (
-                    <View className="py-4 items-center">
-                      <ActivityIndicator size="small" color={theme.primary} />
-                    </View>
-                  ) : null
-                }
-              />
+            <FlatList
+                  ref={listRef}
+                  data={messagesWithSeparators}
+                  keyExtractor={(item) => item.id}
+                  contentContainerStyle={{ padding: 16 }}
+                  renderItem={renderMessage}
+                  showsVerticalScrollIndicator={false}
+                  inverted
+                  onEndReached={loadMoreMessages}
+                  onEndReachedThreshold={0.5}
+                  ListFooterComponent={
+                    loadingMore ? (
+                      <View className="py-4 items-center">
+                        <ActivityIndicator size="small" color={theme.primary} />
+                      </View>
+                    ) : null
+                  }
+                />
 
 {(isOutOfRange || isExpired || roomNotFound) && room?.type !== 'private' ? (
               <View className="border-t border-border bg-card px-4 py-3">

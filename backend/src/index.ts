@@ -63,8 +63,17 @@ setInterval(() => {
 const app = new Hono();
 app.use('*', cors());
 
+app.get('/health', (c) => {
+  return c.json({
+    status: 'ok',
+    version: '1.0.2',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development'
+  });
+});
+
 app.get('/', (c) => {
-  return c.text('Tap In API v1.0.1 is Running');
+  return c.text('Tap In API v1.0.2 is Running');
 });
 
 // --- ROUTES ---
@@ -138,16 +147,17 @@ app.get('/profiles/nearby', async (c) => {
     return c.json(filtered);
   });
 
-app.get('/profiles/search', async (c) => {
-  const q = c.req.query('q') || '';
-  const userId = c.req.query('userId');
-
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('*')
-    .or(`username.ilike.%${q}%,full_name.ilike.%${q}%`)
-    .neq('id', userId || '')
-    .limit(20);
+  app.get('/profiles/search', async (c) => {
+    const q = c.req.query('q') || '';
+    const userId = c.req.query('userId');
+  
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .or(`username.ilike.%${q}%,full_name.ilike.%${q}%`)
+      .eq('is_incognito', false)
+      .neq('id', userId || '')
+      .limit(20);
 
   if (error) return c.json({ error: error.message }, 500);
   
@@ -536,6 +546,7 @@ app.post('/rooms/private', async (c) => {
       latitude: 0,
       longitude: 0,
       radius: 0,
+      expires_at: null,
     })
     .select()
     .single();
@@ -643,22 +654,102 @@ app.post(
     
     const client_msg_id = body.client_msg_id || randomUUID();
     
-    const { data, error } = await supabase
-      .from('messages')
-      .insert({
-        room_id: body.room_id,
-        sender_id: body.sender_id,
-        content: body.content,
-        type: body.type,
-        client_msg_id,
-      })
-      .select('id, client_msg_id, room_id, sender_id, content, type, created_at')
-      .single();
+      const { data, error } = await supabase
+          .from('messages')
+          .insert({
+            room_id: body.room_id,
+            sender_id: body.sender_id,
+            content: body.content,
+            type: body.type,
+            client_msg_id,
+          })
+          .select('id, client_msg_id, room_id, sender_id, content, type, created_at')
+          .single();
 
-    if (error) return c.json({ error: error.message }, 400);
-    return c.json(data);
-  }
-);
+        if (error) return c.json({ error: error.message }, 400);
+
+        // Send push notifications to other participants in the room
+        // CRITICAL: We AWAIT this block to ensure reliability on platforms like Render
+        try {
+          console.log(`Push: Handling notifications for room ${body.room_id}, sender ${body.sender_id}`);
+          const { data: participants, error: partError } = await supabase
+            .from('room_participants')
+            .select('user_id')
+            .eq('room_id', body.room_id)
+            .neq('user_id', body.sender_id)
+            .is('left_at', null);
+
+          if (partError) {
+            console.error('Push: Error fetching participants:', partError);
+          } else if (participants && participants.length > 0) {
+            console.log(`Push: Found ${participants.length} participants to notify`);
+
+            const { data: senderProfile } = await supabase
+              .from('profiles')
+              .select('full_name, username')
+              .eq('id', body.sender_id)
+              .single();
+
+            const { data: roomInfo } = await supabase
+              .from('chat_rooms')
+              .select('name, type')
+              .eq('id', body.room_id)
+              .single();
+
+            const senderName = senderProfile?.full_name || senderProfile?.username || 'Someone';
+            const isPrivate = roomInfo?.type === 'private';
+            const messagePreview = body.type === 'image' ? '📷 Photo' : body.type === 'gif' ? '🎬 GIF' : body.content.substring(0, 50);
+
+            const title = isPrivate ? senderName : (roomInfo?.name || 'Chat');
+            const notifBody = isPrivate ? messagePreview : `${senderName}: ${messagePreview}`;
+
+            console.log(`Push: Constructing notifications for ${participants.length} participants`);
+
+            // Process participants in parallel and AWAIT all of them
+            await Promise.all(participants.map(async (participant) => {
+              if (participant.user_id) {
+                try {
+                  console.log(`Push: Sending to user ${participant.user_id}`);
+                  
+                  // 1. Send Push Notification (Already awaited inside)
+                  await sendPushToUser(participant.user_id, title, notifBody, { 
+                    type: 'new_message', 
+                    room_id: body.room_id,
+                    sender_id: body.sender_id
+                  });
+
+                  // 2. Insert into notifications table for in-app Activity tab
+                  const { error: insertError } = await supabase.from('notifications').insert({
+                    user_id: participant.user_id,
+                    type: 'new_message',
+                    title: title,
+                    content: notifBody,
+                    data: {
+                      room_id: body.room_id,
+                      sender_id: body.sender_id
+                    }
+                  });
+                  
+                  if (insertError) {
+                    console.error(`Push: Error inserting in-app notification for ${participant.user_id}:`, insertError);
+                  } else {
+                    console.log(`Push: In-app notification created for ${participant.user_id}`);
+                  }
+                } catch (participantError) {
+                  console.error(`Push: Failed for participant ${participant.user_id}:`, participantError);
+                }
+              }
+            }));
+          } else {
+            console.log('Push: No other active participants to notify');
+          }
+        } catch (err) {
+          console.error('Push: Error in notification block:', err);
+        }
+
+        return c.json(data);
+    }
+  );
 
 // 6. Room Management
 app.get('/rooms/user-rooms', async (c) => {
@@ -752,31 +843,34 @@ app.get('/rooms/user-rooms', async (c) => {
               }
             }
 
-      let displayName = room.name;
-      let otherUserAvatar: string | null = null;
+        let displayName = room.name;
+        let otherUserAvatar: string | null = null;
+        let otherUserId: string | null = null;
 
-      if (room.type === 'private') {
-        const otherParticipant = room.room_participants?.find(
-          (p: any) => p.user_id !== userId
-        );
-        const profile = otherParticipant?.profiles;
-        if (profile) {
-          displayName = profile.full_name || `@${profile.username}` || 'Private Chat';
-          otherUserAvatar = profile.avatar_url;
+        if (room.type === 'private') {
+          const otherParticipant = room.room_participants?.find(
+            (p: any) => p.user_id !== userId
+          );
+          const profile = otherParticipant?.profiles;
+          if (profile) {
+            displayName = profile.full_name || `@${profile.username}` || 'Private Chat';
+            otherUserAvatar = profile.avatar_url;
+            otherUserId = profile.id;
+          }
         }
-      }
 
-      return {
-        id: room.id,
-        name: displayName,
-        type: room.type,
-        latitude: room.latitude,
-        longitude: room.longitude,
-        radius: room.radius,
-        expires_at: room.expires_at,
-        created_at: room.created_at,
-        other_user_avatar: otherUserAvatar,
-        last_message_at: lastMsg?.created_at || null,
+        return {
+          id: room.id,
+          name: displayName,
+          type: room.type,
+          latitude: room.latitude,
+          longitude: room.longitude,
+          radius: room.radius,
+          expires_at: room.expires_at,
+          created_at: room.created_at,
+          other_user_avatar: otherUserAvatar,
+          other_user_id: otherUserId,
+          last_message_at: lastMsg?.created_at || null,
         last_message_preview: lastMsg ? (lastMsg.type === 'text' ? lastMsg.content.substring(0, 50) : `[${lastMsg.type}]`) : null,
         distance: distance !== null ? Math.round(distance) : null,
         is_expired: isExpired,
@@ -977,6 +1071,17 @@ app.post('/notifications/read', async (c) => {
   return c.json({ success: true, updated: notificationIds.length });
 });
 
+app.delete('/notifications/:id', async (c) => {
+  const id = c.req.param('id');
+  const { error } = await supabase
+    .from('notifications')
+    .delete()
+    .eq('id', id);
+
+  if (error) return c.json({ error: error.message }, 400);
+  return c.json({ success: true });
+});
+
 // 8. Friends & Social
 app.get('/friends/:userId', async (c) => {
   const userId = c.req.param('userId');
@@ -1169,6 +1274,22 @@ app.post('/auth/welcome', async (c) => {
   }
 });
 
+app.delete('/auth/delete-account', async (c) => {
+  const { userId } = await c.req.json();
+  
+  if (!userId) {
+    return c.json({ error: 'userId required' }, 400);
+  }
+
+  const { error } = await supabase.auth.admin.deleteUser(userId);
+  
+  if (error) {
+    return c.json({ error: error.message }, 500);
+  }
+
+  return c.json({ success: true });
+});
+
 // 12. Push Tokens (for push notifications)
 app.post(
   '/push-tokens',
@@ -1198,6 +1319,14 @@ app.post(
       .single();
 
     if (error) return c.json({ error: error.message }, 400);
+
+    // Automatically enable push notifications for the user if we successfully registered a token
+    // This ensures notifications work after the user grants OS-level permissions
+    await supabase
+      .from('profiles')
+      .update({ push_notifications_enabled: true })
+      .eq('id', body.user_id);
+
     return c.json(data);
   }
 );
@@ -1227,75 +1356,78 @@ app.get('/push-tokens/:userId', async (c) => {
   return c.json(data || []);
 });
 
-app.post(
-  '/push/send',
-  zValidator(
-    'json',
-    z.object({
-      user_ids: z.array(z.string().uuid()),
-      title: z.string(),
-      body: z.string(),
-      data: z.record(z.any()).optional(),
-    })
-  ),
-  async (c) => {
-    const { user_ids, title, body, data: notificationData } = c.req.valid('json');
+    app.post(
+      '/push/send',
+      zValidator(
+        'json',
+        z.object({
+          user_ids: z.array(z.string().uuid()),
+          title: z.string(),
+          body: z.string(),
+          data: z.record(z.any()).optional(),
+        })
+      ),
+      async (c) => {
+        const { user_ids, title, body, data: notificationData } = c.req.valid('json');
+        console.log(`Debug: Manual push request for users: ${user_ids.join(', ')}`);
 
-    const { data: tokens, error } = await supabase
+        const results = await Promise.all(user_ids.map(async (uid) => {
+          await sendPushToUser(uid, title, body, notificationData);
+          return { user_id: uid, status: 'processed' };
+        }));
+
+        return c.json({ success: true, results });
+      }
+    );
+
+    app.get('/debug/push/:userId', async (c) => {
+      const userId = c.req.param('userId');
+      console.log(`Debug: Triggering test push for user ${userId}`);
+      await sendPushToUser(userId, 'Test Notification', 'If you see this, push notifications are working!');
+      return c.json({ success: true, message: `Push triggered for ${userId}. Check backend logs for Expo response.` });
+    });
+
+async function sendPushToUser(userId: string, title: string, body: string, data?: Record<string, any>) {
+  try {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('push_notifications_enabled')
+      .eq('id', userId)
+      .single();
+
+    if (!profile?.push_notifications_enabled) {
+      console.log('Push: Notifications disabled for user', userId);
+      return;
+    }
+
+    const { data: tokens, error: tokenError } = await supabase
       .from('push_tokens')
       .select('token')
-      .in('user_id', user_ids);
+      .eq('user_id', userId);
 
-    if (error) return c.json({ error: error.message }, 500);
-    if (!tokens || tokens.length === 0) {
-      return c.json({ success: true, sent: 0, message: 'No push tokens found' });
+    if (tokenError) {
+      console.error('Push: Error fetching tokens for user', userId, tokenError);
+      return;
     }
+
+    if (!tokens || tokens.length === 0) {
+      console.log('Push: No tokens found for user', userId);
+      return;
+    }
+
+    console.log(`Push: Sending to ${tokens.length} device(s) for user ${userId}`);
 
     const messages = tokens.map((t) => ({
       to: t.token,
       sound: 'default' as const,
       title,
       body,
-      data: notificationData || {},
+      data: data || {},
+      priority: 'high' as const,
+      channelId: 'default',
     }));
 
-    try {
-      const response = await fetch('https://exp.host/--/api/v2/push/send', {
-        method: 'POST',
-        headers: {
-          'Accept': 'application/json',
-          'Accept-encoding': 'gzip, deflate',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(messages),
-      });
-
-      const result = await response.json();
-      return c.json({ success: true, sent: messages.length, result });
-    } catch (err: any) {
-      return c.json({ error: err.message }, 500);
-    }
-  }
-);
-
-async function sendPushToUser(userId: string, title: string, body: string, data?: Record<string, any>) {
-  const { data: tokens } = await supabase
-    .from('push_tokens')
-    .select('token')
-    .eq('user_id', userId);
-
-  if (!tokens || tokens.length === 0) return;
-
-  const messages = tokens.map((t) => ({
-    to: t.token,
-    sound: 'default' as const,
-    title,
-    body,
-    data: data || {},
-  }));
-
-  try {
-    await fetch('https://exp.host/--/api/v2/push/send', {
+    const response = await fetch('https://exp.host/--/api/v2/push/send', {
       method: 'POST',
       headers: {
         'Accept': 'application/json',
@@ -1304,6 +1436,17 @@ async function sendPushToUser(userId: string, title: string, body: string, data?
       },
       body: JSON.stringify(messages),
     });
+
+    const result = await response.json();
+    console.log('Push: Expo response:', JSON.stringify(result));
+    
+    if (result.data) {
+      result.data.forEach((r: any, i: number) => {
+        if (r.status === 'error') {
+          console.error('Push: Error sending to token', tokens[i].token, r.message);
+        }
+      });
+    }
   } catch (err) {
     console.error('Push notification error:', err);
   }

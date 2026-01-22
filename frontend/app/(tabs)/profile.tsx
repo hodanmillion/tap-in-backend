@@ -7,6 +7,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Share,
+  Linking,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -31,6 +32,8 @@ import {
   MessageSquare,
   Clock,
   Pencil,
+  Linkedin,
+  Instagram,
 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -249,45 +252,81 @@ export default function ProfileScreen() {
               </Text>
             </View>
             
-            {(profile?.occupation || profile?.location_name || profile?.website) && (
-              <View className="rounded-2xl bg-card border border-border/40 p-5 gap-4">
-                {profile?.occupation && (
-                  <View className="flex-row items-center">
-                    <View className="h-10 w-10 items-center justify-center rounded-xl bg-primary/10 mr-4">
-                      <Briefcase size={18} color={theme.primary} />
+              {(profile?.occupation || profile?.location_name || profile?.website || profile?.linkedin_url || profile?.instagram_url) && (
+                <View className="rounded-2xl bg-card border border-border/40 p-5 gap-4">
+                  {profile?.occupation && (
+                    <View className="flex-row items-center">
+                      <View className="h-10 w-10 items-center justify-center rounded-xl bg-primary/10 mr-4">
+                        <Briefcase size={18} color={theme.primary} />
+                      </View>
+                      <View className="flex-1">
+                        <Text className="text-xs text-muted-foreground font-medium">Occupation</Text>
+                        <Text className="text-base font-semibold text-foreground">{profile.occupation}</Text>
+                      </View>
                     </View>
-                    <View className="flex-1">
-                      <Text className="text-xs text-muted-foreground font-medium">Occupation</Text>
-                      <Text className="text-base font-semibold text-foreground">{profile.occupation}</Text>
+                  )}
+                  
+                  {profile?.location_name && (
+                    <View className="flex-row items-center">
+                      <View className="h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10 mr-4">
+                        <MapPin size={18} color="#10b981" />
+                      </View>
+                      <View className="flex-1">
+                        <Text className="text-xs text-muted-foreground font-medium">Location</Text>
+                        <Text className="text-base font-semibold text-foreground" numberOfLines={1}>{profile.location_name}</Text>
+                      </View>
                     </View>
-                  </View>
-                )}
-                
-                {profile?.location_name && (
-                  <View className="flex-row items-center">
-                    <View className="h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10 mr-4">
-                      <MapPin size={18} color="#10b981" />
+                  )}
+                  
+                  {profile?.website && (
+                    <View className="flex-row items-center">
+                      <View className="h-10 w-10 items-center justify-center rounded-xl bg-blue-500/10 mr-4">
+                        <Globe size={18} color="#3b82f6" />
+                      </View>
+                      <View className="flex-1">
+                        <Text className="text-xs text-muted-foreground font-medium">Website</Text>
+                        <Text className="text-base font-semibold text-primary">{profile.website}</Text>
+                      </View>
                     </View>
-                    <View className="flex-1">
-                      <Text className="text-xs text-muted-foreground font-medium">Location</Text>
-                      <Text className="text-base font-semibold text-foreground" numberOfLines={1}>{profile.location_name}</Text>
-                    </View>
-                  </View>
-                )}
-                
-                {profile?.website && (
-                  <View className="flex-row items-center">
-                    <View className="h-10 w-10 items-center justify-center rounded-xl bg-blue-500/10 mr-4">
-                      <Globe size={18} color="#3b82f6" />
-                    </View>
-                    <View className="flex-1">
-                      <Text className="text-xs text-muted-foreground font-medium">Website</Text>
-                      <Text className="text-base font-semibold text-primary">{profile.website}</Text>
-                    </View>
-                  </View>
-                )}
-              </View>
-            )}
+                  )}
+
+                  {profile?.linkedin_url && (
+                    <TouchableOpacity 
+                      onPress={() => {
+                        const url = profile.linkedin_url.startsWith('http') 
+                          ? profile.linkedin_url 
+                          : `https://linkedin.com/in/${profile.linkedin_url.replace(/^@/, '')}`;
+                        Linking.openURL(url);
+                      }}
+                      className="flex-row items-center">
+                      <View className="h-10 w-10 items-center justify-center rounded-xl bg-[#0077B5]/10 mr-4">
+                        <Linkedin size={18} color="#0077B5" />
+                      </View>
+                      <View className="flex-1">
+                        <Text className="text-xs text-muted-foreground font-medium">LinkedIn</Text>
+                        <Text className="text-base font-semibold text-[#0077B5]">{profile.linkedin_url}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  )}
+
+                  {profile?.instagram_url && (
+                    <TouchableOpacity 
+                      onPress={() => {
+                        const username = profile.instagram_url.replace(/^@/, '').replace('instagram.com/', '');
+                        Linking.openURL(`https://instagram.com/${username}`);
+                      }}
+                      className="flex-row items-center">
+                      <View className="h-10 w-10 items-center justify-center rounded-xl bg-[#E4405F]/10 mr-4">
+                        <Instagram size={18} color="#E4405F" />
+                      </View>
+                      <View className="flex-1">
+                        <Text className="text-xs text-muted-foreground font-medium">Instagram</Text>
+                        <Text className="text-base font-semibold text-[#E4405F]">{profile.instagram_url}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
           </Animated.View>
         );
       case 'Activity':

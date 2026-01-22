@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
   import {
     View,
     Text,
@@ -30,23 +30,120 @@ import {
   Bug
 } from 'lucide-react-native';
 import { useAuth } from '@/context/AuthContext';
+import { useNotifications } from '@/hooks/useNotifications';
 import { useColorScheme } from 'nativewind';
 import { THEME } from '@/lib/theme';
 import { supabase } from '@/lib/supabase';
+import { apiRequest } from '@/lib/api';
 import { ErrorBoundary } from '@/app/error-boundary';
 
 function SettingsContent() {
   const { user } = useAuth();
+  const { requestPermissions, schedulePushNotification, permissionStatus } = useNotifications();
   const { colorScheme, toggleColorScheme } = useColorScheme();
   const theme = THEME[colorScheme ?? 'light'];
   const router = useRouter();
   const [loading, setLoading] = useState(false);
 
-    const [notifications, setNotifications] = useState(true);
+    const [notifications, setNotifications] = useState(false);
+    const [notificationsLoading, setNotificationsLoading] = useState(true);
     const [incognito, setIncognito] = useState(false);
+    const [incognitoLoading, setIncognitoLoading] = useState(true);
     const [isPasswordModalVisible, setIsPasswordModalVisible] = useState(false);
     const [passwords, setPasswords] = useState({ newPassword: '', confirmPassword: '' });
     const [updatingPassword, setUpdatingPassword] = useState(false);
+
+    useEffect(() => {
+      if (user?.id) {
+        loadPreferences();
+      }
+    }, [user?.id]);
+
+    async function loadPreferences() {
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('push_notifications_enabled, is_incognito')
+          .eq('id', user?.id)
+          .single();
+        
+        if (!error && data) {
+          setNotifications(data.push_notifications_enabled ?? false);
+          setIncognito(data.is_incognito ?? false);
+        }
+      } catch (err) {
+        console.error('Error loading preferences:', err);
+      } finally {
+        setNotificationsLoading(false);
+        setIncognitoLoading(false);
+      }
+    }
+
+    async function handleNotificationToggle(value: boolean) {
+      if (value) {
+        // When enabling, ensure we have permissions and token
+        const token = await requestPermissions();
+        if (!token) {
+          Alert.alert(
+            'Permissions Needed',
+            'Please enable notifications in your device settings to receive alerts.',
+            [{ text: 'OK' }]
+          );
+          return;
+        }
+      }
+
+      setNotifications(value);
+      try {
+        const { error } = await supabase
+          .from('profiles')
+          .update({ push_notifications_enabled: value })
+          .eq('id', user?.id);
+        
+        if (error) {
+          setNotifications(!value);
+          Alert.alert('Error', 'Failed to update notification preference');
+        }
+      } catch (err) {
+        setNotifications(!value);
+        Alert.alert('Error', 'Failed to update notification preference');
+      }
+    }
+
+    async function handleIncognitoToggle(value: boolean) {
+      setIncognito(value);
+      try {
+        const { error } = await supabase
+          .from('profiles')
+          .update({ is_incognito: value })
+          .eq('id', user?.id);
+        
+        if (error) {
+          setIncognito(!value);
+          Alert.alert('Error', 'Failed to update incognito preference');
+        }
+      } catch (err) {
+        setIncognito(!value);
+        Alert.alert('Error', 'Failed to update incognito preference');
+      }
+    }
+
+    async function handleTestNotification() {
+      if (!notifications) {
+        Alert.alert('Notifications Disabled', 'Please enable notifications first.');
+        return;
+      }
+      
+      try {
+        await schedulePushNotification(
+          'Test Notification 🔔',
+          'This is a test notification from TapIn settings!',
+          { type: 'test' }
+        );
+      } catch (err) {
+        Alert.alert('Error', 'Failed to send test notification');
+      }
+    }
 
     async function handleUpdatePassword() {
       if (!passwords.newPassword || passwords.newPassword !== passwords.confirmPassword) {
@@ -68,9 +165,10 @@ function SettingsContent() {
     async function handleSignOut() {
     setLoading(true);
     const { error } = await supabase.auth.signOut();
-    if (error) Alert.alert('Error', error.message);
-    else router.replace('/(auth)/login');
-    setLoading(false);
+    if (error) {
+      Alert.alert('Error', error.message);
+      setLoading(false);
+    }
   }
 
   const handleDeleteAccount = () => {
@@ -84,11 +182,17 @@ function SettingsContent() {
           style: 'destructive',
           onPress: async () => {
             setLoading(true);
-            // In a real app, you'd call a backend endpoint to delete user data
-            const { error } = await supabase.auth.admin.deleteUser(user?.id || '');
-            if (error) Alert.alert('Error', 'Contact support to delete your account.');
-            else handleSignOut();
-            setLoading(false);
+            try {
+              await apiRequest('/auth/delete-account', {
+                method: 'DELETE',
+                body: JSON.stringify({ userId: user?.id }),
+              });
+              handleSignOut();
+            } catch (error: any) {
+              Alert.alert('Error', error.message || 'Failed to delete account.');
+            } finally {
+              setLoading(false);
+            }
           }
         },
       ]
@@ -188,20 +292,28 @@ function SettingsContent() {
                 switchValue={colorScheme === 'dark'} 
                 onSwitchChange={toggleColorScheme} 
               />
-              <SettingItem 
-                icon={<Bell size={20} color={theme.mutedForeground} />} 
-                label="Notifications" 
-                isSwitch 
-                switchValue={notifications} 
-                onSwitchChange={setNotifications} 
-              />
-              <SettingItem 
-                icon={<EyeOff size={20} color={theme.mutedForeground} />} 
-                label="Incognito Mode" 
-                isSwitch 
-                switchValue={incognito} 
-                onSwitchChange={setIncognito} 
-              />
+                <SettingItem 
+                    icon={<Bell size={20} color={theme.mutedForeground} />} 
+                    label="Push Notifications" 
+                    isSwitch 
+                    switchValue={notifications} 
+                    onSwitchChange={handleNotificationToggle} 
+                  />
+                {notifications && (
+                  <SettingItem 
+                    icon={<Bell size={20} color={theme.primary} />} 
+                    label="Test Push Notification" 
+                    onPress={handleTestNotification}
+                  />
+                )}
+
+                <SettingItem 
+                  icon={<EyeOff size={20} color={theme.mutedForeground} />} 
+                  label="Incognito Mode" 
+                  isSwitch 
+                  switchValue={incognito} 
+                  onSwitchChange={handleIncognitoToggle} 
+                />
               <SettingItem 
                 icon={<Globe size={20} color={theme.mutedForeground} />} 
                 label="Language" 

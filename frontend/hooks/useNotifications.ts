@@ -11,7 +11,7 @@ type NotificationSubscription = { remove: () => void };
 let NotificationsModule: NotificationsModuleType | null = null;
 let notificationHandlerSet = false;
 
-async function getNotifications(): Promise<NotificationsModule | null> {
+async function getNotifications(): Promise<NotificationsModuleType | null> {
   if (NotificationsModule) return NotificationsModule;
   if (Platform.OS === 'web') return null;
   try {
@@ -27,14 +27,16 @@ async function setupNotificationHandler() {
   if (notificationHandlerSet) return;
   const Notifications = await getNotifications();
   if (!Notifications) return;
-    try {
-      Notifications.setNotificationHandler({
-        handleNotification: async () => ({
-          shouldShowAlert: true,
-          shouldPlaySound: true,
-          shouldSetBadge: true,
-        }),
-      });
+      try {
+        Notifications.setNotificationHandler({
+          handleNotification: async () => ({
+            shouldShowAlert: true,
+            shouldPlaySound: true,
+            shouldSetBadge: true,
+            shouldShowBanner: true,
+            shouldShowList: true,
+          }),
+        });
       notificationHandlerSet = true;
     } catch (e) {
     console.warn('Failed to set notification handler:', e);
@@ -112,6 +114,7 @@ export function useNotifications() {
           platform: Platform.OS,
         }),
       });
+      // Optionally update local profile state or refetch profile here if needed
     } catch (error) {
       console.error('Error saving push token:', error);
     }
@@ -141,14 +144,14 @@ export function useNotifications() {
         const Notifications = await getNotifications();
         if (!Notifications || !isMounted) return;
 
-        notificationListener.current = Notifications.addNotificationReceivedListener(notif => {
-          if (isMounted) setNotification(notif);
-        });
+          notificationListener.current = Notifications.addNotificationReceivedListener((notif: unknown) => {
+            if (isMounted) setNotification(notif);
+          });
 
-        responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
-          const data = response.notification.request.content.data;
-          console.log('Notification response data:', data);
-        });
+          responseListener.current = Notifications.addNotificationResponseReceivedListener((response: { notification: { request: { content: { data: unknown } } } }) => {
+            const data = response.notification.request.content.data;
+            console.log('Notification response data:', data);
+          });
       } catch (e) {
         console.warn('Failed to initialize notifications:', e);
       }

@@ -34,7 +34,7 @@
         "ITSAppUsesNonExemptEncryption": false
       },
         "entitlements": {
-          "aps-environment": "development"
+          "aps-environment": "production"
         },
       "runtimeVersion": "1.0.0"
     },
