@@ -15,26 +15,25 @@ import { supabase } from '@/lib/supabase';
 import * as ImagePicker from 'expo-image-picker';
 
 import { 
-  User, 
-  LogOut, 
-  Settings, 
-  Bell, 
-  Shield, 
-  Users, 
-  ChevronRight, 
-  Share2, 
-  Compass, 
-  Heart,
-  Briefcase,
-  MapPin,
-  Globe,
-  Camera,
-  MessageSquare,
-  Clock,
-  Pencil,
-  Linkedin,
-  Instagram,
-} from 'lucide-react-native';
+    User, 
+    LogOut, 
+    Settings, 
+    Bell, 
+    ChevronRight, 
+    Share2, 
+    Compass, 
+    Heart,
+    Briefcase,
+    MapPin,
+    Globe,
+    Camera,
+    MessageSquare,
+    Clock,
+    Pencil,
+    Linkedin,
+    Instagram,
+    BadgeCheck,
+  } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/context/AuthContext';
@@ -414,9 +413,16 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           </View>
           
-          <Text className="mt-5 text-2xl font-black text-foreground text-center">
-            {profile?.full_name || 'Anonymous'}
-          </Text>
+          <View className="flex-row items-center mt-5">
+            <Text className="text-2xl font-black text-foreground text-center">
+              {profile?.full_name || 'Anonymous'}
+            </Text>
+            {user?.email_confirmed_at && (
+              <View className="ml-2">
+                <BadgeCheck size={20} color="#3b82f6" fill="#3b82f61a" />
+              </View>
+            )}
+          </View>
           <Text className="mt-1 text-sm text-muted-foreground font-medium">
             @{profile?.username || 'user'}
           </Text>

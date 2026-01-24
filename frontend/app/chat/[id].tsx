@@ -326,11 +326,21 @@ export default function ChatScreen() {
             latitude: data.latitude,
             longitude: data.longitude,
           });
-          if (reverseGeocode && reverseGeocode.length > 0) {
-            const loc = reverseGeocode[0];
-            const address = loc.street || loc.name || loc.city || 'Nearby Chat';
-            if (address) updatedRoom.name = address;
-          }
+            if (reverseGeocode && reverseGeocode.length > 0) {
+              const loc = reverseGeocode[0];
+              const street = loc.street || loc.name;
+              const streetNumber = loc.streetNumber || '';
+              const city = loc.city || '';
+              
+              let address = 'Nearby Chat';
+              if (street) {
+                address = streetNumber ? `${streetNumber} ${street}` : street;
+              } else if (city) {
+                address = city;
+              }
+              
+              if (address) updatedRoom.name = address;
+            }
         } catch (e) {
           console.log('Header geocode failed', e);
         }
@@ -1025,26 +1035,30 @@ export default function ChatScreen() {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           className="flex-1"
             keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
-              <FlashList
-                    ref={listRef}
-                    data={messagesWithSeparators}
-                    keyExtractor={(item) => item.id}
-                    contentContainerStyle={{ padding: 16 }}
-                      renderItem={renderMessage}
-                      showsVerticalScrollIndicator={false}
-                      // @ts-ignore - FlashList types might conflict with React 19, but inverted is supported
-                      inverted
-                      onEndReached={loadMoreMessages}
-                    onEndReachedThreshold={0.5}
-                    estimatedItemSize={100}
-                    ListFooterComponent={
-                      loadingMore ? (
-                        <View className="py-4 items-center">
-                          <ActivityIndicator size="small" color={theme.primary} />
-                        </View>
-                      ) : null
-                    }
-                  />
+                <FlashList
+                      ref={listRef}
+                      data={messagesWithSeparators}
+                      keyExtractor={(item) => item.id}
+                      contentContainerStyle={{ padding: 16 }}
+                        renderItem={renderMessage}
+                        showsVerticalScrollIndicator={false}
+                        // @ts-ignore - FlashList types might conflict with React 19, but inverted is supported
+                        inverted
+                        onEndReached={loadMoreMessages}
+                      onEndReachedThreshold={0.5}
+                      estimatedItemSize={100}
+                      initialScrollIndex={0}
+                      maintainVisibleContentPosition={{
+                        minIndexForVisible: 0,
+                      }}
+                      ListFooterComponent={
+                        loadingMore ? (
+                          <View className="py-4 items-center">
+                            <ActivityIndicator size="small" color={theme.primary} />
+                          </View>
+                        ) : null
+                      }
+                    />
 
 
 {(isOutOfRange || isExpired || roomNotFound) && room?.type !== 'private' ? (

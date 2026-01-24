@@ -788,7 +788,8 @@ app.post(
           if (partError) {
             console.error('Push: Error fetching participants:', partError);
           } else if (participants && participants.length > 0) {
-            console.log(`Push: Found ${participants.length} participants to notify`);
+            console.log(`Push: Found ${participants.length} participants to notify (excluding sender ${body.sender_id})`);
+            console.log(`Push: Target user IDs: ${participants.map(p => p.user_id).join(', ')}`);
 
             const { data: senderProfile } = await supabase
               .from('profiles')
@@ -1357,55 +1358,104 @@ app.delete('/tapins/:id', async (c) => {
 
     // 11. Auth Callback
     app.get('/auth/callback', async (c) => {
-      const code = c.req.query('code');
+      const queryCode = c.req.query('code');
       const next = c.req.query('next') || '/';
-      const userAgent = c.req.header('user-agent') || '';
-      const isMobile = /iPhone|iPad|iPod|Android/i.test(userAgent);
 
-      if (code) {
-        if (isMobile) {
-          return c.redirect(`tapin://auth/callback?code=${code}&next=${next}`);
-        }
-        
-        return c.html(`
+      // We return an HTML page that handles both query params (PKCE) and hash fragments (Implicit)
+      // This is necessary because Supabase redirects often use hash fragments which are not sent to the server.
+      return c.html(`
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Email Verified - TapIn</title>
+  <title>Verifying - TapIn</title>
 </head>
 <body style="margin: 0; padding: 0; background-color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased;">
   <div style="max-width: 600px; margin: 0 auto; padding: 80px 24px; text-align: center;">
     <div style="display: inline-block; width: 80px; height: 80px; background-color: #000; border-radius: 24px; color: #fff; font-size: 40px; line-height: 80px; font-weight: 900; text-align: center; margin-bottom: 32px; box-shadow: 0 8px 20px rgba(0,0,0,0.12);">T</div>
     
-    <h1 style="font-size: 42px; font-weight: 900; margin: 0 0 16px 0; letter-spacing: -2px; color: #000;">Verified!</h1>
+    <h1 style="font-size: 32px; font-weight: 900; margin: 0 0 16px 0; letter-spacing: -1.5px; color: #000;">Verifying...</h1>
     
-    <p style="font-size: 20px; color: #333; line-height: 1.6; margin-bottom: 48px; font-weight: 500;">
-      Your email is confirmed. You're ready to start connecting with people nearby.
+    <p style="font-size: 18px; color: #333; line-height: 1.6; margin-bottom: 48px; font-weight: 500;">
+      Connecting you to the TapIn app.
     </p>
+
+    <div id="loading" style="margin-bottom: 24px;">
+      <div style="width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #000; border-radius: 50%; display: inline-block; animation: spin 1s linear infinite;"></div>
+    </div>
     
-    <a href="tapin://auth/callback?code=${code}&next=${next}" 
-       style="background-color: #000; color: #fff; padding: 24px 64px; border-radius: 28px; text-decoration: none; font-weight: 900; font-size: 20px; display: inline-block; box-shadow: 8px 8px 0px #000; border: 2px solid #000; transition: all 0.2s ease;">
-      Open TapIn
+    <style>
+      @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+
+    <a id="manual-btn" href="#" style="display: none; background-color: #000; color: #fff; padding: 20px 48px; border-radius: 24px; text-decoration: none; font-weight: 800; font-size: 18px; box-shadow: 8px 8px 0px #000; border: 2px solid #000;">
+      Open TapIn App
     </a>
     
-    <p style="margin-top: 48px; font-size: 15px; color: #888; font-weight: 500;">
-      Redirecting you automatically...
-    </p>
-    
     <script>
-      setTimeout(() => {
-        window.location.href = "tapin://auth/callback?code=${code}&next=${next}";
-      }, 1500);
+      function getParams() {
+        const query = new URLSearchParams(window.location.search);
+        const hashStr = window.location.hash.substring(1);
+        const hash = new URLSearchParams(hashStr);
+        
+        const params = {};
+        
+        // 1. Check for Access Token (Implicit flow / Hash)
+        if (hash.get('access_token')) {
+          params.access_token = hash.get('access_token');
+          params.refresh_token = hash.get('refresh_token');
+          params.type = hash.get('type');
+        }
+        
+        // 2. Check for Code (PKCE flow / Query)
+        if (query.get('code')) {
+          params.code = query.get('code');
+        } else if (hash.get('code')) {
+          params.code = hash.get('code');
+        }
+        
+        // 3. Errors
+        if (query.get('error')) params.error = query.get('error');
+        if (hash.get('error')) params.error = hash.get('error');
+        if (query.get('error_description')) params.error_description = query.get('error_description');
+        if (hash.get('error_description')) params.error_description = hash.get('error_description');
+
+        params.next = query.get('next') || hash.get('next') || '/';
+        return params;
+      }
+
+      function redirectToApp() {
+        const p = getParams();
+        const search = new URLSearchParams();
+        
+        Object.entries(p).forEach(([k, v]) => {
+          if (v) search.append(k, v);
+        });
+        
+        const finalUrl = "tapin://auth/callback?" + search.toString();
+        console.log("Redirecting to:", finalUrl);
+        
+        const btn = document.getElementById('manual-btn');
+        btn.href = finalUrl;
+        btn.style.display = 'inline-block';
+        document.getElementById('loading').style.display = 'none';
+
+        // Attempt automatic redirect
+        window.location.href = finalUrl;
+        
+        // Fallback for some mobile browsers
+        setTimeout(() => {
+          window.location.href = finalUrl;
+        }, 1000);
+      }
+
+      window.onload = redirectToApp;
     </script>
   </div>
 </body>
 </html>
-        `);
-      }
-
-      return c.redirect('tapin://auth/callback?error=No code provided');
+      `);
     });
 
   app.post(

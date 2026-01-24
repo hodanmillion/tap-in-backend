@@ -83,23 +83,20 @@ function RootLayoutContent() {
       if (!inAuthGroup) {
         router.replace('/(auth)/login');
       }
-    } else {
-      // We have a session
-      if (!session.user.email_confirmed_at) {
-        // Strictly enforce email confirmation
-        supabase.auth.signOut();
-        router.replace('/(auth)/login');
-        Alert.alert(
-          'Email Not Verified',
-          'Please confirm your email address before using the app. Check your inbox (and spam) for the link from Supabase.'
-        );
-        return;
-      }
+      } else {
+        // We have a session
+        if (!session.user.email_confirmed_at) {
+          const inVerifyPage = segments[1] === 'verify';
+          if (!inVerifyPage) {
+            router.replace('/(auth)/verify');
+          }
+          return;
+        }
 
-      if (inAuthGroup) {
-        router.replace('/(tabs)/home');
+        if (inAuthGroup && segments[1] !== 'verify') {
+          router.replace('/(tabs)/home');
+        }
       }
-    }
   }, [session, loading, segments]);
 
   if (loading) {
