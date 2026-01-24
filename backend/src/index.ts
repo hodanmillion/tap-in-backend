@@ -65,7 +65,7 @@ app.use('*', cors());
 
 // Authentication Middleware
 app.use('*', async (c, next) => {
-  const publicPaths = ['/health', '/', '/auth/callback', '/auth/welcome'];
+    const publicPaths = ['/health', '/', '/auth/callback', '/auth/welcome', '/auth/signup'];
   if (publicPaths.includes(c.req.path)) {
     return await next();
   }
@@ -1304,6 +1304,102 @@ app.delete('/tapins/:id', async (c) => {
 
       return c.redirect('tapin://auth/callback?error=No code provided');
     });
+
+  app.post(
+    '/auth/signup',
+    zValidator(
+      'json',
+      z.object({
+        email: z.string().email(),
+        password: z.string().min(6),
+        full_name: z.string(),
+        username: z.string(),
+      })
+    ),
+    async (c) => {
+      const { email, password, full_name, username } = c.req.valid('json');
+
+      try {
+        // 1. Create user via Admin API (prevents automatic Supabase email)
+        const { data: userData, error: userError } = await supabase.auth.admin.createUser({
+          email,
+          password,
+          email_confirm: false,
+          user_metadata: { full_name, username },
+        });
+
+        if (userError) {
+          // If user already exists but is unconfirmed, we might want to resend link
+          if (userError.message.includes('already registered')) {
+            // Find user to get ID
+            const { data: existingUser } = await supabase.auth.admin.listUsers();
+            const user = existingUser?.users.find(u => u.email === email);
+            if (user && !user.email_confirmed_at) {
+              // Continue to generate link for unconfirmed user
+            } else {
+              return c.json({ error: 'User already exists' }, 400);
+            }
+          } else {
+            return c.json({ error: userError.message }, 400);
+          }
+        }
+
+        const user = userData.user;
+        if (!user) throw new Error('Failed to create user');
+
+        // 2. Create profile
+        await supabase.from('profiles').upsert({
+          id: user.id,
+          full_name,
+          username,
+        });
+
+        // 3. Generate verification link
+        const redirectTo = process.env.AUTH_REDIRECT_URL || 'tapin://auth/callback';
+        const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+          type: 'signup',
+          email,
+          options: { redirectTo },
+        });
+
+        if (linkError) throw linkError;
+
+        const verificationLink = linkData.properties.action_link;
+
+        // 4. Send custom welcome email via Resend
+        await resend.emails.send({
+          from: 'TapIn <noreply@securim.ca>',
+          to: [email],
+          subject: 'Verify your email for TapIn!',
+          html: `
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px; color: #000;">
+              <div style="text-align: center; margin-bottom: 30px;">
+                <h1 style="font-size: 32px; font-weight: 900; margin: 0; letter-spacing: -1px;">TapIn</h1>
+              </div>
+              <h2 style="font-size: 24px; font-weight: 800; margin-bottom: 20px;">Welcome, ${full_name}!</h2>
+              <p style="font-size: 16px; line-height: 1.6; margin-bottom: 30px; color: #444;">
+                We're thrilled to have you join our community. TapIn is all about connecting with people and conversations happening right around you.
+              </p>
+              <div style="text-align: center; margin: 40px 0;">
+                <a href="${verificationLink}" style="background-color: #000; color: #fff; padding: 18px 36px; border-radius: 16px; text-decoration: none; font-weight: bold; font-size: 16px; display: inline-block; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                  Verify Your Email
+                </a>
+              </div>
+              <p style="font-size: 14px; color: #888; margin-top: 40px; line-height: 1.6;">
+                If the button doesn't work, copy and paste this link into your browser:<br/>
+                <span style="word-break: break-all; color: #0066cc;">${verificationLink}</span>
+              </p>
+            </div>
+          `,
+        });
+
+        return c.json({ success: true, userId: user.id });
+      } catch (err: any) {
+        console.error('Signup error:', err);
+        return c.json({ error: err.message }, 500);
+      }
+    }
+  );
 
   app.post('/auth/welcome', async (c) => {
   const { email, full_name } = await c.req.json();

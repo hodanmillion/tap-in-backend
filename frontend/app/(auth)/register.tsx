@@ -24,54 +24,26 @@ export default function RegisterScreen() {
     setLoading(true);
     try {
       const generatedUsername = email.split('@')[0] + Math.floor(Math.random() * 1000);
-      const {
-            data: { user },
-            error,
-          } = await supabase.auth.signUp({
-            email: email,
-            password: password,
-              options: {
-                data: {
-                  full_name: fullName,
-                  username: generatedUsername,
-                },
-                emailRedirectTo: `${process.env.EXPO_PUBLIC_BACKEND_URL}/auth/callback`,
-              },
-          });
-  
-        if (error) {
-          Alert.alert('Error', error.message);
-        } else if (user) {
-          const { error: profileError } = await apiRequest('/profiles', {
-            method: 'POST',
-            body: JSON.stringify({
-              id: user.id,
-              full_name: fullName,
-              username: generatedUsername,
-            }),
-          });
+      
+      const response = await apiRequest('/auth/signup', {
+        method: 'POST',
+        body: JSON.stringify({
+          email,
+          password,
+          full_name: fullName,
+          username: generatedUsername,
+        }),
+      });
 
-        if (profileError) console.error('Profile creation error:', profileError);
-
-        try {
-          await apiRequest('/auth/welcome', {
-            method: 'POST',
-            body: JSON.stringify({
-              id: user.id,
-              email: email,
-              full_name: fullName,
-            }),
-          });
-        } catch (emailErr) {
-          console.error('Failed to send welcome email:', emailErr);
-        }
-
+      if (response.error) {
+        Alert.alert('Error', response.error);
+      } else {
         Alert.alert('Success', 'Check your email for verification link!');
         router.replace('/(auth)/login');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Registration error:', err);
-      Alert.alert('Error', 'An unexpected error occurred during registration.');
+      Alert.alert('Error', err.message || 'An unexpected error occurred during registration.');
     } finally {
       setLoading(false);
     }
