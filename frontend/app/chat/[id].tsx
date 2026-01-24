@@ -42,7 +42,7 @@ import { useColorScheme } from 'nativewind';
 import { THEME } from '@/lib/theme';
 import * as Haptics from 'expo-haptics';
 import { apiRequest } from '@/lib/api';
-import { generateUUID, formatDistance } from '@/lib/utils';
+import { generateUUID, formatDistance, formatRoomName } from '@/lib/utils';
 
 const CHAT_RADIUS_METERS = 500;
 const GIPHY_API_KEY = process.env.EXPO_PUBLIC_GIPHY_API_KEY || 'l1WfAFgqA5WupWoMaCaWKB12G54J6LtZ';
@@ -832,27 +832,28 @@ export default function ChatScreen() {
       title: room?.name || 'Chat',
       headerShown: true,
       headerLeft: () => headerLeftComponent,
-    headerTitle: () => (
-      <TouchableOpacity
-        onPress={() => {
-          if (room?.type === 'private' && room?.otherUserId) {
-            router.push(`/user/${room.otherUserId}`);
-          }
-        }}
-        disabled={room?.type !== 'private' || !room?.otherUserId}
-        style={{ flexDirection: 'row', alignItems: 'center' }}
-        activeOpacity={0.7}
-      >
-        <Text
-          style={{ color: theme.foreground, fontSize: 17, fontWeight: '700' }}
-          numberOfLines={1}>
-          {room?.name || 'Chat'}
-        </Text>
-        {room?.type === 'private' && room?.otherUserId && (
-          <ChevronRight size={14} color={theme.mutedForeground} style={{ marginLeft: 4 }} />
-        )}
-      </TouchableOpacity>
-    ),
+        headerTitle: () => (
+        <TouchableOpacity
+          onPress={() => {
+            if (room?.type === 'private' && room?.otherUserId) {
+              router.push(`/user/${room.otherUserId}`);
+            }
+          }}
+          disabled={room?.type !== 'private' || !room?.otherUserId}
+          style={{ flexDirection: 'row', alignItems: 'center' }}
+          activeOpacity={0.7}
+        >
+          <Text
+            style={{ color: theme.foreground, fontSize: 17, fontWeight: '700' }}
+            numberOfLines={1}>
+            {formatRoomName(room?.name)}
+          </Text>
+          {room?.type === 'private' && room?.otherUserId && (
+            <ChevronRight size={14} color={theme.mutedForeground} style={{ marginLeft: 4 }} />
+          )}
+        </TouchableOpacity>
+      ),
+
       headerStyle: { backgroundColor: theme.background },
       headerTitleStyle: { color: theme.foreground, fontSize: 17, fontWeight: '600' as any },
       headerShadowVisible: false,

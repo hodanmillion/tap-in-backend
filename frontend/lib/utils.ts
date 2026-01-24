@@ -27,3 +27,26 @@ export function formatDistance(date: Date | string | number): string {
   if (diffDays < 7) return `${diffDays}d ago`;
   return then.toLocaleDateString();
 }
+
+/**
+ * Formats room names to ensure addresses are shown instead of coordinates.
+ * If the name contains coordinates (e.g., "Chat (40.123, -73.456)"), it returns "Nearby Chat".
+ */
+export function formatRoomName(name: string | null | undefined): string {
+  if (!name) return 'Nearby Chat';
+  
+  // Check if name contains coordinates pattern: Chat (number, number)
+  const coordPattern = /Chat\s*\(-?\d+\.\d+,\s*-?\d+\.\d+\)/i;
+  const zonePattern = /Chat\s*Zone\s*\(-?\d+\.\d+,\s*-?\d+\.\d+\)/i;
+  
+  if (coordPattern.test(name) || zonePattern.test(name)) {
+    return 'Nearby Chat';
+  }
+  
+  // Remove "private_" prefix for private rooms if it leaked (should be handled by display logic)
+  if (name.startsWith('private_')) {
+    return 'Private Chat';
+  }
+  
+  return name;
+}

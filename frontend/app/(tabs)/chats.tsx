@@ -13,6 +13,7 @@ import { useColorScheme } from 'nativewind';
 import { THEME } from '@/lib/theme';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import { apiRequest } from '@/lib/api';
+import { formatRoomName } from '@/lib/utils';
 
 const ChatItemSkeleton = () => (
   <View className="mb-3 flex-row items-center rounded-3xl border border-border/50 bg-card p-4">
@@ -66,11 +67,12 @@ const ChatRoomItem = memo(
             )}
           </View>
           <View className="ml-4 flex-1">
-            <View className="flex-row items-center justify-between">
-              <Text className="text-base font-bold text-foreground flex-1 mr-2" numberOfLines={1}>
-                {item.name}
-              </Text>
-              {isReadOnly && (
+              <View className="flex-row items-center justify-between">
+                <Text className="text-base font-bold text-foreground flex-1 mr-2" numberOfLines={1}>
+                  {formatRoomName(item.name)}
+                </Text>
+                {isReadOnly && (
+
                 <View className="flex-row items-center bg-secondary px-2 py-1 rounded-lg">
                   <Lock size={10} color={theme.mutedForeground} />
                   <Text className="ml-1 text-[9px] font-semibold text-muted-foreground" numberOfLines={1}>

@@ -30,6 +30,97 @@ const supabase = createClient<Database>(
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
+function getEmailHtml(fullName: string, verificationLink: string, isWelcome: boolean) {
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Verify your email for TapIn</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased;">
+  <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+    <!-- Header -->
+    <div style="text-align: center; margin-bottom: 40px;">
+      <div style="display: inline-block; width: 60px; height: 60px; background-color: #000; border-radius: 18px; color: #fff; font-size: 32px; line-height: 60px; font-weight: 900; text-align: center; margin-bottom: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">T</div>
+      <h1 style="font-size: 32px; font-weight: 900; margin: 0; letter-spacing: -1.5px; color: #000;">TapIn</h1>
+    </div>
+
+    <!-- Content Card -->
+    <div style="background-color: #ffffff; border: 1.5px solid #000000; border-radius: 32px; padding: 48px 32px; text-align: center; box-shadow: 8px 8px 0px #000000;">
+      <h2 style="font-size: 28px; font-weight: 900; margin: 0 0 16px 0; color: #000; letter-spacing: -0.5px;">
+        ${isWelcome ? `Welcome, ${fullName}!` : `Welcome Back!`}
+      </h2>
+      
+      <p style="font-size: 17px; line-height: 1.6; color: #333; margin: 0 0 32px 0; font-weight: 500;">
+        ${isWelcome 
+          ? "We're thrilled to have you join our community. TapIn is all about connecting with people and conversations happening right around you."
+          : "Please verify your email to jump back into the conversations happening around you."}
+      </p>
+
+      <a href="${verificationLink}" style="display: inline-block; background-color: #000; color: #ffffff; padding: 20px 48px; border-radius: 24px; text-decoration: none; font-weight: 800; font-size: 18px; transition: all 0.2s ease;">
+        Verify Your Email
+      </a>
+
+      <div style="margin-top: 48px; padding-top: 32px; border-top: 1px solid #eeeeee; text-align: left;">
+        <p style="font-size: 13px; color: #888; margin: 0 0 12px 0; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;">
+          Direct Link
+        </p>
+        <div style="background-color: #f5f5f5; padding: 16px; border-radius: 12px; word-break: break-all;">
+          <a href="${verificationLink}" style="font-size: 12px; line-height: 1.5; color: #666; text-decoration: none; font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, monospace;">
+            ${verificationLink}
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick Tip -->
+    <div style="margin-top: 32px; padding: 24px; background-color: #000; border-radius: 24px; color: #fff;">
+      <p style="margin: 0; font-weight: 800; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; color: #aaa; margin-bottom: 8px;">Quick Tip</p>
+      <p style="margin: 0; font-size: 15px; color: #fff; line-height: 1.5; font-weight: 500;">Enable location services in the app to discover rooms and see people nearby!</p>
+    </div>
+
+    <!-- Footer -->
+    <div style="text-align: center; margin-top: 48px;">
+      <p style="font-size: 12px; color: #999; text-transform: uppercase; letter-spacing: 2px; font-weight: 800;">
+        TapIn • Connect Locally
+      </p>
+      <p style="font-size: 11px; color: #bbb; margin-top: 8px; font-weight: 500;">
+        &copy; 2026 TapIn. All rights reserved.<br/>
+        You're receiving this because you signed up for TapIn.
+      </p>
+    </div>
+  </div>
+</body>
+</html>
+  `;
+}
+
+async function sendVerificationEmail(email: string, fullName: string, type: 'signup' | 'welcome' = 'signup') {
+  // Use backend proxy for verification redirect
+  const redirectTo = 'https://tap-in-backend.onrender.com/auth/callback';
+  console.log(`Generating verification link for ${email}, redirecting to ${redirectTo}`);
+  
+  const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+    type: 'signup',
+    email,
+    options: { redirectTo },
+  });
+
+  if (linkError) throw linkError;
+
+  const verificationLink = linkData.properties.action_link;
+  const isWelcome = type === 'welcome';
+
+  return resend.emails.send({
+    from: 'TapIn <noreply@securim.ca>',
+    to: [email],
+    subject: isWelcome ? 'Welcome to TapIn!' : 'Verify your email for TapIn!',
+    html: getEmailHtml(fullName, verificationLink, isWelcome),
+  });
+}
+
 const messageRateLimit = new Map<string, number[]>();
 const RATE_LIMIT_WINDOW_MS = 2000;
 const RATE_LIMIT_MAX_MESSAGES = 5;
@@ -1264,7 +1355,7 @@ app.delete('/tapins/:id', async (c) => {
   return c.json({ success: true });
 });
 
-    // 11. Auth Welcome Email
+    // 11. Auth Callback
     app.get('/auth/callback', async (c) => {
       const code = c.req.query('code');
       const next = c.req.query('next') || '/';
@@ -1272,33 +1363,45 @@ app.delete('/tapins/:id', async (c) => {
       const isMobile = /iPhone|iPad|iPod|Android/i.test(userAgent);
 
       if (code) {
-        // If it's a mobile device, use the deep link
         if (isMobile) {
           return c.redirect(`tapin://auth/callback?code=${code}&next=${next}`);
         }
         
-        // If it's a desktop browser, provide a manual link as well
         return c.html(`
-          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; text-align: center; padding: 60px 20px; color: #000; max-width: 600px; margin: 0 auto;">
-            <h1 style="font-size: 32px; font-weight: 900; margin-bottom: 20px; letter-spacing: -1px;">Email Verified!</h1>
-            <p style="font-size: 18px; color: #444; line-height: 1.6; margin-bottom: 40px;">Your email has been successfully verified. You can now return to the TapIn app to continue.</p>
-            
-            <a href="tapin://auth/callback?code=${code}&next=${next}" 
-               style="background-color: #000; color: #fff; padding: 18px 36px; border-radius: 16px; text-decoration: none; font-weight: bold; font-size: 16px; display: inline-block; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
-              Open TapIn App
-            </a>
-            
-            <p style="margin-top: 30px; font-size: 14px; color: #888;">
-              If the app doesn't open automatically, click the button above.
-            </p>
-            
-            <script>
-              // Try to open the app automatically after a short delay
-              setTimeout(() => {
-                window.location.href = "tapin://auth/callback?code=${code}&next=${next}";
-              }, 500);
-            </script>
-          </div>
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Email Verified - TapIn</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased;">
+  <div style="max-width: 600px; margin: 0 auto; padding: 80px 24px; text-align: center;">
+    <div style="display: inline-block; width: 80px; height: 80px; background-color: #000; border-radius: 24px; color: #fff; font-size: 40px; line-height: 80px; font-weight: 900; text-align: center; margin-bottom: 32px; box-shadow: 0 8px 20px rgba(0,0,0,0.12);">T</div>
+    
+    <h1 style="font-size: 42px; font-weight: 900; margin: 0 0 16px 0; letter-spacing: -2px; color: #000;">Verified!</h1>
+    
+    <p style="font-size: 20px; color: #333; line-height: 1.6; margin-bottom: 48px; font-weight: 500;">
+      Your email is confirmed. You're ready to start connecting with people nearby.
+    </p>
+    
+    <a href="tapin://auth/callback?code=${code}&next=${next}" 
+       style="background-color: #000; color: #fff; padding: 24px 64px; border-radius: 28px; text-decoration: none; font-weight: 900; font-size: 20px; display: inline-block; box-shadow: 8px 8px 0px #000; border: 2px solid #000; transition: all 0.2s ease;">
+      Open TapIn
+    </a>
+    
+    <p style="margin-top: 48px; font-size: 15px; color: #888; font-weight: 500;">
+      Redirecting you automatically...
+    </p>
+    
+    <script>
+      setTimeout(() => {
+        window.location.href = "tapin://auth/callback?code=${code}&next=${next}";
+      }, 1500);
+    </script>
+  </div>
+</body>
+</html>
         `);
       }
 
@@ -1318,9 +1421,9 @@ app.delete('/tapins/:id', async (c) => {
     ),
     async (c) => {
       const { email, password, full_name, username } = c.req.valid('json');
+      console.log(`Signup request for email: ${email}, username: ${username}`);
 
       try {
-        // 1. Create user via Admin API (prevents automatic Supabase email)
         const { data: userData, error: userError } = await supabase.auth.admin.createUser({
           email,
           password,
@@ -1329,13 +1432,17 @@ app.delete('/tapins/:id', async (c) => {
         });
 
         if (userError) {
-          // If user already exists but is unconfirmed, we might want to resend link
           if (userError.message.includes('already registered')) {
-            // Find user to get ID
-            const { data: existingUser } = await supabase.auth.admin.listUsers();
-            const user = existingUser?.users.find(u => u.email === email);
-            if (user && !user.email_confirmed_at) {
-              // Continue to generate link for unconfirmed user
+            const { data: existingUsers } = await supabase.auth.admin.listUsers();
+            const existingUser = existingUsers?.users.find(u => u.email === email);
+            if (existingUser && !existingUser.email_confirmed_at) {
+              const resendResult = await sendVerificationEmail(email, existingUser.user_metadata?.full_name || 'User', 'signup');
+              
+              if (resendResult.error) {
+                return c.json({ success: false, error: resendResult.error.message }, 500);
+              }
+              
+              return c.json({ success: true, userId: existingUser.id, resend: true });
             } else {
               return c.json({ error: 'User already exists' }, 400);
             }
@@ -1347,51 +1454,18 @@ app.delete('/tapins/:id', async (c) => {
         const user = userData.user;
         if (!user) throw new Error('Failed to create user');
 
-        // 2. Create profile
         await supabase.from('profiles').upsert({
           id: user.id,
           full_name,
           username,
+          display_name: full_name || username,
         });
 
-        // 3. Generate verification link
-        const redirectTo = process.env.AUTH_REDIRECT_URL || 'tapin://auth/callback';
-        const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
-          type: 'signup',
-          email,
-          options: { redirectTo },
-        });
+        const resendResult = await sendVerificationEmail(email, full_name, 'signup');
 
-        if (linkError) throw linkError;
-
-        const verificationLink = linkData.properties.action_link;
-
-        // 4. Send custom welcome email via Resend
-        await resend.emails.send({
-          from: 'TapIn <noreply@securim.ca>',
-          to: [email],
-          subject: 'Verify your email for TapIn!',
-          html: `
-            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px; color: #000;">
-              <div style="text-align: center; margin-bottom: 30px;">
-                <h1 style="font-size: 32px; font-weight: 900; margin: 0; letter-spacing: -1px;">TapIn</h1>
-              </div>
-              <h2 style="font-size: 24px; font-weight: 800; margin-bottom: 20px;">Welcome, ${full_name}!</h2>
-              <p style="font-size: 16px; line-height: 1.6; margin-bottom: 30px; color: #444;">
-                We're thrilled to have you join our community. TapIn is all about connecting with people and conversations happening right around you.
-              </p>
-              <div style="text-align: center; margin: 40px 0;">
-                <a href="${verificationLink}" style="background-color: #000; color: #fff; padding: 18px 36px; border-radius: 16px; text-decoration: none; font-weight: bold; font-size: 16px; display: inline-block; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
-                  Verify Your Email
-                </a>
-              </div>
-              <p style="font-size: 14px; color: #888; margin-top: 40px; line-height: 1.6;">
-                If the button doesn't work, copy and paste this link into your browser:<br/>
-                <span style="word-break: break-all; color: #0066cc;">${verificationLink}</span>
-              </p>
-            </div>
-          `,
-        });
+        if (resendResult.error) {
+          return c.json({ success: false, error: resendResult.error.message }, 500);
+        }
 
         return c.json({ success: true, userId: user.id });
       } catch (err: any) {
@@ -1402,82 +1476,26 @@ app.delete('/tapins/:id', async (c) => {
   );
 
   app.post('/auth/welcome', async (c) => {
-  const { email, full_name } = await c.req.json();
+    const { email, full_name } = await c.req.json();
 
-  if (!email) {
-    return c.json({ error: 'Email required' }, 400);
-  }
-
-  console.log(`Generating verification link and sending welcome email to ${email}`);
-
-    try {
-      // Determine the best redirect URL based on environment
-      // We prefer the mobile deep link for native apps, but allow for web testing via env
-      const redirectTo = process.env.AUTH_REDIRECT_URL || 'tapin://auth/callback';
-
-      // Generate the verification link
-      const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
-        type: 'signup',
-        email,
-        options: {
-          redirectTo,
-        },
-      });
-
-    if (linkError) {
-      console.error('Link generation error:', linkError);
-      throw linkError;
+    if (!email) {
+      return c.json({ error: 'Email required' }, 400);
     }
 
-    const verificationLink = linkData.properties.action_link;
+    try {
+      const resendResult = await sendVerificationEmail(email, full_name || 'User', 'welcome');
 
-    const data = await resend.emails.send({
-      from: 'TapIn <noreply@securim.ca>', // Use verified domain from Resend
-      to: [email],
-      subject: 'Verify your email for TapIn!',
-      html: `
-        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px; color: #000;">
-          <div style="text-align: center; margin-bottom: 30px;">
-            <h1 style="font-size: 32px; font-weight: 900; margin: 0; letter-spacing: -1px;">TapIn</h1>
-          </div>
-          
-          <h2 style="font-size: 24px; font-weight: 800; margin-bottom: 20px;">Welcome${full_name ? `, ${full_name}` : ''}!</h2>
-          
-          <p style="font-size: 16px; line-height: 1.6; margin-bottom: 30px; color: #444;">
-            We're thrilled to have you join our community. TapIn is all about connecting with people and conversations happening right around you.
-          </p>
-          
-          <div style="text-align: center; margin: 40px 0;">
-            <a href="${verificationLink}" style="background-color: #000; color: #fff; padding: 18px 36px; border-radius: 16px; text-decoration: none; font-weight: bold; font-size: 16px; display: inline-block; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
-              Verify Your Email
-            </a>
-          </div>
-          
-          <p style="font-size: 14px; color: #888; margin-top: 40px; line-height: 1.6;">
-            If the button doesn't work, copy and paste this link into your browser:<br/>
-            <span style="word-break: break-all; color: #0066cc;">${verificationLink}</span>
-          </p>
-          
-          <div style="margin-top: 50px; padding: 25px; background-color: #f8f9fa; border-radius: 20px; border: 1px solid #eee;">
-            <p style="margin: 0; font-weight: bold; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; color: #666; margin-bottom: 8px;">Quick Tip</p>
-            <p style="margin: 0; font-size: 15px; color: #333; line-height: 1.5;">Enable location services in the app to discover rooms and see people nearby!</p>
-          </div>
-          
-          <div style="text-align: center; margin-top: 60px; border-top: 1px solid #eee; padding-top: 30px;">
-            <p style="font-size: 12px; color: #ccc; text-transform: uppercase; letter-spacing: 2px; font-weight: bold;">
-              TapIn • Connect Locally
-            </p>
-          </div>
-        </div>
-      `,
-    });
-    console.log('Resend response:', data);
-    return c.json({ success: true, data });
-  } catch (err: any) {
-    console.error('Welcome email error:', err);
-    return c.json({ success: false, error: err.message }, 500);
-  }
-});
+      if (resendResult.error) {
+        return c.json({ success: false, error: resendResult.error.message }, 500);
+      }
+
+      return c.json({ success: true, data: resendResult.data });
+    } catch (err: any) {
+      console.error('Welcome email error:', err);
+      return c.json({ success: false, error: err.message }, 500);
+    }
+  });
+
 
 app.delete('/auth/delete-account', async (c) => {
   const { userId } = await c.req.json();

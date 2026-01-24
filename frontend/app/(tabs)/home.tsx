@@ -8,6 +8,7 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiRequest } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
+import { formatRoomName } from '@/lib/utils';
 import { useColorScheme } from 'nativewind';
 import { THEME } from '@/lib/theme';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -47,14 +48,15 @@ const RoomItem = memo(({ item, onPress, theme, index }: { item: any; onPress: ()
           <View className="min-h-[48px] min-w-[48px] items-center justify-center rounded-2xl bg-primary/15 p-3">
             <MapPin size={22} color={theme.primary} strokeWidth={2.5} />
           </View>
-          <View className="ml-3 flex-1 shrink">
-            <Text 
-              className="text-base font-bold text-foreground tracking-tight" 
-              numberOfLines={2}
-              adjustsFontSizeToFit={false}
-              allowFontScaling={true}>
-              {item.name}
-            </Text>
+            <View className="ml-3 flex-1 shrink">
+              <Text 
+                className="text-base font-bold text-foreground tracking-tight" 
+                numberOfLines={2}
+                adjustsFontSizeToFit={false}
+                allowFontScaling={true}>
+                {formatRoomName(item.name)}
+              </Text>
+
             <View className="flex-row items-center gap-1.5 mt-1">
               <View className="h-2 w-2 rounded-full bg-emerald-500" />
               <Text className="text-sm text-primary font-semibold" allowFontScaling={true}>Active</Text>
@@ -135,15 +137,16 @@ export default function HomeScreen() {
     try {
       const { latitude, longitude } = location.coords;
       
-      let address = 'Nearby Chat';
-      try {
-        const reverseGeocode = await Location.reverseGeocodeAsync({ latitude, longitude });
-        if (reverseGeocode && reverseGeocode.length > 0) {
-          const loc = reverseGeocode[0];
-          const parts = [loc.street, loc.name, loc.city].filter(Boolean);
-          address = parts.length > 0 ? parts.join(', ') : `Chat (${latitude.toFixed(3)}, ${longitude.toFixed(3)})`;
-        }
-      } catch {}
+        let address = 'Nearby Chat';
+        try {
+          const reverseGeocode = await Location.reverseGeocodeAsync({ latitude, longitude });
+          if (reverseGeocode && reverseGeocode.length > 0) {
+            const loc = reverseGeocode[0];
+            const parts = [loc.street, loc.name, loc.city].filter(Boolean);
+            address = parts.length > 0 ? parts.join(', ') : 'Nearby Chat';
+          }
+        } catch {}
+
       
       const result = await apiRequest('/rooms/create', {
         method: 'POST',
@@ -157,6 +160,7 @@ export default function HomeScreen() {
       });
       
       queryClient.invalidateQueries({ queryKey: ['nearbyRooms'] });
+      queryClient.invalidateQueries({ queryKey: ['myChatRooms'] });
       
       if (result.room?.id) {
         router.push(`/chat/${result.room.id}`);
