@@ -1277,18 +1277,26 @@ app.delete('/tapins/:id', async (c) => {
           return c.redirect(`tapin://auth/callback?code=${code}&next=${next}`);
         }
         
-        // If it's a desktop browser, we can't use tapin://
-        // For now, let's redirect to a success page or back to the web app if we had the URL
-        // Since we don't know the exact web URL (it could be localhost:8081 or an expo tunnel),
-        // we'll show a simple "Success" message or try to redirect to localhost:8081 as a fallback
+        // If it's a desktop browser, provide a manual link as well
         return c.html(`
-          <div style="font-family: sans-serif; text-align: center; padding: 40px;">
-            <h1>Email Verified!</h1>
-            <p>You can now return to the TapIn app.</p>
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; text-align: center; padding: 60px 20px; color: #000; max-width: 600px; margin: 0 auto;">
+            <h1 style="font-size: 32px; font-weight: 900; margin-bottom: 20px; letter-spacing: -1px;">Email Verified!</h1>
+            <p style="font-size: 18px; color: #444; line-height: 1.6; margin-bottom: 40px;">Your email has been successfully verified. You can now return to the TapIn app to continue.</p>
+            
+            <a href="tapin://auth/callback?code=${code}&next=${next}" 
+               style="background-color: #000; color: #fff; padding: 18px 36px; border-radius: 16px; text-decoration: none; font-weight: bold; font-size: 16px; display: inline-block; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+              Open TapIn App
+            </a>
+            
+            <p style="margin-top: 30px; font-size: 14px; color: #888;">
+              If the app doesn't open automatically, click the button above.
+            </p>
+            
             <script>
-              // Try to open the app automatically
-              window.location.href = "tapin://auth/callback?code=${code}&next=${next}";
-              // If that fails, the user stays on this page
+              // Try to open the app automatically after a short delay
+              setTimeout(() => {
+                window.location.href = "tapin://auth/callback?code=${code}&next=${next}";
+              }, 500);
             </script>
           </div>
         `);
