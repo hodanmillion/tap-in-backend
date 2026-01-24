@@ -29,21 +29,24 @@ const {
         } = await supabase.auth.signUp({
           email: email,
           password: password,
-          options: {
-            data: {
-              full_name: fullName,
+            options: {
+              data: {
+                full_name: fullName,
+              },
+              emailRedirectTo: `${process.env.EXPO_PUBLIC_BACKEND_URL}/auth/callback`,
             },
-            emailRedirectTo: 'tapin://auth/callback',
-          },
         });
 
       if (error) {
         Alert.alert('Error', error.message);
       } else if (user) {
-        const { error: profileError } = await supabase.from('profiles').insert({
-          id: user.id,
-          full_name: fullName,
-          username: email.split('@')[0] + Math.floor(Math.random() * 1000),
+        const { error: profileError } = await apiRequest('/profiles', {
+          method: 'POST',
+          body: JSON.stringify({
+            id: user.id,
+            full_name: fullName,
+            username: email.split('@')[0] + Math.floor(Math.random() * 1000),
+          }),
         });
 
         if (profileError) console.error('Profile creation error:', profileError);

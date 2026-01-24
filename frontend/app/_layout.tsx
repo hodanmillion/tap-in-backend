@@ -5,11 +5,12 @@ import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { ChatProvider } from '@/context/ChatContext';
 import { useEffect, useRef } from 'react';
 import { useRouter, useSegments } from 'expo-router';
-import { View, ActivityIndicator, AppState, Platform } from 'react-native';
+import { View, ActivityIndicator, AppState, Platform, Alert } from 'react-native';
 import { ErrorBoundary } from './error-boundary';
 import { useLocation } from '@/hooks/useLocation';
 import { useNotifications } from '@/hooks/useNotifications';
 import { useColorScheme } from 'nativewind';
+import { supabase } from '@/lib/supabase';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -73,15 +74,31 @@ function RootLayoutContent() {
 
 
 
-  useEffect(() => {
+    useEffect(() => {
     if (loading) return;
 
     const inAuthGroup = segments[0] === '(auth)';
 
-    if (!session && !inAuthGroup) {
-      router.replace('/(auth)/login');
-    } else if (session && inAuthGroup) {
-      router.replace('/(tabs)/home');
+    if (!session) {
+      if (!inAuthGroup) {
+        router.replace('/(auth)/login');
+      }
+    } else {
+      // We have a session
+      if (!session.user.email_confirmed_at) {
+        // Strictly enforce email confirmation
+        supabase.auth.signOut();
+        router.replace('/(auth)/login');
+        Alert.alert(
+          'Email Not Verified',
+          'Please confirm your email address before using the app. Check your inbox (and spam) for the link from Supabase.'
+        );
+        return;
+      }
+
+      if (inAuthGroup) {
+        router.replace('/(tabs)/home');
+      }
     }
   }, [session, loading, segments]);
 

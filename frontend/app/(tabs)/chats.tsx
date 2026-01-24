@@ -150,20 +150,16 @@ export default function ChatsScreen() {
     refetchOnMount: 'always',
   });
 
-  const rooms = useMemo(() => {
-    if (!roomsData) return [];
-    const seen = new Map<string, any>();
-    for (const room of roomsData) {
-      if (!seen.has(room.id)) {
-        seen.set(room.id, room);
+    const rooms = useMemo(() => {
+      if (!roomsData) return [];
+      const seen = new Map<string, any>();
+      for (const room of roomsData) {
+        if (!seen.has(room.id)) {
+          seen.set(room.id, room);
+        }
       }
-    }
-    return Array.from(seen.values()).filter((r) => {
-      if (r.is_expired) return false;
-      if (r.type === 'private') return true;
-      return !r.is_currently_in_zone;
-    });
-  }, [roomsData]);
+      return Array.from(seen.values()).filter((r) => !r.is_expired);
+    }, [roomsData]);
 
   const throttledInvalidate = useCallback(() => {
     if (invalidationThrottleRef.current) return;
@@ -233,39 +229,39 @@ export default function ChatsScreen() {
               <View>
                   <Text className="text-3xl font-black tracking-tight text-foreground">Messages</Text>
                   <Text className="mt-2 text-sm font-medium text-muted-foreground">
-                    Chats from zones you've left
+                    All your active and past conversations
                   </Text>
                 </View>
             </View>
           </Animated.View>
-  
-        {isLoading ? (
-          <View className="flex-1">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <ChatItemSkeleton key={i} />
-            ))}
-          </View>
-        ) : (
-            <FlashList
-              data={rooms}
-              keyExtractor={(item) => item.id}
-              onRefresh={refetch}
-              refreshing={isFetching}
-              renderItem={renderRoom}
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingBottom: 120 }}
-              ListEmptyComponent={
-                !isFetching ? (
-                  <Animated.View entering={FadeIn} className="mt-4 items-center justify-center rounded-3xl border border-border/50 bg-card p-8">
-                      <View className="h-16 w-16 items-center justify-center rounded-2xl bg-secondary mb-4">
-                        <MessageSquare size={28} color={theme.mutedForeground} />
-                      </View>
-                      <Text className="text-center text-xl font-bold text-foreground">
-                        No old chats
-                      </Text>
-                      <Text className="mt-2 text-center text-sm text-muted-foreground px-4">
-                        When you leave a zone, those chats will appear here
-                      </Text>
+    
+          {isLoading ? (
+            <View className="flex-1">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <ChatItemSkeleton key={i} />
+              ))}
+            </View>
+          ) : (
+              <FlashList
+                data={rooms}
+                keyExtractor={(item) => item.id}
+                onRefresh={refetch}
+                refreshing={isFetching}
+                renderItem={renderRoom}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: 120 }}
+                ListEmptyComponent={
+                  !isFetching ? (
+                    <Animated.View entering={FadeIn} className="mt-4 items-center justify-center rounded-3xl border border-border/50 bg-card p-8">
+                        <View className="h-16 w-16 items-center justify-center rounded-2xl bg-secondary mb-4">
+                          <MessageSquare size={28} color={theme.mutedForeground} />
+                        </View>
+                        <Text className="text-center text-xl font-bold text-foreground">
+                          No messages yet
+                        </Text>
+                        <Text className="mt-2 text-center text-sm text-muted-foreground px-4">
+                          Join a zone or start a private chat to see messages here
+                        </Text>
                       <TouchableOpacity
                         onPress={() => router.push('/home')}
                         activeOpacity={0.8}

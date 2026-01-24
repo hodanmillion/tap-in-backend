@@ -44,7 +44,7 @@ import * as Haptics from 'expo-haptics';
 import { apiRequest } from '@/lib/api';
 import { generateUUID, formatDistance } from '@/lib/utils';
 
-const CHAT_RADIUS_METERS = 100;
+const CHAT_RADIUS_METERS = 500;
 const GIPHY_API_KEY = process.env.EXPO_PUBLIC_GIPHY_API_KEY || 'l1WfAFgqA5WupWoMaCaWKB12G54J6LtZ';
 const REALTIME_BUFFER_MS = 100;
 const PROFILE_FETCH_DEBOUNCE_MS = 100;
@@ -167,6 +167,7 @@ export default function ChatScreen() {
   const [id, setId] = useState<string | null>(null);
   const [newMessage, setNewMessage] = useState('');
   const [isResolvingId, setIsResolvingId] = useState(true);
+  const [resolutionError, setResolutionError] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   const senderCacheRef = useRef<Map<string, Profile>>(new Map());
@@ -210,9 +211,10 @@ export default function ChatScreen() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
 
-  const { location } = useLocation(user?.id);
+    const { location, locationRef } = useLocation(user?.id);
 
   const { data: messagesData, isLoading: messagesLoading, refetch: refetchMessages } = useQuery({
+
     queryKey: ['chatMessages', id],
     queryFn: async () => {
       if (!id) return { messages: [], nextCursor: null, hasMore: false };
@@ -249,23 +251,29 @@ export default function ChatScreen() {
     if (!user) return;
     setIsResolvingId(true);
 
-    if (typeof initialId === 'string' && initialId.startsWith('private_')) {
-      const friendId = initialId.replace('private_', '');
-      try {
+    try {
+      if (typeof initialId === 'string' && initialId.startsWith('private_')) {
+        const friendId = initialId.replace('private_', '');
         const data = await apiRequest('/rooms/private', {
           method: 'POST',
           body: JSON.stringify({ user1_id: user.id, user2_id: friendId }),
         });
-        if (data.room_id) {
+        if (data && data.room_id) {
           setId(data.room_id);
+        } else {
+          setResolutionError('Could not create private room');
         }
-      } catch (error) {
-        console.error('Error resolving private room:', error);
+      } else if (initialId) {
+        setId(initialId as string);
+      } else {
+        setResolutionError('No chat ID provided');
       }
-    } else {
-      setId(initialId as string);
+    } catch (error: any) {
+      console.error('Error resolving private room:', error);
+      setResolutionError(error.message || 'Failed to connect to chat');
+    } finally {
+      setIsResolvingId(false);
     }
-    setIsResolvingId(false);
   }, [initialId, user]);
 
   useEffect(() => {
@@ -543,11 +551,16 @@ export default function ChatScreen() {
         room.longitude
       );
       const radius = room.radius || CHAT_RADIUS_METERS;
-      setIsOutOfRange(distance > radius);
+      const newIsOutOfRange = distance > radius;
+      
+      // Only update state if it actually changes to prevent redundant renders
+      setIsOutOfRange((prev) => (prev !== newIsOutOfRange ? newIsOutOfRange : prev));
+      
       if (room.expires_at) {
         const now = new Date();
         const expires = new Date(room.expires_at);
-        setIsExpired(now > expires);
+        const newIsExpired = now > expires;
+        setIsExpired((prev) => (prev !== newIsExpired ? newIsExpired : prev));
       }
     }
   }, [room, location]);
@@ -625,19 +638,21 @@ export default function ChatScreen() {
         clearDraft(id);
       }
 
-      try {
-        const data = await apiRequest('/messages', {
-          method: 'POST',
-          body: JSON.stringify({
-            room_id: id,
-            sender_id: user.id,
-            content: finalContent,
-            type: type,
-            client_msg_id,
-            sender_lat: location?.coords.latitude,
-            sender_lng: location?.coords.longitude,
-          }),
-        });
+        try {
+          const loc = locationRef.current;
+          const data = await apiRequest('/messages', {
+            method: 'POST',
+            body: JSON.stringify({
+              room_id: id,
+              sender_id: user.id,
+              content: finalContent,
+              type: type,
+              client_msg_id,
+              sender_lat: loc?.coords.latitude,
+              sender_lng: loc?.coords.longitude,
+            }),
+          });
+
 
         if (!data || data.error) {
           throw new Error(data?.message || data?.error || 'Failed to send');
@@ -684,7 +699,7 @@ export default function ChatScreen() {
         }
       }
     },
-    [id, user, newMessage, roomNotFound, isExpired, isOutOfRange, room?.type, isResolvingId, clearDraft, setDraft, queryClient, location?.coords]
+    [id, user, newMessage, roomNotFound, isExpired, isOutOfRange, room?.type, isResolvingId, clearDraft, setDraft, queryClient]
   );
 
   const pickImage = useCallback(async () => {
@@ -963,6 +978,27 @@ export default function ChatScreen() {
     [user?.id, theme.primary]
   );
 
+  if (resolutionError) {
+    return (
+      <View className="flex-1 items-center justify-center bg-background px-6">
+        <Stack.Screen options={defaultHeaderOptions} />
+        <View className="h-20 w-20 items-center justify-center rounded-3xl bg-red-500/10 mb-6">
+          <X size={40} color="#ef4444" strokeWidth={2.5} />
+        </View>
+        <Text className="text-xl font-bold text-foreground text-center">Chat Unavailable</Text>
+        <Text className="mt-2 text-center text-muted-foreground mb-8">{resolutionError}</Text>
+        <TouchableOpacity
+          onPress={() => {
+            setResolutionError(null);
+            resolveRoomId();
+          }}
+          className="bg-primary px-8 py-3.5 rounded-2xl shadow-sm">
+          <Text className="font-bold text-primary-foreground text-base">Try Again</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   if (initialLoading) {
     return (
       <View className="flex-1 bg-background">
@@ -987,25 +1023,28 @@ export default function ChatScreen() {
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           className="flex-1"
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
-            <FlatList
-                  ref={listRef}
-                  data={messagesWithSeparators}
-                  keyExtractor={(item) => item.id}
-                  contentContainerStyle={{ padding: 16 }}
-                  renderItem={renderMessage}
-                  showsVerticalScrollIndicator={false}
-                  inverted
-                  onEndReached={loadMoreMessages}
-                  onEndReachedThreshold={0.5}
-                  ListFooterComponent={
-                    loadingMore ? (
-                      <View className="py-4 items-center">
-                        <ActivityIndicator size="small" color={theme.primary} />
-                      </View>
-                    ) : null
-                  }
-                />
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
+              <FlashList
+                    ref={listRef}
+                    data={messagesWithSeparators}
+                    keyExtractor={(item) => item.id}
+                    contentContainerStyle={{ padding: 16 }}
+                      renderItem={renderMessage}
+                      showsVerticalScrollIndicator={false}
+                      // @ts-ignore - FlashList types might conflict with React 19, but inverted is supported
+                      inverted
+                      onEndReached={loadMoreMessages}
+                    onEndReachedThreshold={0.5}
+                    estimatedItemSize={100}
+                    ListFooterComponent={
+                      loadingMore ? (
+                        <View className="py-4 items-center">
+                          <ActivityIndicator size="small" color={theme.primary} />
+                        </View>
+                      ) : null
+                    }
+                  />
+
 
 {(isOutOfRange || isExpired || roomNotFound) && room?.type !== 'private' ? (
               <View className="border-t border-border bg-card px-4 py-3">

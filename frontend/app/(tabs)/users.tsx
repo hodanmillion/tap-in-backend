@@ -78,9 +78,10 @@ export default function UsersScreen() {
       queryKey: ['userSearch', debouncedQuery],
       queryFn: async () => {
         if (!debouncedQuery || !user?.id) return [];
-        return apiRequest(
-          `/profiles/search?q=${encodeURIComponent(debouncedQuery)}&userId=${user.id}`
-        );
+        const lat = location?.coords.latitude;
+        const lng = location?.coords.longitude;
+        const url = `/profiles/search?q=${encodeURIComponent(debouncedQuery)}&userId=${user.id}${lat ? `&lat=${lat}&lng=${lng}&radius=10000` : ''}`;
+        return apiRequest(url);
       },
     enabled: !!debouncedQuery && !!user?.id,
     staleTime: 30000,

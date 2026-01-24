@@ -18,16 +18,26 @@ export default function LoginScreen() {
   const { colorScheme } = useColorScheme();
   const theme = THEME[colorScheme ?? 'light'];
 
-  async function signInWithEmail() {
-    setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({
-      email: email,
-      password: password,
-    });
+    async function signInWithEmail() {
+      setLoading(true);
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email,
+        password: password,
+      });
 
-    if (error) Alert.alert('Error', error.message);
-    setLoading(false);
-  }
+      if (error) {
+        Alert.alert('Error', error.message);
+      } else if (data.user && !data.user.email_confirmed_at) {
+        // Supabase sometimes creates a session even if unconfirmed depending on settings
+        // If we want to strictly enforce it in the app:
+        await supabase.auth.signOut();
+        Alert.alert(
+          'Verification Required',
+          'Please verify your email address before signing in. Check your inbox for the confirmation link.'
+        );
+      }
+      setLoading(false);
+    }
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top']}>

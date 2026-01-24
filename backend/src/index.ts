@@ -63,6 +63,28 @@ setInterval(() => {
 const app = new Hono();
 app.use('*', cors());
 
+// Authentication Middleware
+app.use('*', async (c, next) => {
+  const publicPaths = ['/health', '/', '/auth/callback', '/auth/welcome'];
+  if (publicPaths.includes(c.req.path)) {
+    return await next();
+  }
+
+  const authHeader = c.req.header('Authorization');
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return await next(); // Allow for now, but endpoints should check c.get('user')
+  }
+
+  const token = authHeader.split(' ')[1];
+  const { data: { user }, error } = await supabase.auth.getUser(token);
+
+  if (!error && user) {
+    c.set('user', user);
+  }
+
+  await next();
+});
+
 app.get('/health', (c) => {
   return c.json({
     status: 'ok',
@@ -85,135 +107,115 @@ app.get('/profiles/nearby', async (c) => {
   const radius = parseInt(c.req.query('radius') || '5000');
   const userId = c.req.query('userId');
 
-  const { data, error } = await supabase.rpc('find_nearby_users', {
-    lat,
-    lng,
-    max_dist_meters: radius,
+    const { data, error } = await supabase.rpc('find_nearby_users', {
+      lat,
+      lng,
+      max_dist_meters: radius,
+    });
+
+    if (error) return c.json({ error: error.message }, 500);
+    
+    let filtered = userId ? data.filter((u: any) => u.id !== userId) : data;
+    
+    return c.json(await enrichProfiles(filtered || [], userId));
   });
 
-  if (error) return c.json({ error: error.message }, 500);
-  
-  let filtered = userId ? data.filter((u: any) => u.id !== userId) : data;
-  
-  if (userId && filtered.length > 0) {
-    const { data: friends } = await supabase
-      .from('friends')
-      .select('user_id_1, user_id_2')
-      .or(`user_id_1.eq.${userId},user_id_2.eq.${userId}`);
-    
-    const { data: pendingRequests } = await supabase
-      .from('friend_requests')
-      .select('sender_id, receiver_id')
-      .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
-      .eq('status', 'pending');
-    
-    const { data: privateRooms } = await supabase
-      .from('chat_rooms')
-      .select('name')
-      .eq('type', 'private')
-      .like('name', `%${userId}%`);
-    
-    const friendIds = new Set<string>();
-    const pendingIds = new Set<string>();
-    const privateRoomUserIds = new Set<string>();
-    
-    if (friends) {
-      friends.forEach((f: any) => {
-        friendIds.add(f.user_id_1 === userId ? f.user_id_2 : f.user_id_1);
-      });
-    }
-    
-    if (pendingRequests) {
-      pendingRequests.forEach((r: any) => {
-        pendingIds.add(r.sender_id === userId ? r.receiver_id : r.sender_id);
-      });
-    }
-    
-    if (privateRooms) {
-      privateRooms.forEach((r: any) => {
-        const parts = r.name.replace('private_', '').split('_');
-        const otherUserId = parts[0] === userId ? parts[1] : parts[0];
-        if (otherUserId) privateRoomUserIds.add(otherUserId);
-      });
-    }
-    
-      filtered = filtered.map((u: any) => ({
-        ...u,
-        connection_status: friendIds.has(u.id) || privateRoomUserIds.has(u.id) ? 'accepted' : pendingIds.has(u.id) ? 'pending' : 'none',
-        has_private_room: privateRoomUserIds.has(u.id)
-      }));
-    }
-    
-    return c.json(filtered);
-  });
 
   app.get('/profiles/search', async (c) => {
     const q = c.req.query('q') || '';
     const userId = c.req.query('userId');
+    const lat = c.req.query('lat') ? parseFloat(c.req.query('lat')!) : null;
+    const lng = c.req.query('lng') ? parseFloat(c.req.query('lng')!) : null;
+    const radius = c.req.query('radius') ? parseInt(c.req.query('radius')!) : 10000; // Default 10km for search
   
-    const { data, error } = await supabase
+    let query = supabase
       .from('profiles')
       .select('*')
       .or(`username.ilike.%${q}%,full_name.ilike.%${q}%`)
       .eq('is_incognito', false)
       .neq('id', userId || '')
+      .order('last_seen', { ascending: false })
       .limit(20);
 
-  if (error) return c.json({ error: error.message }, 500);
-  
-  let filtered = data || [];
-  
-  if (userId && filtered.length > 0) {
-    const { data: friends } = await supabase
-      .from('friends')
-      .select('user_id_1, user_id_2')
-      .or(`user_id_1.eq.${userId},user_id_2.eq.${userId}`);
-    
-    const { data: pendingRequests } = await supabase
-      .from('friend_requests')
-      .select('sender_id, receiver_id')
-      .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
-      .eq('status', 'pending');
-    
-    const { data: privateRooms } = await supabase
-      .from('chat_rooms')
-      .select('name')
-      .eq('type', 'private')
-      .like('name', `%${userId}%`);
-    
-    const friendIds = new Set<string>();
-    const pendingIds = new Set<string>();
-    const privateRoomUserIds = new Set<string>();
-    
-    if (friends) {
-      friends.forEach((f: any) => {
-        friendIds.add(f.user_id_1 === userId ? f.user_id_2 : f.user_id_1);
+    if (lat !== null && lng !== null) {
+      // If location is provided, we use the RPC to find nearby users matching the search query
+      // This is more efficient than filtering in JS
+      const { data: nearbyData, error: nearbyError } = await supabase.rpc('find_nearby_users', {
+        lat,
+        lng,
+        max_dist_meters: radius,
       });
+
+      if (!nearbyError && nearbyData) {
+        // Filter the nearby users by the search query
+        const searchTerms = q.toLowerCase();
+        const filteredNearby = nearbyData.filter((u: any) => {
+          const username = (u.username || '').toLowerCase();
+          const fullName = (u.full_name || '').toLowerCase();
+          return (username.includes(searchTerms) || fullName.includes(searchTerms)) && u.id !== userId;
+        });
+        
+        // Return these results
+        return c.json(await enrichProfiles(filteredNearby, userId));
+      }
     }
+
+    const { data, error } = await query;
+    if (error) return c.json({ error: error.message }, 500);
     
-    if (pendingRequests) {
-      pendingRequests.forEach((r: any) => {
-        pendingIds.add(r.sender_id === userId ? r.receiver_id : r.sender_id);
-      });
-    }
-    
-    if (privateRooms) {
-      privateRooms.forEach((r: any) => {
-        const parts = r.name.replace('private_', '').split('_');
-        const otherUserId = parts[0] === userId ? parts[1] : parts[0];
-        if (otherUserId) privateRoomUserIds.add(otherUserId);
-      });
-    }
-    
-      filtered = filtered.map((u: any) => ({
-        ...u,
-        connection_status: friendIds.has(u.id) || privateRoomUserIds.has(u.id) ? 'accepted' : pendingIds.has(u.id) ? 'pending' : 'none',
-        has_private_room: privateRoomUserIds.has(u.id)
-      }));
-    }
-    
-    return c.json(filtered);
+    return c.json(await enrichProfiles(data || [], userId));
 });
+
+async function enrichProfiles(profiles: any[], userId: string | undefined | null) {
+  if (!userId || profiles.length === 0) return profiles;
+
+  const { data: friends } = await supabase
+    .from('friends')
+    .select('user_id_1, user_id_2')
+    .or(`user_id_1.eq.${userId},user_id_2.eq.${userId}`);
+  
+  const { data: pendingRequests } = await supabase
+    .from('friend_requests')
+    .select('sender_id, receiver_id')
+    .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
+    .eq('status', 'pending');
+  
+  const { data: privateRooms } = await supabase
+    .from('chat_rooms')
+    .select('name')
+    .eq('type', 'private')
+    .like('name', `%${userId}%`);
+  
+  const friendIds = new Set<string>();
+  const pendingIds = new Set<string>();
+  const privateRoomUserIds = new Set<string>();
+  
+  if (friends) {
+    friends.forEach((f: any) => {
+      friendIds.add(f.user_id_1 === userId ? f.user_id_2 : f.user_id_1);
+    });
+  }
+  
+  if (pendingRequests) {
+    pendingRequests.forEach((r: any) => {
+      pendingIds.add(r.sender_id === userId ? r.receiver_id : r.sender_id);
+    });
+  }
+  
+  if (privateRooms) {
+    privateRooms.forEach((r: any) => {
+      const parts = r.name.replace('private_', '').split('_');
+      const otherUserId = parts[0] === userId ? parts[1] : parts[0];
+      if (otherUserId) privateRoomUserIds.add(otherUserId);
+    });
+  }
+  
+  return profiles.map((u: any) => ({
+    ...u,
+    connection_status: friendIds.has(u.id) || privateRoomUserIds.has(u.id) ? 'accepted' : pendingIds.has(u.id) ? 'pending' : 'none',
+    has_private_room: privateRoomUserIds.has(u.id)
+  }));
+}
 
 app.get('/profiles/:id', async (c) => {
   const id = c.req.param('id');
@@ -291,9 +293,16 @@ app.post(
       address: z.string().optional(),
     })
   ),
-  async (c) => {
-    const { userId, latitude, longitude, address } = c.req.valid('json');
-    const startTime = Date.now();
+    async (c) => {
+      const { userId, latitude, longitude, address } = c.req.valid('json');
+      const authUser = c.get('user');
+
+      // Security: Ensure user can only sync their own location
+      if (authUser && authUser.id !== userId) {
+        return c.json({ error: 'Unauthorized: Cannot sync location for another user' }, 403);
+      }
+
+      const startTime = Date.now();
 
     try {
       await supabase.rpc('cleanup_expired_rooms');
@@ -593,10 +602,16 @@ app.post(
       sender_lng: z.number().optional(),
     })
   ),
-  async (c) => {
-    const body = c.req.valid('json');
-    
-    if (!checkRateLimit(body.sender_id)) {
+    async (c) => {
+      const body = c.req.valid('json');
+      const authUser = c.get('user');
+
+      // Security: Ensure user can only send messages as themselves
+      if (authUser && authUser.id !== body.sender_id) {
+        return c.json({ error: 'Unauthorized: Cannot send message as another user' }, 403);
+      }
+      
+      if (!checkRateLimit(body.sender_id)) {
       return c.json({ error: 'Rate limit exceeded. Max 5 messages per 2 seconds.', reason: 'RATE_LIMITED' }, 429);
     }
 
@@ -1249,28 +1264,114 @@ app.delete('/tapins/:id', async (c) => {
   return c.json({ success: true });
 });
 
-// 11. Auth Welcome Email
-app.post('/auth/welcome', async (c) => {
-  const { email, name } = await c.req.json();
+    // 11. Auth Welcome Email
+    app.get('/auth/callback', async (c) => {
+      const code = c.req.query('code');
+      const next = c.req.query('next') || '/';
+      const userAgent = c.req.header('user-agent') || '';
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(userAgent);
+
+      if (code) {
+        // If it's a mobile device, use the deep link
+        if (isMobile) {
+          return c.redirect(`tapin://auth/callback?code=${code}&next=${next}`);
+        }
+        
+        // If it's a desktop browser, we can't use tapin://
+        // For now, let's redirect to a success page or back to the web app if we had the URL
+        // Since we don't know the exact web URL (it could be localhost:8081 or an expo tunnel),
+        // we'll show a simple "Success" message or try to redirect to localhost:8081 as a fallback
+        return c.html(`
+          <div style="font-family: sans-serif; text-align: center; padding: 40px;">
+            <h1>Email Verified!</h1>
+            <p>You can now return to the TapIn app.</p>
+            <script>
+              // Try to open the app automatically
+              window.location.href = "tapin://auth/callback?code=${code}&next=${next}";
+              // If that fails, the user stays on this page
+            </script>
+          </div>
+        `);
+      }
+
+      return c.redirect('tapin://auth/callback?error=No code provided');
+    });
+
+  app.post('/auth/welcome', async (c) => {
+  const { email, full_name } = await c.req.json();
 
   if (!email) {
     return c.json({ error: 'Email required' }, 400);
   }
 
-  try {
+  console.log(`Generating verification link and sending welcome email to ${email}`);
+
+    try {
+      // Determine the best redirect URL based on environment
+      // We prefer the mobile deep link for native apps, but allow for web testing via env
+      const redirectTo = process.env.AUTH_REDIRECT_URL || 'tapin://auth/callback';
+
+      // Generate the verification link
+      const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+        type: 'signup',
+        email,
+        options: {
+          redirectTo,
+        },
+      });
+
+    if (linkError) {
+      console.error('Link generation error:', linkError);
+      throw linkError;
+    }
+
+    const verificationLink = linkData.properties.action_link;
+
     const data = await resend.emails.send({
-      from: 'TapIn <welcome@tapin.pro>',
+      from: 'TapIn <noreply@securim.ca>', // Use verified domain from Resend
       to: [email],
-      subject: 'Welcome to TapIn!',
+      subject: 'Verify your email for TapIn!',
       html: `
-        <h1>Welcome${name ? `, ${name}` : ''}!</h1>
-        <p>Thanks for joining TapIn. Start discovering people and conversations near you.</p>
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px; color: #000;">
+          <div style="text-align: center; margin-bottom: 30px;">
+            <h1 style="font-size: 32px; font-weight: 900; margin: 0; letter-spacing: -1px;">TapIn</h1>
+          </div>
+          
+          <h2 style="font-size: 24px; font-weight: 800; margin-bottom: 20px;">Welcome${full_name ? `, ${full_name}` : ''}!</h2>
+          
+          <p style="font-size: 16px; line-height: 1.6; margin-bottom: 30px; color: #444;">
+            We're thrilled to have you join our community. TapIn is all about connecting with people and conversations happening right around you.
+          </p>
+          
+          <div style="text-align: center; margin: 40px 0;">
+            <a href="${verificationLink}" style="background-color: #000; color: #fff; padding: 18px 36px; border-radius: 16px; text-decoration: none; font-weight: bold; font-size: 16px; display: inline-block; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+              Verify Your Email
+            </a>
+          </div>
+          
+          <p style="font-size: 14px; color: #888; margin-top: 40px; line-height: 1.6;">
+            If the button doesn't work, copy and paste this link into your browser:<br/>
+            <span style="word-break: break-all; color: #0066cc;">${verificationLink}</span>
+          </p>
+          
+          <div style="margin-top: 50px; padding: 25px; background-color: #f8f9fa; border-radius: 20px; border: 1px solid #eee;">
+            <p style="margin: 0; font-weight: bold; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; color: #666; margin-bottom: 8px;">Quick Tip</p>
+            <p style="margin: 0; font-size: 15px; color: #333; line-height: 1.5;">Enable location services in the app to discover rooms and see people nearby!</p>
+          </div>
+          
+          <div style="text-align: center; margin-top: 60px; border-top: 1px solid #eee; padding-top: 30px;">
+            <p style="font-size: 12px; color: #ccc; text-transform: uppercase; letter-spacing: 2px; font-weight: bold;">
+              TapIn • Connect Locally
+            </p>
+          </div>
+        </div>
       `,
     });
-    return c.json(data);
+    console.log('Resend response:', data);
+    return c.json({ success: true, data });
   } catch (err: any) {
     console.error('Welcome email error:', err);
-    return c.json({ success: true });
+    return c.json({ success: false, error: err.message }, 500);
   }
 });
 

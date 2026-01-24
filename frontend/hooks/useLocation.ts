@@ -32,6 +32,8 @@ export function useLocation(userId: string | undefined) {
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [lastSyncTime, setLastSyncTime] = useState<number>(0);
+  const locationRef = useRef<Location.LocationObject | null>(null);
+  const lastUpdateRef = useRef<Location.LocationObject | null>(null);
   const lastSyncRef = useRef<LastSyncData | null>(null);
   const appStateRef = useRef(AppState.currentState);
 
@@ -60,6 +62,8 @@ export function useLocation(userId: string | undefined) {
           if (cached) {
             const parsedCache = JSON.parse(cached);
             setLocation(parsedCache);
+            locationRef.current = parsedCache;
+            lastUpdateRef.current = parsedCache;
           }
         }
 
@@ -73,6 +77,8 @@ export function useLocation(userId: string | undefined) {
 
         if (initialLocation) {
           setLocation(initialLocation);
+          locationRef.current = initialLocation;
+          lastUpdateRef.current = initialLocation;
           AsyncStorage.setItem(LOCATION_CACHE_KEY, JSON.stringify(initialLocation));
           if (userId) {
             maybeSyncLocation(
@@ -88,6 +94,8 @@ export function useLocation(userId: string | undefined) {
         });
 
         setLocation(currentPosition);
+        locationRef.current = currentPosition;
+        lastUpdateRef.current = currentPosition;
         AsyncStorage.setItem(LOCATION_CACHE_KEY, JSON.stringify(currentPosition));
 
         if (userId) {
@@ -101,11 +109,29 @@ export function useLocation(userId: string | undefined) {
         subscription = await Location.watchPositionAsync(
           {
             accuracy: Location.Accuracy.High,
-            timeInterval: 30000,
-            distanceInterval: 15,
+            timeInterval: 10000, // 10 seconds
+            distanceInterval: 10, // 10 meters
           },
           (newLocation) => {
-            setLocation(newLocation);
+            // Always update ref for latest data
+            locationRef.current = newLocation;
+
+            // Only update state (trigger re-render) if moved significantly (> 50m)
+            // or if it's been more than 30 seconds since last state update
+            const shouldUpdateState = !lastUpdateRef.current || 
+              haversineDistance(
+                lastUpdateRef.current.coords.latitude, 
+                lastUpdateRef.current.coords.longitude,
+                newLocation.coords.latitude,
+                newLocation.coords.longitude
+              ) > 50 || 
+              (newLocation.timestamp - lastUpdateRef.current.timestamp) > 30000;
+
+            if (shouldUpdateState) {
+              setLocation(newLocation);
+              lastUpdateRef.current = newLocation;
+            }
+
             if (userId && appStateRef.current === 'active') {
               maybeSyncLocation(
                 userId,
@@ -127,47 +153,37 @@ export function useLocation(userId: string | undefined) {
     };
   }, [userId]);
 
-  async function maybeSyncLocation(userId: string, latitude: number, longitude: number) {
+  const maybeSyncLocation = async (uid: string, lat: number, lng: number) => {
     const now = Date.now();
-    const last = lastSyncRef.current;
-
-    if (last) {
-      const timeSinceLastSync = now - last.timestamp;
-      const distanceMoved = haversineDistance(last.latitude, last.longitude, latitude, longitude);
-
-      if (timeSinceLastSync < MIN_SYNC_INTERVAL_MS && distanceMoved < MIN_DISTANCE_METERS) {
+    
+    if (lastSyncRef.current) {
+      const dist = haversineDistance(
+        lastSyncRef.current.latitude,
+        lastSyncRef.current.longitude,
+        lat,
+        lng
+      );
+      const timeDiff = now - lastSyncRef.current.timestamp;
+      
+      if (dist < MIN_DISTANCE_METERS && timeDiff < MIN_SYNC_INTERVAL_MS) {
         return;
       }
     }
 
     try {
-      let address: string | undefined;
-      try {
-        const reverseGeocode = (await Promise.race([
-          Location.reverseGeocodeAsync({ latitude, longitude }),
-          new Promise((_, reject) => setTimeout(() => reject('Geocode timeout'), 3000)),
-        ])) as Location.LocationGeocodedAddress[];
-
-        if (reverseGeocode && reverseGeocode.length > 0) {
-          const loc = reverseGeocode[0];
-          const parts = [loc.street, loc.name, loc.city].filter(Boolean);
-          address = parts.length > 0 ? parts.join(', ') : undefined;
-        }
-      } catch {}
-
       await apiRequest('/rooms/sync', {
         method: 'POST',
-        body: JSON.stringify({ userId, latitude, longitude, address }),
+        body: JSON.stringify({ userId: uid, latitude: lat, longitude: lng }),
       });
-
-      const syncData: LastSyncData = { latitude, longitude, timestamp: now };
+      
+      const syncData: LastSyncData = { latitude: lat, longitude: lng, timestamp: now };
       lastSyncRef.current = syncData;
       setLastSyncTime(now);
       AsyncStorage.setItem(LAST_SYNC_KEY, JSON.stringify(syncData));
     } catch (err) {
-      console.error('Failed to sync location and rooms:', err);
+      console.error('Failed to sync location:', err);
     }
-  }
+  };
 
-  return { location, errorMsg, lastSyncTime };
+  return { location, locationRef, errorMsg, lastSyncTime };
 }

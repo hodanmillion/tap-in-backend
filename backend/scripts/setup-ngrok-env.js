@@ -25,23 +25,37 @@ async function getNgrokUrl() {
 
 async function writeBackendUrlToEnv(url) {
   try {
-    const envPath = path.join(__dirname, '../../frontend/.env');
-    let envContent = '';
+    // Update frontend .env
+    const frontendEnvPath = path.join(__dirname, '../../frontend/.env');
+    let frontendEnvContent = '';
     
-    if (fs.existsSync(envPath)) {
-      envContent = fs.readFileSync(envPath, 'utf-8');
-      envContent = envContent.replace(/^EXPO_PUBLIC_BACKEND_URL=.*$/m, `EXPO_PUBLIC_BACKEND_URL=${url}`);
-      if (!envContent.includes('EXPO_PUBLIC_BACKEND_URL=')) {
-        envContent += `\nEXPO_PUBLIC_BACKEND_URL=${url}`;
+    if (fs.existsSync(frontendEnvPath)) {
+      frontendEnvContent = fs.readFileSync(frontendEnvPath, 'utf-8');
+      frontendEnvContent = frontendEnvContent.replace(/^EXPO_PUBLIC_BACKEND_URL=.*$/m, `EXPO_PUBLIC_BACKEND_URL=${url}`);
+      if (!frontendEnvContent.includes('EXPO_PUBLIC_BACKEND_URL=')) {
+        frontendEnvContent += `\nEXPO_PUBLIC_BACKEND_URL=${url}`;
       }
     } else {
-      envContent = `EXPO_PUBLIC_BACKEND_URL=${url}\n`;
+      frontendEnvContent = `EXPO_PUBLIC_BACKEND_URL=${url}\n`;
     }
     
-    fs.writeFileSync(envPath, envContent, 'utf-8');
-    console.log(`✅ Backend URL written to .env: ${url}`);
+    fs.writeFileSync(frontendEnvPath, frontendEnvContent, 'utf-8');
+    console.log(`✅ Backend URL written to frontend/.env: ${url}`);
+
+    // Update backend .env
+    const backendEnvPath = path.join(__dirname, '../.env');
+    if (fs.existsSync(backendEnvPath)) {
+      let backendEnvContent = fs.readFileSync(backendEnvPath, 'utf-8');
+      const authRedirectUrl = `${url}/auth/callback`;
+      backendEnvContent = backendEnvContent.replace(/^AUTH_REDIRECT_URL=.*$/m, `AUTH_REDIRECT_URL=${authRedirectUrl}`);
+      if (!backendEnvContent.includes('AUTH_REDIRECT_URL=')) {
+        backendEnvContent += `\nAUTH_REDIRECT_URL=${authRedirectUrl}`;
+      }
+      fs.writeFileSync(backendEnvPath, backendEnvContent, 'utf-8');
+      console.log(`✅ Auth redirect URL written to backend/.env: ${authRedirectUrl}`);
+    }
   } catch (error) {
-    console.error('Failed to write env file:', error);
+    console.error('Failed to write env files:', error);
   }
 }
 
