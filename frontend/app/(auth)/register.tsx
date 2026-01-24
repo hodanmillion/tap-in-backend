@@ -20,34 +20,36 @@ export default function RegisterScreen() {
   const { colorScheme } = useColorScheme();
   const theme = THEME[colorScheme ?? 'light'];
 
-  async function signUpWithEmail() {
+    async function signUpWithEmail() {
     setLoading(true);
     try {
-const {
-          data: { user },
-          error,
-        } = await supabase.auth.signUp({
-          email: email,
-          password: password,
-            options: {
-              data: {
-                full_name: fullName,
+      const generatedUsername = email.split('@')[0] + Math.floor(Math.random() * 1000);
+      const {
+            data: { user },
+            error,
+          } = await supabase.auth.signUp({
+            email: email,
+            password: password,
+              options: {
+                data: {
+                  full_name: fullName,
+                  username: generatedUsername,
+                },
+                emailRedirectTo: `${process.env.EXPO_PUBLIC_BACKEND_URL}/auth/callback`,
               },
-              emailRedirectTo: `${process.env.EXPO_PUBLIC_BACKEND_URL}/auth/callback`,
-            },
-        });
-
-      if (error) {
-        Alert.alert('Error', error.message);
-      } else if (user) {
-        const { error: profileError } = await apiRequest('/profiles', {
-          method: 'POST',
-          body: JSON.stringify({
-            id: user.id,
-            full_name: fullName,
-            username: email.split('@')[0] + Math.floor(Math.random() * 1000),
-          }),
-        });
+          });
+  
+        if (error) {
+          Alert.alert('Error', error.message);
+        } else if (user) {
+          const { error: profileError } = await apiRequest('/profiles', {
+            method: 'POST',
+            body: JSON.stringify({
+              id: user.id,
+              full_name: fullName,
+              username: generatedUsername,
+            }),
+          });
 
         if (profileError) console.error('Profile creation error:', profileError);
 

@@ -23,7 +23,7 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.TapIn.myapp",
+      "bundleIdentifier": "com.tapin.social",
       "buildNumber": "134",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Allow Tap In to access your location to find nearby users and chat rooms.",
@@ -33,9 +33,9 @@
         "NSCameraUsageDescription": "Allow Tap In to use your camera to take a profile picture.",
         "ITSAppUsesNonExemptEncryption": false
       },
-        "entitlements": {
-          "aps-environment": "production"
-        },
+      "entitlements": {
+        "aps-environment": "production"
+      },
       "runtimeVersion": "1.0.0"
     },
     "android": {
@@ -49,7 +49,7 @@
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.RECORD_AUDIO"
       ],
-      "package": "com.TapIn.myapp",
+      "package": "com.tapin.social",
       "runtimeVersion": {
         "policy": "appVersion"
       }
