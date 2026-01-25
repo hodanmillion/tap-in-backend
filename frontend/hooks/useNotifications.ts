@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Platform } from 'react-native';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
+import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { apiRequest } from '@/lib/api';
 
@@ -45,6 +46,7 @@ async function setupNotificationHandler() {
 
 export function useNotifications() {
   const { user } = useAuth();
+  const router = useRouter();
   const [expoPushToken, setExpoPushToken] = useState<string>('');
   const [notification, setNotification] = useState<unknown>(null);
   const [permissionStatus, setPermissionStatus] = useState<string>('undetermined');
@@ -114,7 +116,6 @@ export function useNotifications() {
           platform: Platform.OS,
         }),
       });
-      // Optionally update local profile state or refetch profile here if needed
     } catch (error) {
       console.error('Error saving push token:', error);
     }
@@ -148,9 +149,18 @@ export function useNotifications() {
             if (isMounted) setNotification(notif);
           });
 
-          responseListener.current = Notifications.addNotificationResponseReceivedListener((response: { notification: { request: { content: { data: unknown } } } }) => {
-            const data = response.notification.request.content.data;
+          responseListener.current = Notifications.addNotificationResponseReceivedListener((response) => {
+            const data = response.notification.request.content.data as any;
             console.log('Notification response data:', data);
+            
+            if (data?.room_id) {
+              // Ensure we navigate correctly using the router from hook scope
+              setTimeout(() => {
+                if (isMounted) {
+                  router.push(`/chat/${data.room_id}`);
+                }
+              }, 0);
+            }
           });
       } catch (e) {
         console.warn('Failed to initialize notifications:', e);
@@ -173,7 +183,7 @@ export function useNotifications() {
         console.warn('Failed to remove notification listeners:', e);
       }
     };
-  }, []);
+  }, [router]);
 
   const schedulePushNotification = useCallback(async (title: string, body: string, data?: Record<string, unknown>) => {
     const Notifications = await getNotifications();

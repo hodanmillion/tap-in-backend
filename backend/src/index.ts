@@ -778,55 +778,60 @@ app.post(
         // CRITICAL: We AWAIT this block to ensure reliability on platforms like Render
         try {
           console.log(`Push: Handling notifications for room ${body.room_id}, sender ${body.sender_id}`);
-          const { data: participants, error: partError } = await supabase
-            .from('room_participants')
-            .select('user_id')
-            .eq('room_id', body.room_id)
-            .neq('user_id', body.sender_id)
-            .is('left_at', null);
+            const { data: participants, error: partError } = await supabase
+              .from('room_participants')
+              .select('user_id')
+              .eq('room_id', body.room_id)
+              .is('left_at', null);
 
-          if (partError) {
-            console.error('Push: Error fetching participants:', partError);
-          } else if (participants && participants.length > 0) {
-            console.log(`Push: Found ${participants.length} participants to notify (excluding sender ${body.sender_id})`);
-            console.log(`Push: Target user IDs: ${participants.map(p => p.user_id).join(', ')}`);
+            if (partError) {
+              console.error('Push: Error fetching participants:', partError);
+            } else if (participants && participants.length > 0) {
+              // Strictly filter out the sender locally and double-check
+              const targets = participants.filter(p => p.user_id && p.user_id !== body.sender_id);
+              
+              if (targets.length === 0) {
+                console.log('Push: No other participants to notify after filtering sender');
+                return c.json(data);
+              }
 
-            const { data: senderProfile } = await supabase
-              .from('profiles')
-              .select('full_name, username')
-              .eq('id', body.sender_id)
-              .single();
+              console.log(`Push: Found ${targets.length} participants to notify (excluding sender ${body.sender_id})`);
+              
+              const { data: senderProfile } = await supabase
+                .from('profiles')
+                .select('full_name, username')
+                .eq('id', body.sender_id)
+                .single();
 
-            const { data: roomInfo } = await supabase
-              .from('chat_rooms')
-              .select('name, type')
-              .eq('id', body.room_id)
-              .single();
+              const { data: roomInfo } = await supabase
+                .from('chat_rooms')
+                .select('name, type')
+                .eq('id', body.room_id)
+                .single();
 
-            const senderName = senderProfile?.full_name || senderProfile?.username || 'Someone';
-            const isPrivate = roomInfo?.type === 'private';
-            const messagePreview = body.type === 'image' ? '📷 Photo' : body.type === 'gif' ? '🎬 GIF' : body.content.substring(0, 50);
+              const senderName = senderProfile?.full_name || senderProfile?.username || 'Someone';
+              const isPrivate = roomInfo?.type === 'private';
+              const messagePreview = body.type === 'image' ? '📷 Photo' : body.type === 'gif' ? '🎬 GIF' : body.content.substring(0, 50);
 
-            const title = isPrivate ? senderName : (roomInfo?.name || 'Chat');
-            const notifBody = isPrivate ? messagePreview : `${senderName}: ${messagePreview}`;
+              const title = isPrivate ? senderName : (roomInfo?.name || 'Chat');
+              const notifBody = isPrivate ? messagePreview : `${senderName}: ${messagePreview}`;
 
-            console.log(`Push: Constructing notifications for ${participants.length} participants`);
-
-            // Process participants in parallel and AWAIT all of them
-            await Promise.all(participants.map(async (participant) => {
-              if (participant.user_id) {
+              // Process participants in parallel and AWAIT all of them
+              await Promise.all(targets.map(async (participant) => {
                 try {
+                  if (!participant.user_id) return;
+                  
                   console.log(`Push: Sending to user ${participant.user_id}`);
                   
-                  // 1. Send Push Notification (Already awaited inside)
+                  // 1. Send Push Notification
                   await sendPushToUser(participant.user_id, title, notifBody, { 
                     type: 'new_message', 
                     room_id: body.room_id,
                     sender_id: body.sender_id
                   });
 
-                  // 2. Insert into notifications table for in-app Activity tab
-                  const { error: insertError } = await supabase.from('notifications').insert({
+                  // 2. Insert into notifications table
+                  await supabase.from('notifications').insert({
                     user_id: participant.user_id,
                     type: 'new_message',
                     title: title,
@@ -836,20 +841,13 @@ app.post(
                       sender_id: body.sender_id
                     }
                   });
-                  
-                  if (insertError) {
-                    console.error(`Push: Error inserting in-app notification for ${participant.user_id}:`, insertError);
-                  } else {
-                    console.log(`Push: In-app notification created for ${participant.user_id}`);
-                  }
                 } catch (participantError) {
                   console.error(`Push: Failed for participant ${participant.user_id}:`, participantError);
                 }
-              }
-            }));
-          } else {
-            console.log('Push: No other active participants to notify');
-          }
+              }));
+            } else {
+              console.log('Push: No active participants to notify');
+            }
         } catch (err) {
           console.error('Push: Error in notification block:', err);
         }
@@ -923,32 +921,35 @@ app.get('/rooms/user-rooms', async (c) => {
           let isCurrentlyInZone = false;
 
           const userParticipation = room.room_participants?.find((p: any) => p.user_id === userId);
-          const hasMessages = !!lastMsg;
+            const hasMessages = !!lastMsg;
+            const isPrivate = room.type === 'private';
 
-            if (room.type !== 'private' && lat && lng) {
-              distance = calculateDistance(lat, lng, room.latitude, room.longitude);
-              const radius = room.radius || 100;
-              
-              if (distance <= radius) {
-                isCurrentlyInZone = true;
-              } else {
-                const leftAt = userParticipation?.left_at;
-                if (leftAt) {
-                  const hoursSinceLeft = (Date.now() - new Date(leftAt).getTime()) / (1000 * 60 * 60);
-                    if (hoursSinceLeft >= 48 && !hasMessages) {
-                      isExpired = true;
-                      readOnlyReason = 'Expired';
-                    } else if (!hasMessages) {
-                      const hoursRemaining = Math.ceil(48 - hoursSinceLeft);
-                      readOnlyReason = `${formatDistance(distance)} away (${hoursRemaining}hr left)`;
+              if (!isPrivate && lat && lng) {
+                distance = calculateDistance(lat, lng, room.latitude, room.longitude);
+                const radius = room.radius || 100;
+                
+                if (distance <= radius) {
+                  isCurrentlyInZone = true;
+                } else {
+                  const leftAt = userParticipation?.left_at;
+                  if (leftAt) {
+                    const hoursSinceLeft = (Date.now() - new Date(leftAt).getTime()) / (1000 * 60 * 60);
+                      // Persistent: Only expire if NO messages and left for > 48 hours
+                      if (hoursSinceLeft >= 48 && !hasMessages) {
+                        isExpired = true;
+                        readOnlyReason = 'Expired';
+                      } else if (!hasMessages) {
+                        const hoursRemaining = Math.ceil(48 - hoursSinceLeft);
+                        readOnlyReason = `${formatDistance(distance)} away (${hoursRemaining}hr left)`;
+                      } else {
+                        // Room has messages - keep it persistent but mark as away
+                        readOnlyReason = `${formatDistance(distance)} away`;
+                      }
                     } else {
                       readOnlyReason = `${formatDistance(distance)} away`;
                     }
-                  } else {
-                    readOnlyReason = `${formatDistance(distance)} away`;
-                  }
+                }
               }
-            }
 
         let displayName = room.name;
         let otherUserAvatar: string | null = null;
@@ -1192,14 +1193,14 @@ app.delete('/notifications/:id', async (c) => {
 // 8. Friends & Social
 app.get('/friends/:userId', async (c) => {
   const userId = c.req.param('userId');
-  const { data, error } = await supabase
-    .from('friends')
-    .select(`
-      *,
-      user_1:profiles!user_id_1(*),
-      user_2:profiles!user_id_2(*)
-    `)
-    .or(`user_id_1.eq.${userId},user_id_2.eq.${userId}`);
+    const { data, error } = await supabase
+      .from('friends')
+      .select(`
+        *,
+        user_1:profiles!user_id_1(*),
+        user_2:profiles!user_id_2(*)
+      `)
+      .or(`user_id_1.eq.${userId},user_id_2.eq.${userId}`);
 
   if (error) return c.json({ error: error.message }, 500);
 
@@ -1269,12 +1270,12 @@ app.post('/friends/request', async (c) => {
 app.get('/tapins/:userId', async (c) => {
   const userId = c.req.param('userId');
   
-  const { data, error } = await supabase
-    .from('tapins')
-    .select(`
-      *,
-      sender:profiles!sender_id(id, username, full_name, avatar_url)
-    `)
+    const { data, error } = await supabase
+      .from('tapins')
+      .select(`
+        *,
+        sender:profiles!sender_id(id, username, full_name, avatar_url)
+      `)
     .eq('receiver_id', userId)
     .is('viewed_at', null)
     .gt('expires_at', new Date().toISOString())
@@ -1576,6 +1577,14 @@ app.post(
   ),
   async (c) => {
     const body = c.req.valid('json');
+
+    // Remove this token from any other users first to ensure a device only 
+    // receives notifications for the most recently logged-in user.
+    await supabase
+      .from('push_tokens')
+      .delete()
+      .eq('token', body.token)
+      .neq('user_id', body.user_id);
 
     const { data, error } = await supabase
       .from('push_tokens')

@@ -305,48 +305,51 @@ export default function ChatScreen() {
       }
     }
 
-    if (data.type === 'private') {
-      const { data: participants } = await supabase
-        .from('room_participants')
-        .select('profiles(id, full_name, username)')
-        .eq('room_id', id)
-        .neq('user_id', user?.id)
-        .single();
-      const otherUser = (participants as any)?.profiles;
-      setRoom({
-        ...data,
-        name: otherUser?.full_name || `@${otherUser?.username}` || 'Private Chat',
-        otherUserId: otherUser?.id,
-      });
-    } else {
-      let updatedRoom = { ...data };
-      if (data.type === 'auto_generated') {
-        try {
-          const reverseGeocode = await Location.reverseGeocodeAsync({
-            latitude: data.latitude,
-            longitude: data.longitude,
-          });
-            if (reverseGeocode && reverseGeocode.length > 0) {
-              const loc = reverseGeocode[0];
-              const street = loc.street || loc.name;
-              const streetNumber = loc.streetNumber || '';
-              const city = loc.city || '';
-              
-              let address = 'Nearby Chat';
-              if (street) {
-                address = streetNumber ? `${streetNumber} ${street}` : street;
-              } else if (city) {
-                address = city;
+      if (data.type === 'private') {
+        const { data: participants } = await supabase
+          .from('room_participants')
+          .select('profiles(id, full_name, username)')
+          .eq('room_id', id)
+          .neq('user_id', user?.id)
+          .single();
+        const otherUser = (participants as any)?.profiles;
+        setRoom({
+          ...data,
+          name: otherUser?.full_name || `@${otherUser?.username}` || 'Private Chat',
+          otherUserId: otherUser?.id,
+        });
+        } else {
+          let updatedRoom = { ...data };
+          // If it's an auto-generated room OR the name is generic, try to get a better address
+          if (data.type === 'auto_generated' || data.name === 'Nearby Chat' || !data.name || data.name.includes('Chat Zone')) {
+            try {
+              const reverseGeocode = await Location.reverseGeocodeAsync({
+                latitude: data.latitude,
+                longitude: data.longitude,
+              });
+              if (reverseGeocode && reverseGeocode.length > 0) {
+                const loc = reverseGeocode[0];
+                const street = loc.street || loc.name;
+                const streetNumber = loc.streetNumber || '';
+                const city = loc.city || '';
+                
+                let address = '';
+                if (street && street !== 'Unnamed Road') {
+                  address = streetNumber ? `${streetNumber} ${street}` : street;
+                } else if (city) {
+                  address = city;
+                }
+                
+                if (address && address !== 'Unnamed Road') {
+                  updatedRoom.name = address;
+                }
               }
-              
-              if (address) updatedRoom.name = address;
+            } catch (e) {
+              console.log('Header geocode failed', e);
             }
-        } catch (e) {
-          console.log('Header geocode failed', e);
+          }
+          setRoom(updatedRoom);
         }
-      }
-      setRoom(updatedRoom);
-    }
     setLoading(false);
   }, [id, user?.id]);
 
@@ -586,6 +589,20 @@ export default function ChatScreen() {
       setDraft(id, newMessage);
     }
   }, [id, newMessage]);
+
+  // Automatic navigation when leaving location or expiration
+  useEffect(() => {
+    if ((isOutOfRange || isExpired || roomNotFound) && room?.type !== 'private' && room) {
+      const timer = setTimeout(() => {
+        // Only navigate if we're still out of range/expired when timer fires
+        if (isOutOfRange || isExpired || roomNotFound) {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          router.replace('/(tabs)/chats');
+        }
+      }, 5000); // 5 second grace period to allow for GPS flicker or reading final messages
+      return () => clearTimeout(timer);
+    }
+  }, [isOutOfRange, isExpired, roomNotFound, room?.type, router]);
 
   const sendMessage = useCallback(
     async (content?: string, type: 'text' | 'image' | 'gif' = 'text') => {
@@ -1031,34 +1048,28 @@ export default function ChatScreen() {
     <View className="flex-1 bg-background">
       <Stack.Screen options={headerOptions} />
       <SafeAreaView className="flex-1" edges={['bottom']}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          className="flex-1"
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            className="flex-1"
             keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
-                <FlashList
-                      ref={listRef}
-                      data={messagesWithSeparators}
-                      keyExtractor={(item) => item.id}
-                      contentContainerStyle={{ padding: 16 }}
-                        renderItem={renderMessage}
-                        showsVerticalScrollIndicator={false}
-                        // @ts-ignore - FlashList types might conflict with React 19, but inverted is supported
-                        inverted
-                        onEndReached={loadMoreMessages}
-                      onEndReachedThreshold={0.5}
-                      estimatedItemSize={100}
-                      initialScrollIndex={0}
-                      maintainVisibleContentPosition={{
-                        minIndexForVisible: 0,
-                      }}
-                      ListFooterComponent={
-                        loadingMore ? (
-                          <View className="py-4 items-center">
-                            <ActivityIndicator size="small" color={theme.primary} />
-                          </View>
-                        ) : null
-                      }
-                    />
+            <FlatList
+              ref={listRef}
+              data={messagesWithSeparators}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={{ padding: 16 }}
+              renderItem={renderMessage}
+              showsVerticalScrollIndicator={false}
+              inverted={true}
+              onEndReached={loadMoreMessages}
+              onEndReachedThreshold={0.5}
+              ListFooterComponent={
+                loadingMore ? (
+                  <View className="py-4 items-center">
+                    <ActivityIndicator size="small" color={theme.primary} />
+                  </View>
+                ) : null
+              }
+            />
 
 
 {(isOutOfRange || isExpired || roomNotFound) && room?.type !== 'private' ? (

@@ -39,7 +39,12 @@ import { ErrorBoundary } from '@/app/error-boundary';
 
 function SettingsContent() {
   const { user } = useAuth();
-  const { requestPermissions, schedulePushNotification, permissionStatus } = useNotifications();
+  const { 
+    requestPermissions, 
+    schedulePushNotification, 
+    permissionStatus,
+    expoPushToken 
+  } = useNotifications();
   const { colorScheme, toggleColorScheme } = useColorScheme();
   const theme = THEME[colorScheme ?? 'light'];
   const router = useRouter();
@@ -163,13 +168,29 @@ function SettingsContent() {
     }
 
     async function handleSignOut() {
-    setLoading(true);
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      Alert.alert('Error', error.message);
-      setLoading(false);
+      setLoading(true);
+
+      // Clear push token from server if it exists
+      if (user?.id && expoPushToken) {
+        try {
+          await apiRequest('/push-tokens', {
+            method: 'DELETE',
+            body: JSON.stringify({
+              user_id: user.id,
+              token: expoPushToken
+            })
+          });
+        } catch (err) {
+          console.error('Error deleting push token on logout:', err);
+        }
+      }
+
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        Alert.alert('Error', error.message);
+        setLoading(false);
+      }
     }
-  }
 
   const handleDeleteAccount = () => {
     Alert.alert(

@@ -37,6 +37,8 @@ import {
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/context/AuthContext';
+import { useNotifications } from '@/hooks/useNotifications';
+import { apiRequest } from '@/lib/api';
 import { useColorScheme } from 'nativewind';
 import { THEME } from '@/lib/theme';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -46,6 +48,7 @@ type Tab = 'About' | 'Activity';
 
 export default function ProfileScreen() {
   const { user, loading: authLoading } = useAuth();
+  const { expoPushToken } = useNotifications();
   const { colorScheme } = useColorScheme();
   const theme = THEME[colorScheme ?? 'dark'];
   const router = useRouter();
@@ -201,20 +204,51 @@ export default function ProfileScreen() {
     }
   };
 
-  async function handleSignOut() {
-    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Sign Out',
-        style: 'destructive',
-        onPress: async () => {
-          const { error } = await supabase.auth.signOut();
-          if (error) Alert.alert('Error', error.message);
-          else router.replace('/(auth)/login');
+    async function handleSignOut() {
+      Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Sign Out',
+          style: 'destructive',
+            onPress: async () => {
+              // 1. Clear push token from server
+              if (user?.id && expoPushToken) {
+                try {
+                  await apiRequest('/push-tokens', {
+                    method: 'DELETE',
+                    body: JSON.stringify({
+                      user_id: user.id,
+                      token: expoPushToken
+                    })
+                  });
+                } catch (err) {
+                  console.error('Error deleting push token on logout:', err);
+                }
+              }
+
+              // 2. Clear location/last_seen on server
+              if (user?.id) {
+                try {
+                  await supabase
+                    .from('profiles')
+                    .update({ 
+                      latitude: null, 
+                      longitude: null, 
+                      last_seen: null 
+                    })
+                    .eq('id', user.id);
+                } catch (err) {
+                  console.error('Error clearing location on logout:', err);
+                }
+              }
+
+              const { error } = await supabase.auth.signOut();
+              if (error) Alert.alert('Error', error.message);
+              else router.replace('/(auth)/login');
+            },
         },
-      },
-    ]);
-  }
+      ]);
+    }
 
   const handleInvite = async () => {
     try {

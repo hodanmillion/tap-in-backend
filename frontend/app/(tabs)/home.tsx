@@ -172,8 +172,15 @@ export default function HomeScreen() {
           const reverseGeocode = await Location.reverseGeocodeAsync({ latitude, longitude });
           if (reverseGeocode && reverseGeocode.length > 0) {
             const loc = reverseGeocode[0];
-            const parts = [loc.street, loc.name, loc.city].filter(Boolean);
-            address = parts.length > 0 ? parts.join(', ') : 'Nearby Chat';
+            const street = loc.street || loc.name;
+            const streetNumber = loc.streetNumber || '';
+            const city = loc.city || '';
+            
+            if (street && street !== 'Unnamed Road') {
+              address = streetNumber ? `${streetNumber} ${street}` : street;
+            } else if (city) {
+              address = city;
+            }
           }
         } catch {}
 
