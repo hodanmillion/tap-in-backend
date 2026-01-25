@@ -1,4 +1,4 @@
-package com.TapIn.myapp
+package com.tapin.social
 
 import android.app.Application
 import android.content.res.Configuration

@@ -1,4 +1,4 @@
-package com.TapIn.myapp
+package com.tapin.social
 
 import android.os.Build
 import android.os.Bundle

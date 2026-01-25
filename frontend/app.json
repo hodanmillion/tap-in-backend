@@ -24,7 +24,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.tapin.social",
-      "buildNumber": "135",
+        "buildNumber": "177",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Allow Tap In to access your location to find nearby users and chat rooms.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Allow Tap In to access your location even when the app is in the background.",
@@ -50,20 +50,29 @@
         "android.permission.RECORD_AUDIO"
       ],
       "package": "com.tapin.social",
-      "runtimeVersion": {
-        "policy": "appVersion"
-      }
+        "runtimeVersion": "1.0.0"
     },
     "web": {
       "bundler": "metro",
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
-    "plugins": [
-      "expo-router",
-      "expo-image-picker",
-      [
-        "expo-location",
+      "plugins": [
+        "expo-router",
+        "expo-image-picker",
+        [
+          "expo-build-properties",
+          {
+            "ios": {
+              "newArchEnabled": true
+            },
+            "android": {
+              "newArchEnabled": true
+            }
+          }
+        ],
+        [
+          "expo-location",
         {
           "locationAlwaysPermission": "Allow Tap In to access your location even when the app is in the background.",
           "locationWhenInUsePermission": "Allow Tap In to access your location to find nearby users and chat rooms.",
@@ -93,8 +102,10 @@
       }
     },
     "owner": "hodanmo15",
-    "updates": {
-      "url": "https://u.expo.dev/09438138-397a-4217-ace8-19c2d7a3b92d"
-    }
+      "updates": {
+        "url": "https://u.expo.dev/09438138-397a-4217-ace8-19c2d7a3b92d",
+        "checkAutomatically": "NEVER"
+      }
+
   }
 }

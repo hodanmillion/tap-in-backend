@@ -9,8 +9,6 @@
 // Get the backend URL from environment variables
 // Production: https://tap-in-backend.onrender.com (set in eas.json)
 // Development: ngrok URL (set by backend dev:tunnel script)
-import { supabase } from './supabase';
-
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://tap-in-backend.onrender.com';
 
 /**
@@ -19,16 +17,12 @@ const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://tap-in-backe
 export async function apiRequest<T = any>(endpoint: string, options?: RequestInit): Promise<T> {
   const url = `${BACKEND_URL}${endpoint}`;
 
-  // Get current session for Auth header
-  const { data: { session } } = await supabase.auth.getSession();
-
   const response = await fetch(url, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
       'ngrok-skip-browser-warning': 'true',
       'Bypass-Tunnel-Reminder': 'true',
-      ...(session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {}),
       ...options?.headers,
     },
   });

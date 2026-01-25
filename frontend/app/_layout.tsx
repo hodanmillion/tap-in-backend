@@ -6,7 +6,7 @@ import { ChatProvider } from '@/context/ChatContext';
 import { NotificationProvider, useNotifications } from '@/context/NotificationContext';
 import { useEffect, useRef } from 'react';
 import { useRouter, useSegments } from 'expo-router';
-import { View, ActivityIndicator, AppState, Platform, Alert } from 'react-native';
+import { View, ActivityIndicator, AppState, Platform, Text } from 'react-native';
 import { ErrorBoundary } from './error-boundary';
 import { useLocation } from '@/hooks/useLocation';
 import { useColorScheme } from 'nativewind';
@@ -43,12 +43,16 @@ function RootLayoutContent() {
 
   useEffect(() => {
     if (user?.id && !loading) {
-      requestPermissions();
+      requestPermissions().catch(err => console.error('Push permission error:', err));
     }
   }, [user?.id, loading]);
 
   useEffect(() => {
-    setColorScheme('dark');
+    try {
+      setColorScheme('dark');
+    } catch (e) {
+      console.warn('Failed to set color scheme:', e);
+    }
   }, []);
 
   useEffect(() => {
@@ -74,9 +78,7 @@ function RootLayoutContent() {
 
   useLocation(user?.id);
 
-
-
-    useEffect(() => {
+  useEffect(() => {
     if (loading) return;
 
     const inAuthGroup = segments[0] === '(auth)';
@@ -85,20 +87,20 @@ function RootLayoutContent() {
       if (!inAuthGroup) {
         router.replace('/(auth)/login');
       }
-      } else {
-        // We have a session
-        if (!session.user.email_confirmed_at) {
-          const inVerifyPage = segments[1] === 'verify';
-          if (!inVerifyPage) {
-            router.replace('/(auth)/verify');
-          }
-          return;
+    } else {
+      // We have a session
+      if (!session.user.email_confirmed_at) {
+        const inVerifyPage = segments[1] === 'verify';
+        if (!inVerifyPage) {
+          router.replace('/(auth)/verify');
         }
-
-        if (inAuthGroup && segments[1] !== 'verify') {
-          router.replace('/(tabs)/home');
-        }
+        return;
       }
+
+      if (inAuthGroup && segments[1] !== 'verify') {
+        router.replace('/(tabs)/home');
+      }
+    }
   }, [session, loading, segments]);
 
   if (loading) {
@@ -131,8 +133,8 @@ function RootLayoutContent() {
 
 export default function RootLayout() {
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <ErrorBoundary>
+    <ErrorBoundary>
+      <GestureHandlerRootView style={{ flex: 1 }}>
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
             <NotificationProvider>
@@ -142,7 +144,7 @@ export default function RootLayout() {
             </NotificationProvider>
           </AuthProvider>
         </QueryClientProvider>
-      </ErrorBoundary>
-    </GestureHandlerRootView>
+      </GestureHandlerRootView>
+    </ErrorBoundary>
   );
 }

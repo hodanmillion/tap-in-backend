@@ -1,5 +1,7 @@
 import React from 'react';
-import { View, Text, Platform } from 'react-native';
+import { View, Text, Platform, TouchableOpacity } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Updates from 'expo-updates';
 
 interface Props {
   children: React.ReactNode;
@@ -92,18 +94,51 @@ export class ErrorBoundary extends React.Component<Props, State> {
     }
   }
 
+  handleReset = async () => {
+    try {
+      await AsyncStorage.clear();
+      if (Platform.OS !== 'web') {
+        await Updates.reloadAsync();
+      } else {
+        window.location.reload();
+      }
+    } catch (e) {
+      console.error('Failed to reset app:', e);
+    }
+  };
+
   render() {
     if (this.state.hasError) {
       return (
-        <View className="flex-1 bg-white">
-          <View className="flex-1 items-center justify-center p-5">
-            <Text className="mb-2 text-center text-4xl font-bold">Something went wrong</Text>
-            <Text className="mb-3 text-center text-sm text-gray-600">
-              {this.state.error?.message}
+        <View style={{ flex: 1, backgroundColor: '#000' }}>
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+            <Text style={{ marginBottom: 12, textAlign: 'center', fontSize: 28, fontWeight: '900', color: 'white' }}>
+              Oops! A crash occurred.
             </Text>
+              <Text style={{ marginBottom: 24, textAlign: 'center', fontSize: 16, color: '#9ca3af', lineHeight: 24 }}>
+                {this.state.error?.message || 'An unexpected error occurred.'}
+              </Text>
+            
+            <TouchableOpacity 
+              onPress={this.handleReset}
+              style={{ 
+                backgroundColor: '#6366f1', 
+                paddingVertical: 16, 
+                paddingHorizontal: 32, 
+                borderRadius: 16,
+                shadowColor: '#6366f1',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.3,
+                shadowRadius: 8,
+                elevation: 5
+              }}
+            >
+              <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 16 }}>Clear Cache & Restart</Text>
+            </TouchableOpacity>
+
             {Platform.OS !== 'web' && (
-              <Text className="mt-2 text-center text-sm text-gray-600">
-                Please check your device logs for more details.
+              <Text style={{ marginTop: 24, textAlign: 'center', fontSize: 12, color: '#4b5563' }}>
+                Technical details have been logged.
               </Text>
             )}
           </View>
