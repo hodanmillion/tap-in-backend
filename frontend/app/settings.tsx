@@ -27,7 +27,8 @@ import {
   Lock,
   EyeOff,
   Mail,
-  Bug
+  Bug,
+  Zap
 } from 'lucide-react-native';
 import { useAuth } from '@/context/AuthContext';
 import { useNotifications } from '@/hooks/useNotifications';
@@ -362,11 +363,16 @@ function SettingsContent() {
                   value="Pro"
                   onPress={() => Alert.alert('Subscription', 'Manage your subscription options here. Feature coming soon.')}
                 />
-                <SettingItem 
-                  icon={<Bug size={20} color={theme.mutedForeground} />} 
-                  label="Debug & Performance" 
-                  onPress={() => router.push('/debug')}
-                />
+                  <SettingItem 
+                    icon={<Zap size={20} color={theme.primary} />} 
+                    label="T-Shirt Design" 
+                    onPress={() => router.push('/tshirt-design')}
+                  />
+                  <SettingItem 
+                    icon={<Bug size={20} color={theme.mutedForeground} />} 
+                    label="Debug & Performance" 
+                    onPress={() => router.push('/debug')}
+                  />
               </View>
             </View>
 

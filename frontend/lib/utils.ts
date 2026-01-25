@@ -35,14 +35,6 @@ export function formatDistance(date: Date | string | number): string {
 export function formatRoomName(name: string | null | undefined): string {
   if (!name) return 'Nearby Chat';
   
-  // Check if name contains coordinates pattern: Chat (number, number)
-  const coordPattern = /Chat\s*\(-?\d+\.\d+,\s*-?\d+\.\d+\)/i;
-  const zonePattern = /Chat\s*Zone\s*\(-?\d+\.\d+,\s*-?\d+\.\d+\)/i;
-  
-  if (coordPattern.test(name) || zonePattern.test(name)) {
-    return 'Nearby Chat';
-  }
-  
   // Remove "private_" prefix for private rooms if it leaked (should be handled by display logic)
   if (name.startsWith('private_')) {
     return 'Private Chat';

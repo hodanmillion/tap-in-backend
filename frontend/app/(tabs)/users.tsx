@@ -202,100 +202,122 @@ export default function UsersScreen() {
   const isError = debouncedQuery ? searchError : nearbyError;
   const errorMsg = debouncedQuery ? searchErrorMsg : nearbyErrorMsg;
 
-  return (
-    <SafeAreaView className="flex-1 bg-background" edges={['top']}>
-      <View className="flex-1 px-5">
-        <View className="mb-6 mt-6">
-          <Text className="text-3xl font-black tracking-tight text-foreground">Discover</Text>
-          <Text className="mt-1 text-sm font-semibold text-muted-foreground">
-            Connect with people in your area
-          </Text>
-        </View>
-
-        <View className="mb-8 flex-row items-center rounded-2xl bg-secondary/30 border border-border/50 px-4 py-1">
-          <Search size={18} color={theme.mutedForeground} />
-          <TextInput
-            placeholder="Search by username..."
-            placeholderTextColor={theme.mutedForeground}
-            className="ml-3 h-12 flex-1 text-base font-semibold text-foreground"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')} className="p-1">
-              <X size={16} color={theme.mutedForeground} />
-            </TouchableOpacity>
-          )}
-        </View>
-
-        <View className="mb-4 flex-row items-center justify-between">
-          <Text className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">
-            {debouncedQuery ? 'Search Results' : 'Nearby People'}
-          </Text>
-          {!debouncedQuery && location && (
-            <View className="flex-row items-center gap-1.5">
-               <View className="h-1.5 w-1.5 rounded-full bg-primary/40" />
-               <Text className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
-                 5km Radius
-               </Text>
+    return (
+      <SafeAreaView className="flex-1 bg-background" edges={['top']}>
+        <View className="flex-1 px-5">
+          {!user?.id ? (
+            <View className="mt-20 items-center justify-center rounded-[40px] border-2 border-dashed border-border/60 bg-secondary/50 p-12">
+              <View className="h-24 w-24 items-center justify-center rounded-full bg-background border border-border mb-8 shadow-sm">
+                <Compass size={40} color={theme.mutedForeground} opacity={0.4} />
+              </View>
+              <Text className="text-center text-2xl font-black text-foreground">
+                Discover Nearby
+              </Text>
+              <Text className="mt-3 text-center text-base font-medium text-muted-foreground px-4">
+                Sign in to see people nearby and start connecting with your local community.
+              </Text>
+              <TouchableOpacity
+                onPress={() => router.push('/(auth)/login')}
+                activeOpacity={0.8}
+                className="mt-8 flex-row items-center gap-2 rounded-2xl bg-primary px-8 py-4 shadow-lg shadow-primary/30">
+                <Text className="font-bold text-white text-lg">Sign In</Text>
+              </TouchableOpacity>
             </View>
-          )}
-        </View>
-  
-        {isLoading ? (
-          <View className="flex-1">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <UserItemSkeleton key={i} />
-            ))}
-          </View>
-        ) : isError ? (
-          <View className="mt-10 items-center justify-center p-12 rounded-[40px] border-2 border-dashed border-destructive/30 bg-destructive/5">
-            <View className="h-20 w-20 items-center justify-center rounded-full bg-background border border-border mb-6">
-              <WifiOff size={40} color={theme.destructive} opacity={0.6} />
-            </View>
-            <Text className="text-2xl font-black text-foreground text-center">
-              Connection Issue
-            </Text>
-            <Text className="mt-2 text-center text-base font-medium text-muted-foreground px-4">
-              {(errorMsg as Error)?.message || 'Unable to discover people. Check your connection.'}
-            </Text>
-            <TouchableOpacity
-              onPress={() => refetchNearby()}
-              activeOpacity={0.8}
-              className="mt-6 flex-row items-center gap-2 rounded-2xl bg-primary px-6 py-3">
-              <RefreshCw size={18} color={theme.primaryForeground} />
-              <Text className="text-sm font-bold text-primary-foreground">Try Again</Text>
-            </TouchableOpacity>
-          </View>
           ) : (
-            <FlashList
-              data={displayData}
-              keyExtractor={(item) => item.id}
-              renderItem={renderUser}
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingBottom: 120 }}
-              ListEmptyComponent={
-                !isLoading ? (
-                  <View className="mt-10 items-center justify-center rounded-[40px] border-2 border-dashed border-border/60 bg-secondary/50 p-12">
-                    <View className="h-24 w-24 items-center justify-center rounded-full bg-background border border-border mb-8 shadow-sm">
-                      <Compass size={40} color={theme.mutedForeground} opacity={0.4} />
-                    </View>
-                    <Text className="text-center text-2xl font-black text-foreground">
-                      {debouncedQuery ? 'No users found' : 'Silence is golden'}
-                    </Text>
-                    <Text className="mt-3 text-center text-base font-medium text-muted-foreground px-4">
-                      {debouncedQuery
-                        ? `We couldn't find anyone matching "${debouncedQuery}"`
-                        : "No one else is nearby right now. Be the first to start a conversation!"}
+            <>
+              <View className="mb-6 mt-6">
+                <Text className="text-3xl font-black tracking-tight text-foreground">Discover</Text>
+                <Text className="mt-1 text-sm font-semibold text-muted-foreground">
+                  Connect with people in your area
+                </Text>
+              </View>
+
+              <View className="mb-8 flex-row items-center rounded-2xl bg-secondary/30 border border-border/50 px-4 py-1">
+                <Search size={18} color={theme.mutedForeground} />
+                <TextInput
+                  placeholder="Search by username..."
+                  placeholderTextColor={theme.mutedForeground}
+                  className="ml-3 h-12 flex-1 text-base font-semibold text-foreground"
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                {searchQuery.length > 0 && (
+                  <TouchableOpacity onPress={() => setSearchQuery('')} className="p-1">
+                    <X size={16} color={theme.mutedForeground} />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              <View className="mb-4 flex-row items-center justify-between">
+                <Text className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">
+                  {debouncedQuery ? 'Search Results' : 'Nearby People'}
+                </Text>
+                {!debouncedQuery && location && (
+                  <View className="flex-row items-center gap-1.5">
+                    <View className="h-1.5 w-1.5 rounded-full bg-primary/40" />
+                    <Text className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
+                      5km Radius
                     </Text>
                   </View>
-                ) : null
-              }
-              onRefresh={!debouncedQuery ? refetchNearby : undefined}
-              refreshing={false}
-            />
+                )}
+              </View>
+
+              {isLoading ? (
+                <View className="flex-1">
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <UserItemSkeleton key={i} />
+                  ))}
+                </View>
+              ) : isError ? (
+                <View className="mt-10 items-center justify-center p-12 rounded-[40px] border-2 border-dashed border-destructive/30 bg-destructive/5">
+                  <View className="h-20 w-20 items-center justify-center rounded-full bg-background border border-border mb-6">
+                    <WifiOff size={40} color={theme.destructive} opacity={0.6} />
+                  </View>
+                  <Text className="text-2xl font-black text-foreground text-center">
+                    Connection Issue
+                  </Text>
+                  <Text className="mt-2 text-center text-base font-medium text-muted-foreground px-4">
+                    {(errorMsg as Error)?.message || 'Unable to discover people. Check your connection.'}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => refetchNearby()}
+                    activeOpacity={0.8}
+                    className="mt-6 flex-row items-center gap-2 rounded-2xl bg-primary px-6 py-3">
+                    <RefreshCw size={18} color={theme.primaryForeground} />
+                    <Text className="text-sm font-bold text-primary-foreground">Try Again</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <FlashList
+                  data={displayData}
+                  keyExtractor={(item) => item.id}
+                  renderItem={renderUser}
+                  showsVerticalScrollIndicator={false}
+                  contentContainerStyle={{ paddingBottom: 120 }}
+                  ListEmptyComponent={
+                    !isLoading ? (
+                      <View className="mt-10 items-center justify-center rounded-[40px] border-2 border-dashed border-border/60 bg-secondary/50 p-12">
+                        <View className="h-24 w-24 items-center justify-center rounded-full bg-background border border-border mb-8 shadow-sm">
+                          <Compass size={40} color={theme.mutedForeground} opacity={0.4} />
+                        </View>
+                        <Text className="text-center text-2xl font-black text-foreground">
+                          {debouncedQuery ? 'No users found' : 'Silence is golden'}
+                        </Text>
+                        <Text className="mt-3 text-center text-base font-medium text-muted-foreground px-4">
+                          {debouncedQuery
+                            ? `We couldn't find anyone matching "${debouncedQuery}"`
+                            : "No one else is nearby right now. Be the first to start a conversation!"}
+                        </Text>
+                      </View>
+                    ) : null
+                  }
+                  onRefresh={!debouncedQuery ? refetchNearby : undefined}
+                  refreshing={false}
+                />
+              )}
+            </>
           )}
         </View>
       </SafeAreaView>

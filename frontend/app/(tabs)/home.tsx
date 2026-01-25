@@ -167,22 +167,30 @@ export default function HomeScreen() {
     try {
       const { latitude, longitude } = location.coords;
       
-        let address = 'Nearby Chat';
-        try {
-          const reverseGeocode = await Location.reverseGeocodeAsync({ latitude, longitude });
-          if (reverseGeocode && reverseGeocode.length > 0) {
-            const loc = reverseGeocode[0];
-            const street = loc.street || loc.name;
-            const streetNumber = loc.streetNumber || '';
-            const city = loc.city || '';
-            
-            if (street && street !== 'Unnamed Road') {
-              address = streetNumber ? `${streetNumber} ${street}` : street;
-            } else if (city) {
-              address = city;
+          let address = '';
+          try {
+            const reverseGeocode = await Location.reverseGeocodeAsync({ latitude, longitude });
+            if (reverseGeocode && reverseGeocode.length > 0) {
+              const loc = reverseGeocode[0];
+              const street = loc.street || loc.name;
+              const streetNumber = loc.streetNumber || '';
+              const city = loc.city || '';
+              const district = loc.district || '';
+              
+              if (street && street !== 'Unnamed Road') {
+                address = streetNumber ? `${streetNumber} ${street}` : street;
+              } else if (district) {
+                address = `${district}, ${city}`;
+              } else if (city) {
+                address = city;
+              }
             }
-          }
-        } catch {}
+          } catch {}
+
+        if (!address) {
+          address = `Chat Zone @ ${latitude.toFixed(3)}, ${longitude.toFixed(3)}`;
+        }
+
 
       
       const result = await apiRequest('/rooms/create', {

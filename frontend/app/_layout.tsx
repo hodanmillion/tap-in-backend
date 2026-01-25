@@ -3,12 +3,12 @@ import { Stack } from 'expo-router';
 import { QueryClient, QueryClientProvider, focusManager } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { ChatProvider } from '@/context/ChatContext';
+import { NotificationProvider, useNotifications } from '@/context/NotificationContext';
 import { useEffect, useRef } from 'react';
 import { useRouter, useSegments } from 'expo-router';
 import { View, ActivityIndicator, AppState, Platform, Alert } from 'react-native';
 import { ErrorBoundary } from './error-boundary';
 import { useLocation } from '@/hooks/useLocation';
-import { useNotifications } from '@/hooks/useNotifications';
 import { useColorScheme } from 'nativewind';
 import { supabase } from '@/lib/supabase';
 
@@ -132,9 +132,11 @@ export default function RootLayout() {
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <ChatProvider>
-            <RootLayoutContent />
-          </ChatProvider>
+          <NotificationProvider>
+            <ChatProvider>
+              <RootLayoutContent />
+            </ChatProvider>
+          </NotificationProvider>
         </AuthProvider>
       </QueryClientProvider>
     </ErrorBoundary>

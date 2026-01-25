@@ -176,6 +176,19 @@ app.use('*', async (c, next) => {
   await next();
 });
 
+// --- HELPER FUNCTIONS ---
+async function ensureFriendship(userId1: string, userId2: string) {
+  const sorted = [userId1, userId2].sort();
+  const { error } = await supabase
+    .from('friends')
+    .upsert({
+      user_id_1: sorted[0],
+      user_id_2: sorted[1],
+    }, { onConflict: 'user_id_1,user_id_2' });
+  
+  return !error;
+}
+
 app.get('/health', (c) => {
   return c.json({
     status: 'ok',
@@ -1191,22 +1204,25 @@ app.delete('/notifications/:id', async (c) => {
 });
 
 // 8. Friends & Social
-app.get('/friends/:userId', async (c) => {
-  const userId = c.req.param('userId');
-    const { data, error } = await supabase
-      .from('friends')
-      .select(`
-        *,
-        user_1:profiles!user_id_1(*),
-        user_2:profiles!user_id_2(*)
-      `)
-      .or(`user_id_1.eq.${userId},user_id_2.eq.${userId}`);
+    app.get('/friends/:userId', async (c) => {
+      const userId = c.req.param('userId');
+          const { data, error } = await supabase
+            .from('friends')
+            .select(`
+              *,
+              user_1:profiles!user_id_1(*),
+              user_2:profiles!user_id_2(*)
+            `)
+            .or(`user_id_1.eq.${userId},user_id_2.eq.${userId}`);
 
-  if (error) return c.json({ error: error.message }, 500);
+      if (error) {
+        console.error('Error fetching friends:', error);
+        return c.json({ error: error.message }, 500);
+      }
 
-  const friends = data.map((f: any) => (f.user_id_1 === userId ? f.user_2 : f.user_1));
-  return c.json(friends);
-});
+      const friends = data.map((f: any) => (f.user_id_1 === userId ? f.user_2 : f.user_1));
+      return c.json(friends);
+    });
 
 app.post('/friends/request', async (c) => {
   const { sender_id, receiver_id } = await c.req.json();
@@ -1267,23 +1283,109 @@ app.post('/friends/request', async (c) => {
   return c.json(data);
 });
 
-app.get('/tapins/:userId', async (c) => {
-  const userId = c.req.param('userId');
-  
+  app.get('/friend-requests/:userId', async (c) => {
+    const userId = c.req.param('userId');
     const { data, error } = await supabase
-      .from('tapins')
+      .from('friend_requests')
       .select(`
         *,
         sender:profiles!sender_id(id, username, full_name, avatar_url)
       `)
-    .eq('receiver_id', userId)
-    .is('viewed_at', null)
-    .gt('expires_at', new Date().toISOString())
-    .order('created_at', { ascending: false });
+      .eq('receiver_id', userId)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false });
 
-  if (error) return c.json({ error: error.message }, 500);
-  return c.json(data || []);
+    if (error) return c.json({ error: error.message }, 500);
+    return c.json(data || []);
+  });
+
+app.post('/friend-requests/:id/respond', async (c) => {
+  const id = c.req.param('id');
+  const { status } = await c.req.json();
+
+  if (!['accepted', 'rejected'].includes(status)) {
+    return c.json({ error: 'Invalid status' }, 400);
+  }
+
+  const { data: request, error: fetchError } = await supabase
+    .from('friend_requests')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (fetchError || !request) {
+    return c.json({ error: 'Request not found' }, 404);
+  }
+
+  const { error: updateError } = await supabase
+    .from('friend_requests')
+    .update({ status })
+    .eq('id', id);
+
+  if (updateError) return c.json({ error: updateError.message }, 400);
+
+  if (status === 'accepted') {
+    // 1. Create friendship
+    await ensureFriendship(request.sender_id, request.receiver_id);
+
+    // 2. Notify sender
+    const { data: receiverProfile } = await supabase
+      .from('profiles')
+      .select('full_name, username')
+      .eq('id', request.receiver_id)
+      .single();
+    
+    const receiverName = receiverProfile?.full_name || receiverProfile?.username || 'Someone';
+    
+    await supabase.from('notifications').insert({
+      user_id: request.sender_id,
+      type: 'friend_request_accepted',
+      title: 'Request Accepted',
+      content: `${receiverName} accepted your friend request!`,
+      data: { friend_id: request.receiver_id }
+    });
+
+    sendPushToUser(request.sender_id, 'Friend Request Accepted', `${receiverName} is now your friend!`, { type: 'friend_request_accepted' });
+  }
+
+  return c.json({ success: true });
 });
+
+  app.get('/tapins/received/:userId', async (c) => {
+    const userId = c.req.param('userId');
+    
+      const { data, error } = await supabase
+        .from('tapins')
+        .select(`
+          *,
+          sender:profiles!sender_id(id, username, full_name, avatar_url)
+        `)
+      .eq('receiver_id', userId)
+      .is('viewed_at', null)
+      .gt('expires_at', new Date().toISOString())
+      .order('created_at', { ascending: false });
+
+    if (error) return c.json({ error: error.message }, 500);
+    return c.json(data || []);
+  });
+
+  app.get('/tapins/:userId', async (c) => {
+    const userId = c.req.param('userId');
+    
+      const { data, error } = await supabase
+        .from('tapins')
+        .select(`
+          *,
+          sender:profiles!sender_id(id, username, full_name, avatar_url)
+        `)
+      .eq('receiver_id', userId)
+      .is('viewed_at', null)
+      .gt('expires_at', new Date().toISOString())
+      .order('created_at', { ascending: false });
+
+    if (error) return c.json({ error: error.message }, 500);
+    return c.json(data || []);
+  });
 
 app.post(
   '/tapins',

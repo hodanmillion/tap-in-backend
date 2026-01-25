@@ -103,7 +103,7 @@ export default function NotificationsScreen() {
         router.push(`/chat/${item.data.room_id}`);
       } else if (item.type === 'friend_request') {
         router.push('/friend-requests');
-      } else if (item.type === 'friend_request_accepted') {
+      } else if (item.type === 'friend_request_accepted' || item.type === 'friend_accept') {
         router.push('/(tabs)/friends');
       }
     };
