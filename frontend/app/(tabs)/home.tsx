@@ -31,45 +31,61 @@ const RoomItemSkeleton = () => (
   </View>
 );
 
-const RoomItem = memo(({ item, onPress, theme, index }: { item: any; onPress: () => void; theme: any; index: number }) => (
-  <Animated.View entering={FadeInDown.delay(index * 60).springify()}>
-    <TouchableOpacity
-      onPress={onPress}
-      activeOpacity={0.8}
-      accessibilityRole="button"
-      accessibilityLabel={`${item.name}, Active zone`}
-      className="mb-4">
-      <LinearGradient
-        colors={['rgba(139,92,246,0.08)', 'rgba(124,58,237,0.04)']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        className="rounded-3xl border border-primary/10 p-4">
-        <View className="flex-row items-center">
-          <View className="min-h-[48px] min-w-[48px] items-center justify-center rounded-2xl bg-primary/15 p-3">
-            <MapPin size={22} color={theme.primary} strokeWidth={2.5} />
-          </View>
-            <View className="ml-3 flex-1 shrink">
-              <Text 
-                className="text-base font-bold text-foreground tracking-tight" 
-                numberOfLines={2}
-                adjustsFontSizeToFit={false}
-                allowFontScaling={true}>
-                {formatRoomName(item.name)}
-              </Text>
+const RoomItem = memo(({ item, onPress, theme, index }: { item: any; onPress: () => void; theme: any; index: number }) => {
+  const distanceText = item.distanceMeters !== undefined 
+    ? item.distanceMeters < 100 
+      ? 'Under 100m away' 
+      : `${(item.distanceMeters / 1000).toFixed(1)}km away`
+    : null;
 
-            <View className="flex-row items-center gap-1.5 mt-1">
-              <View className="h-2 w-2 rounded-full bg-emerald-500" />
-              <Text className="text-sm text-primary font-semibold" allowFontScaling={true}>Active</Text>
+  return (
+    <Animated.View entering={FadeInDown.delay(index * 60).springify()}>
+      <TouchableOpacity
+        onPress={onPress}
+        activeOpacity={0.8}
+        accessibilityRole="button"
+        accessibilityLabel={`${item.name}, Active zone`}
+        className="mb-4">
+        <LinearGradient
+          colors={['rgba(139,92,246,0.08)', 'rgba(124,58,237,0.04)']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          className="rounded-3xl border border-primary/10 p-4">
+          <View className="flex-row items-center">
+            <View className="min-h-[48px] min-w-[48px] items-center justify-center rounded-2xl bg-primary/15 p-3">
+              <MapPin size={22} color={theme.primary} strokeWidth={2.5} />
+            </View>
+              <View className="ml-3 flex-1 shrink">
+                <Text 
+                  className="text-base font-bold text-foreground tracking-tight" 
+                  numberOfLines={2}
+                  adjustsFontSizeToFit={false}
+                  allowFontScaling={true}>
+                  {formatRoomName(item.name)}
+                </Text>
+
+              <View className="flex-row items-center gap-2 mt-1">
+                <View className="flex-row items-center gap-1">
+                  <View className="h-2 w-2 rounded-full bg-emerald-500" />
+                  <Text className="text-sm text-primary font-semibold" allowFontScaling={true}>Active</Text>
+                </View>
+                {distanceText && (
+                  <>
+                    <View className="h-1 w-1 rounded-full bg-muted-foreground/30" />
+                    <Text className="text-sm text-muted-foreground font-medium">{distanceText}</Text>
+                  </>
+                )}
+              </View>
+            </View>
+            <View className="min-h-[44px] min-w-[44px] items-center justify-center rounded-xl bg-primary/10 ml-2">
+              <ChevronRight size={20} color={theme.primary} strokeWidth={2.5} />
             </View>
           </View>
-          <View className="min-h-[44px] min-w-[44px] items-center justify-center rounded-xl bg-primary/10 ml-2">
-            <ChevronRight size={20} color={theme.primary} strokeWidth={2.5} />
-          </View>
-        </View>
-      </LinearGradient>
-    </TouchableOpacity>
-  </Animated.View>
-));
+        </LinearGradient>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+});
 
 export default function HomeScreen() {
   const { user } = useAuth();
@@ -91,7 +107,12 @@ export default function HomeScreen() {
     gcTime: 1000 * 60 * 15,
   });
 
-  const unreadCount = notifications?.filter((n: any) => !n.is_read).length || 0;
+  const unreadCount = useMemo(() => {
+    if (Array.isArray(notifications)) {
+      return notifications.filter((n: any) => !n.is_read).length;
+    }
+    return 0;
+  }, [notifications]);
 
     const {
       data: nearbyRooms,
@@ -188,7 +209,7 @@ export default function HomeScreen() {
           } catch {}
 
         if (!address) {
-          address = `Chat Zone @ ${latitude.toFixed(3)}, ${longitude.toFixed(3)}`;
+          address = 'Nearby Zone';
         }
 
 

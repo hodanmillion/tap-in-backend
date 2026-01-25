@@ -152,16 +152,25 @@ export default function ChatsScreen() {
     refetchOnMount: 'always',
   });
 
-    const rooms = useMemo(() => {
-      if (!roomsData) return [];
-      const seen = new Map<string, any>();
-      for (const room of roomsData) {
-        if (!seen.has(room.id)) {
-          seen.set(room.id, room);
-        }
+  const rooms = useMemo(() => {
+    if (!Array.isArray(roomsData)) return { active: [], past: [] };
+    
+    const active: any[] = [];
+    const past: any[] = [];
+    
+    roomsData.forEach((room: any) => {
+      if (room.is_expired) return;
+      
+      const isReadOnly = room.type !== 'private' && room.read_only_reason;
+      if (isReadOnly) {
+        past.push(room);
+      } else {
+        active.push(room);
       }
-      return Array.from(seen.values()).filter((r) => !r.is_expired);
-    }, [roomsData]);
+    });
+    
+    return { active, past };
+  }, [roomsData]);
 
   const throttledInvalidate = useCallback(() => {
     if (invalidationThrottleRef.current) return;
@@ -173,9 +182,9 @@ export default function ChatsScreen() {
   }, [queryClient]);
 
   useEffect(() => {
-    if (!user?.id || !rooms || rooms.length === 0) return;
+    if (!user?.id || (!rooms.active.length && !rooms.past.length)) return;
 
-    const roomIds = rooms.map((r: any) => r.id);
+    const roomIds = [...rooms.active, ...rooms.past].map((r: any) => r.id);
     
     const channel = supabase
       .channel('chats-room-updates')
@@ -209,14 +218,40 @@ export default function ChatsScreen() {
     return () => subscription.remove();
   }, [refetch]);
 
-  const renderRoom = useCallback(
+  const sections = useMemo(() => {
+    const result: any[] = [];
+    if (rooms.active.length > 0) {
+      result.push({ type: 'header', title: 'Active Conversations' });
+      rooms.active.forEach((r, i) => result.push({ ...r, sectionIndex: i }));
+    }
+    if (rooms.past.length > 0) {
+      if (result.length > 0) result.push({ type: 'spacer' });
+      result.push({ type: 'header', title: 'Past Interactions' });
+      rooms.past.forEach((r, i) => result.push({ ...r, sectionIndex: i }));
+    }
+    return result;
+  }, [rooms]);
+
+  const renderItem = useCallback(
     ({ item, index }: { item: any; index: number }) => {
+      if (item.type === 'header') {
+        return (
+          <View className="mb-3 mt-2 px-1">
+            <Text className="text-[13px] font-black uppercase tracking-widest text-primary/60">
+              {item.title}
+            </Text>
+          </View>
+        );
+      }
+      if (item.type === 'spacer') {
+        return <View className="h-6" />;
+      }
       return (
         <ChatRoomItem
           item={item}
           theme={theme}
           onPress={() => router.push(`/chat/${item.id}`)}
-          index={index}
+          index={item.sectionIndex || 0}
         />
       );
     },
@@ -231,7 +266,7 @@ export default function ChatsScreen() {
               <View>
                   <Text className="text-3xl font-black tracking-tight text-foreground">Messages</Text>
                   <Text className="mt-2 text-sm font-medium text-muted-foreground">
-                    All your active and past conversations
+                    Active and past interactions nearby
                   </Text>
                 </View>
             </View>
@@ -245,11 +280,12 @@ export default function ChatsScreen() {
             </View>
           ) : (
               <FlashList
-                data={rooms}
-                keyExtractor={(item) => item.id}
+                data={sections}
+                keyExtractor={(item, index) => item.id || `extra-${index}`}
                 onRefresh={refetch}
                 refreshing={isFetching}
-                renderItem={renderRoom}
+                renderItem={renderItem}
+                estimatedItemSize={80}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{ paddingBottom: 120 }}
                 ListEmptyComponent={
@@ -279,6 +315,6 @@ export default function ChatsScreen() {
             />
           )}
         </View>
-      </SafeAreaView>
-    );
-  }
+    </SafeAreaView>
+  );
+}

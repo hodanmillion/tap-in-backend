@@ -431,7 +431,7 @@ app.post(
           const room = (participation as any).chat_rooms;
           if (room && room.type !== 'private') {
             const distance = calculateDistance(latitude, longitude, room.latitude, room.longitude);
-            const radius = room.radius || 100;
+            const radius = room.radius || 500;
             const isInZone = distance <= radius;
 
             if (isInZone && participation.left_at) {
@@ -461,10 +461,19 @@ app.post(
 
     const publicRooms = (existingRooms || []).filter((r: any) => r.type === 'public');
 
-    if (publicRooms.length > 0) {
-      const nearestRoom = publicRooms[0];
-      
-      const { data: existingMembership } = await supabase
+      if (publicRooms.length > 0) {
+        const nearestRoom = publicRooms[0];
+        
+        // If the nearest room has a technical name and we have a real address, update it
+        if (address && nearestRoom.name && (nearestRoom.name.includes('Chat Zone') || nearestRoom.name === 'Nearby Zone')) {
+          await supabase
+            .from('chat_rooms')
+            .update({ name: address })
+            .eq('id', nearestRoom.id);
+          nearestRoom.name = address; // Update local copy for response
+        }
+
+        const { data: existingMembership } = await supabase
         .from('room_participants')
         .select('id')
         .eq('room_id', nearestRoom.id)
@@ -490,7 +499,7 @@ app.post(
       });
     }
 
-    const roomName = address || `Chat Zone (${latitude.toFixed(3)}, ${longitude.toFixed(3)})`;
+    const roomName = address || 'Nearby Zone';
     const { data: newRoom, error: createError } = await supabase
       .from('chat_rooms')
       .insert({
@@ -759,15 +768,15 @@ app.post(
             room.latitude ?? 0,
             room.longitude ?? 0
           );
-        const radius = room.radius || 100;
-          if (distance > radius) {
-            return c.json({ 
-              error: `Out of range. You are ${formatDistance(distance)} away, max is ${formatDistance(radius)}.`,
-              reason: 'OUT_OF_RANGE',
-              distance: Math.round(distance),
-              radius 
-            }, 403);
-          }
+          const radius = room.radius || 500;
+            if (distance > radius) {
+              return c.json({ 
+                error: `Out of range. You are ${formatDistance(distance)} away, max is ${formatDistance(radius)}.`,
+                reason: 'OUT_OF_RANGE',
+                distance: Math.round(distance),
+                radius 
+              }, 403);
+            }
       }
     }
     
@@ -879,131 +888,46 @@ app.get('/rooms/user-rooms', async (c) => {
     return c.json({ error: 'userId required' }, 400);
   }
 
-  const { data: participations, error: partError } = await supabase
-    .from('room_participants')
-    .select('room_id')
-    .eq('user_id', userId);
+  // Use the highly optimized get_user_rooms_v3 RPC to fetch rooms, last messages, and distance/status in one query
+  const { data: rooms, error } = await supabase.rpc('get_user_rooms_v3', {
+    p_user_id: userId,
+    p_lat: lat,
+    p_lng: lng
+  });
 
-  if (partError) return c.json({ error: partError.message }, 500);
-  if (!participations || participations.length === 0) return c.json([]);
-
-    const roomIds = participations.map(p => p.room_id).filter((id): id is string => id !== null);
-
-  const { data: rooms, error: roomsError } = await supabase
-    .from('chat_rooms')
-    .select(`
-      id,
-      name,
-      type,
-      latitude,
-      longitude,
-      radius,
-      expires_at,
-      created_at,
-      room_participants(
-        user_id,
-        left_at,
-        profiles(id, full_name, username, avatar_url)
-      )
-    `)
-    .in('id', roomIds);
-
-  if (roomsError) return c.json({ error: roomsError.message }, 500);
-  if (!rooms) return c.json([]);
-
-  const { data: lastMessages } = await supabase
-    .from('messages')
-    .select('room_id, content, created_at, type')
-    .in('room_id', roomIds)
-    .order('created_at', { ascending: false });
-
-  const lastMessageMap = new Map<string, any>();
-  if (lastMessages) {
-    for (const msg of lastMessages) {
-    if (!lastMessageMap.has(msg.room_id ?? '')) {
-          lastMessageMap.set(msg.room_id ?? '', msg);
-      }
-    }
+  if (error) {
+    console.error('Error fetching user rooms:', error);
+    return c.json({ error: error.message }, 500);
   }
 
-        const enrichedRooms = rooms.map((room: any) => {
-          const lastMsg = lastMessageMap.get(room.id);
-          let distance: number | null = null;
-          let isExpired = false;
-          let readOnlyReason: string | null = null;
-          let isCurrentlyInZone = false;
+  if (!rooms) return c.json([]);
 
-          const userParticipation = room.room_participants?.find((p: any) => p.user_id === userId);
-            const hasMessages = !!lastMsg;
-            const isPrivate = room.type === 'private';
+  const enrichedRooms = rooms.map((room: any) => {
+    let displayName = room.name;
+    if (room.type === 'private' && room.other_user_id) {
+      displayName = room.other_user_full_name || `@${room.other_user_username}` || 'Private Chat';
+    }
 
-              if (!isPrivate && lat && lng) {
-                distance = calculateDistance(lat, lng, room.latitude, room.longitude);
-                const radius = room.radius || 100;
-                
-                if (distance <= radius) {
-                  isCurrentlyInZone = true;
-                } else {
-                  const leftAt = userParticipation?.left_at;
-                  if (leftAt) {
-                    const hoursSinceLeft = (Date.now() - new Date(leftAt).getTime()) / (1000 * 60 * 60);
-                      // Persistent: Only expire if NO messages and left for > 48 hours
-                      if (hoursSinceLeft >= 48 && !hasMessages) {
-                        isExpired = true;
-                        readOnlyReason = 'Expired';
-                      } else if (!hasMessages) {
-                        const hoursRemaining = Math.ceil(48 - hoursSinceLeft);
-                        readOnlyReason = `${formatDistance(distance)} away (${hoursRemaining}hr left)`;
-                      } else {
-                        // Room has messages - keep it persistent but mark as away
-                        readOnlyReason = `${formatDistance(distance)} away`;
-                      }
-                    } else {
-                      readOnlyReason = `${formatDistance(distance)} away`;
-                    }
-                }
-              }
-
-        let displayName = room.name;
-        let otherUserAvatar: string | null = null;
-        let otherUserId: string | null = null;
-
-        if (room.type === 'private') {
-          const otherParticipant = room.room_participants?.find(
-            (p: any) => p.user_id !== userId
-          );
-          const profile = otherParticipant?.profiles;
-          if (profile) {
-            displayName = profile.full_name || `@${profile.username}` || 'Private Chat';
-            otherUserAvatar = profile.avatar_url;
-            otherUserId = profile.id;
-          }
-        }
-
-        return {
-          id: room.id,
-          name: displayName,
-          type: room.type,
-          latitude: room.latitude,
-          longitude: room.longitude,
-          radius: room.radius,
-          expires_at: room.expires_at,
-          created_at: room.created_at,
-          other_user_avatar: otherUserAvatar,
-          other_user_id: otherUserId,
-          last_message_at: lastMsg?.created_at || null,
-        last_message_preview: lastMsg ? (lastMsg.type === 'text' ? lastMsg.content.substring(0, 50) : `[${lastMsg.type}]`) : null,
-        distance: distance !== null ? Math.round(distance) : null,
-        is_expired: isExpired,
-        read_only_reason: readOnlyReason,
-        is_currently_in_zone: isCurrentlyInZone,
-      };
-    });
-
-  enrichedRooms.sort((a, b) => {
-    const aTime = a.last_message_at || a.created_at || '';
-    const bTime = b.last_message_at || b.created_at || '';
-    return new Date(bTime).getTime() - new Date(aTime).getTime();
+    return {
+      id: room.id,
+      name: displayName,
+      type: room.type,
+      latitude: room.latitude,
+      longitude: room.longitude,
+      radius: room.radius,
+      expires_at: room.expires_at,
+      created_at: room.created_at,
+      other_user_avatar: room.other_user_avatar_url,
+      other_user_id: room.other_user_id,
+      last_message_at: room.last_message_created_at || null,
+      last_message_preview: room.last_message_content 
+        ? (room.last_message_type === 'text' ? room.last_message_content.substring(0, 50) : `[${room.last_message_type}]`) 
+        : null,
+      distance: room.distance !== null ? Math.round(room.distance) : null,
+      is_expired: room.is_expired,
+      read_only_reason: room.read_only_reason,
+      is_currently_in_zone: room.is_currently_in_zone,
+    };
   });
 
   return c.json(enrichedRooms);

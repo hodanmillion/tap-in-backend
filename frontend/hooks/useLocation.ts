@@ -171,9 +171,36 @@ export function useLocation(userId: string | undefined) {
     }
 
     try {
+      let address = '';
+      try {
+        const reverseGeocode = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
+        if (reverseGeocode && reverseGeocode.length > 0) {
+          const loc = reverseGeocode[0];
+          const street = loc.street || loc.name;
+          const streetNumber = loc.streetNumber || '';
+          const city = loc.city || '';
+          const district = loc.district || '';
+          
+          if (street && street !== 'Unnamed Road') {
+            address = streetNumber ? `${streetNumber} ${street}` : street;
+          } else if (district) {
+            address = `${district}, ${city}`;
+          } else if (city) {
+            address = city;
+          }
+        }
+      } catch (geocodeErr) {
+        console.error('Reverse geocode failed in useLocation:', geocodeErr);
+      }
+
       await apiRequest('/rooms/sync', {
         method: 'POST',
-        body: JSON.stringify({ userId: uid, latitude: lat, longitude: lng }),
+        body: JSON.stringify({ 
+          userId: uid, 
+          latitude: lat, 
+          longitude: lng,
+          address: address || undefined 
+        }),
       });
       
       const syncData: LastSyncData = { latitude: lat, longitude: lng, timestamp: now };

@@ -210,6 +210,7 @@ export default function ChatScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [currentDistance, setCurrentDistance] = useState<number | null>(null);
 
     const { location, locationRef } = useLocation(user?.id);
 
@@ -557,13 +558,14 @@ export default function ChatScreen() {
 
   useEffect(() => {
     if (room && location && room.type !== 'private') {
-      const distance = calculateDistance(
-        location.coords.latitude,
-        location.coords.longitude,
-        room.latitude,
-        room.longitude
-      );
-      const radius = room.radius || CHAT_RADIUS_METERS;
+        const distance = calculateDistance(
+          location.coords.latitude,
+          location.coords.longitude,
+          room.latitude,
+          room.longitude
+        );
+        setCurrentDistance(distance);
+        const radius = room.radius || CHAT_RADIUS_METERS;
       const newIsOutOfRange = distance > radius;
       
       // Only update state if it actually changes to prevent redundant renders
@@ -589,20 +591,6 @@ export default function ChatScreen() {
       setDraft(id, newMessage);
     }
   }, [id, newMessage]);
-
-  // Automatic navigation when leaving location or expiration
-  useEffect(() => {
-    if ((isOutOfRange || isExpired || roomNotFound) && room?.type !== 'private' && room) {
-      const timer = setTimeout(() => {
-        // Only navigate if we're still out of range/expired when timer fires
-        if (isOutOfRange || isExpired || roomNotFound) {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-          router.replace('/(tabs)/chats');
-        }
-      }, 5000); // 5 second grace period to allow for GPS flicker or reading final messages
-      return () => clearTimeout(timer);
-    }
-  }, [isOutOfRange, isExpired, roomNotFound, room?.type, router]);
 
   const sendMessage = useCallback(
     async (content?: string, type: 'text' | 'image' | 'gif' = 'text') => {
@@ -860,25 +848,32 @@ export default function ChatScreen() {
       headerShown: true,
       headerLeft: () => headerLeftComponent,
         headerTitle: () => (
-        <TouchableOpacity
-          onPress={() => {
-            if (room?.type === 'private' && room?.otherUserId) {
-              router.push(`/user/${room.otherUserId}`);
-            }
-          }}
-          disabled={room?.type !== 'private' || !room?.otherUserId}
-          style={{ flexDirection: 'row', alignItems: 'center' }}
-          activeOpacity={0.7}
-        >
-          <Text
-            style={{ color: theme.foreground, fontSize: 17, fontWeight: '700' }}
-            numberOfLines={1}>
-            {formatRoomName(room?.name)}
-          </Text>
-          {room?.type === 'private' && room?.otherUserId && (
-            <ChevronRight size={14} color={theme.mutedForeground} style={{ marginLeft: 4 }} />
-          )}
-        </TouchableOpacity>
+          <View>
+            <TouchableOpacity
+              onPress={() => {
+                if (room?.type === 'private' && room?.otherUserId) {
+                  router.push(`/user/${room.otherUserId}`);
+                }
+              }}
+              disabled={room?.type !== 'private' || !room?.otherUserId}
+              style={{ flexDirection: 'row', alignItems: 'center' }}
+              activeOpacity={0.7}
+            >
+              <Text
+                style={{ color: theme.foreground, fontSize: 17, fontWeight: '700' }}
+                numberOfLines={1}>
+                {formatRoomName(room?.name)}
+              </Text>
+              {room?.type === 'private' && room?.otherUserId && (
+                <ChevronRight size={14} color={theme.mutedForeground} style={{ marginLeft: 4 }} />
+              )}
+            </TouchableOpacity>
+            {room?.type !== 'private' && (
+              <Text style={{ color: isOutOfRange ? '#ef4444' : theme.mutedForeground, fontSize: 11, fontWeight: '600' }}>
+                {isOutOfRange ? 'Out of zone' : `${formatDistance(currentDistance || 0)} from center`} • {formatDistance(room?.radius || CHAT_RADIUS_METERS)} zone
+              </Text>
+            )}
+          </View>
       ),
 
       headerStyle: { backgroundColor: theme.background },
@@ -1077,11 +1072,11 @@ export default function ChatScreen() {
                 <View className="flex-row items-center rounded-2xl bg-secondary/50 px-4 py-3 border border-border/50">
                   <Lock size={18} color={theme.mutedForeground} className="mr-3" />
                   <Text className="flex-1 text-[14px] font-bold text-muted-foreground tracking-tight">
-                      {roomNotFound
-                        ? 'This chat room is no longer active.'
-                        : isExpired
-                          ? 'This chat has expired.'
-                          : `Read only - You've left the ${formatDistance(room?.radius || 20)} area.`}
+                        {roomNotFound
+                          ? 'This chat room is no longer active.'
+                          : isExpired
+                            ? 'This chat has expired.'
+                            : `Read only - You are ${formatDistance(currentDistance || 0)} away (Limit: ${formatDistance(room?.radius || CHAT_RADIUS_METERS)})`}
                   </Text>
                 </View>
               </View>

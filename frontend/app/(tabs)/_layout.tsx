@@ -79,13 +79,14 @@ export default function TabsLayout() {
           options={{
             title: 'TapIn',
             tabBarLabel: 'TapIn',
-          tabBarIcon: ({ color, focused }) => (
-            <View className={`p-2.5 rounded-2xl ${focused ? 'bg-primary/15' : ''}`}>
-              <Zap color={color} size={22} strokeWidth={focused ? 2.5 : 2} fill={focused ? color : 'transparent'} />
-            </View>
-          ),
-        }}
-      />
+            headerShown: false,
+            tabBarIcon: ({ color, focused }) => (
+              <View className={`p-2.5 rounded-2xl ${focused ? 'bg-primary/15' : ''}`}>
+                <Zap color={color} size={22} strokeWidth={focused ? 2.5 : 2} fill={focused ? color : 'transparent'} />
+              </View>
+            ),
+          }}
+        />
       <Tabs.Screen
         name="users"
         options={{

@@ -12,6 +12,8 @@ import { useLocation } from '@/hooks/useLocation';
 import { useColorScheme } from 'nativewind';
 import { supabase } from '@/lib/supabase';
 
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -129,16 +131,18 @@ function RootLayoutContent() {
 
 export default function RootLayout() {
   return (
-    <ErrorBoundary>
-      <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <NotificationProvider>
-            <ChatProvider>
-              <RootLayoutContent />
-            </ChatProvider>
-          </NotificationProvider>
-        </AuthProvider>
-      </QueryClientProvider>
-    </ErrorBoundary>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ErrorBoundary>
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>
+            <NotificationProvider>
+              <ChatProvider>
+                <RootLayoutContent />
+              </ChatProvider>
+            </NotificationProvider>
+          </AuthProvider>
+        </QueryClientProvider>
+      </ErrorBoundary>
+    </GestureHandlerRootView>
   );
 }

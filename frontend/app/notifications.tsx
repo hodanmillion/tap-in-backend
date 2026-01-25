@@ -3,8 +3,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Bell, MessageCircle, UserPlus, MapPin, CheckCircle2, ChevronLeft, Trash2 } from 'lucide-react-native';
-import { router, Stack } from 'expo-router';
-import { useEffect, useCallback } from 'react';
+import { useRouter } from 'expo-router';
+import { useEffect, useCallback, useRef } from 'react';
 import { useColorScheme } from 'nativewind';
 import { THEME } from '@/lib/theme';
 import { apiRequest } from '@/lib/api';
@@ -19,6 +19,8 @@ export default function NotificationsScreen() {
   const { colorScheme } = useColorScheme();
   const theme = THEME[colorScheme ?? 'light'];
   const queryClient = useQueryClient();
+  const router = useRouter();
+  const lastMarkedReadRef = useRef<string[]>([]);
 
   const {
     data: notifications,
@@ -70,9 +72,15 @@ export default function NotificationsScreen() {
   }, [deleteNotificationMutation]);
 
   useEffect(() => {
-    if (notifications && notifications.length > 0) {
+    if (Array.isArray(notifications) && notifications.length > 0) {
       const unreadIds = notifications.filter((n: any) => !n.is_read).map((n: any) => n.id);
-      if (unreadIds.length > 0) {
+      
+      // Prevent infinite loop by checking if we already marked these specific IDs
+      const unreadIdsKey = unreadIds.sort().join(',');
+      const lastKey = lastMarkedReadRef.current.sort().join(',');
+      
+      if (unreadIds.length > 0 && unreadIdsKey !== lastKey) {
+        lastMarkedReadRef.current = unreadIds;
         markReadMutation.mutate(unreadIds);
       }
     }
