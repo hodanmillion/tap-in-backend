@@ -35,7 +35,6 @@
         <category android:name="android.intent.category.DEFAULT"/>
         <category android:name="android.intent.category.BROWSABLE"/>
         <data android:scheme="tapin"/>
-        <data android:scheme="exp+tap-in"/>
       </intent-filter>
     </activity>
   </application>

@@ -42,7 +42,7 @@ import { useColorScheme } from 'nativewind';
 import { THEME } from '@/lib/theme';
 import * as Haptics from 'expo-haptics';
 import { apiRequest } from '@/lib/api';
-import { generateUUID, formatDistance, formatRoomName } from '@/lib/utils';
+import { generateUUID, formatDistance, formatRoomName, formatGeographicDistance } from '@/lib/utils';
 
 const CHAT_RADIUS_METERS = 500;
 const GIPHY_API_KEY = process.env.EXPO_PUBLIC_GIPHY_API_KEY || 'l1WfAFgqA5WupWoMaCaWKB12G54J6LtZ';
@@ -868,11 +868,11 @@ export default function ChatScreen() {
                 <ChevronRight size={14} color={theme.mutedForeground} style={{ marginLeft: 4 }} />
               )}
             </TouchableOpacity>
-            {room?.type !== 'private' && (
-              <Text style={{ color: isOutOfRange ? '#ef4444' : theme.mutedForeground, fontSize: 11, fontWeight: '600' }}>
-                {isOutOfRange ? 'Out of zone' : `${formatDistance(currentDistance || 0)} from center`} • {formatDistance(room?.radius || CHAT_RADIUS_METERS)} zone
-              </Text>
-            )}
+              {room?.type !== 'private' && (
+                <Text style={{ color: isOutOfRange ? '#ef4444' : theme.mutedForeground, fontSize: 11, fontWeight: '600' }}>
+                  {isOutOfRange ? 'Out of zone' : `${formatGeographicDistance(currentDistance || 0)} from center`} • {formatGeographicDistance(room?.radius || CHAT_RADIUS_METERS)} zone
+                </Text>
+              )}
           </View>
       ),
 
@@ -1075,8 +1075,8 @@ export default function ChatScreen() {
                         {roomNotFound
                           ? 'This chat room is no longer active.'
                           : isExpired
-                            ? 'This chat has expired.'
-                            : `Read only - You are ${formatDistance(currentDistance || 0)} away (Limit: ${formatDistance(room?.radius || CHAT_RADIUS_METERS)})`}
+                              ? 'This chat has expired.'
+                              : `Read only - You are ${formatGeographicDistance(currentDistance || 0)} away (Limit: ${formatGeographicDistance(room?.radius || CHAT_RADIUS_METERS)})`}
                   </Text>
                 </View>
               </View>

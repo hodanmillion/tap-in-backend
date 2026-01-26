@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Tap In Pro",
+    "name": "TapIn",
     "slug": "tap-in",
     "version": "15.2.0",
     "orientation": "portrait",
@@ -23,14 +23,13 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.tapin.social",
-        "buildNumber": "177",
+      "bundleIdentifier": "com.TapIn.myapp",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Allow Tap In to access your location to find nearby users and chat rooms.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "Allow Tap In to access your location even when the app is in the background.",
-        "NSLocationAlwaysUsageDescription": "Allow Tap In to access your location even when the app is in the background.",
-        "NSPhotoLibraryUsageDescription": "Allow Tap In to access your photos to update your profile picture.",
-        "NSCameraUsageDescription": "Allow Tap In to use your camera to take a profile picture.",
+        "NSLocationWhenInUseUsageDescription": "Allow TapIn to access your location to find nearby users and chat rooms.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Allow TapIn to access your location even when the app is in the background.",
+        "NSLocationAlwaysUsageDescription": "Allow TapIn to access your location even when the app is in the background.",
+        "NSPhotoLibraryUsageDescription": "Allow TapIn to access your photos to update your profile picture.",
+        "NSCameraUsageDescription": "Allow TapIn to use your camera to take a profile picture.",
         "ITSAppUsesNonExemptEncryption": false
       },
       "entitlements": {
@@ -49,8 +48,8 @@
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.RECORD_AUDIO"
       ],
-      "package": "com.tapin.social",
-        "runtimeVersion": "1.0.0"
+      "package": "com.tapin.myapp",
+      "runtimeVersion": "1.0.0"
     },
     "web": {
       "bundler": "metro",
@@ -60,22 +59,12 @@
       "plugins": [
         "expo-router",
         "expo-image-picker",
-        [
-          "expo-build-properties",
-          {
-            "ios": {
-              "newArchEnabled": true
-            },
-            "android": {
-              "newArchEnabled": true
-            }
-          }
-        ],
+        "expo-build-properties",
         [
           "expo-location",
         {
-          "locationAlwaysPermission": "Allow Tap In to access your location even when the app is in the background.",
-          "locationWhenInUsePermission": "Allow Tap In to access your location to find nearby users and chat rooms.",
+          "locationAlwaysPermission": "Allow TapIn to access your location even when the app is in the background.",
+          "locationWhenInUsePermission": "Allow TapIn to access your location to find nearby users and chat rooms.",
           "isIosBackgroundLocationEnabled": false,
           "isAndroidBackgroundLocationEnabled": false
         }
@@ -89,9 +78,11 @@
           "enableBackgroundRemoteNotifications": true
         }
       ],
-      "expo-font",
-      "expo-asset"
-    ],
+        "expo-font",
+        "expo-asset",
+        "expo-updates"
+      ],
+
     "experiments": {
       "typedRoutes": true
     },
@@ -102,10 +93,9 @@
       }
     },
     "owner": "hodanmo15",
-      "updates": {
-        "url": "https://u.expo.dev/09438138-397a-4217-ace8-19c2d7a3b92d",
-        "checkAutomatically": "NEVER"
-      }
-
+    "updates": {
+      "url": "https://u.expo.dev/09438138-397a-4217-ace8-19c2d7a3b92d",
+      "checkAutomatically": "NEVER"
+    }
   }
 }

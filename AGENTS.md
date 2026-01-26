@@ -16,7 +16,7 @@ TapIn is a mobile-first social application built with React Native (Expo) and a 
 - Follow Expo Router conventions for navigation.
 - Implement proper loading/error states using React Query.
 - Ensure cross-platform compatibility (iOS/Android) and web preview support.
-- **Store Submission**: Always use professional bundle IDs (e.g., `com.tapin.social`) and ensure accurate iPhone screenshots (6.5" and 5.5") are included to avoid 2.3.6 rejections.
+- **Store Submission**: Use the official bundle ID `com.TapIn.myapp` for App Store and Play Store releases. Ensure accurate iPhone screenshots (6.5" and 5.5") are included to avoid 2.3.6 rejections.
 - **Metadata**: App name should accurately reflect functionality. Use `frontend/app/previews.tsx` to generate store-ready screenshots.
 
 ## Common Patterns

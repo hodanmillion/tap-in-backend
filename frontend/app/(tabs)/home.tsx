@@ -8,7 +8,7 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiRequest } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
-import { formatRoomName } from '@/lib/utils';
+import { formatRoomName, formatGeographicDistance } from '@/lib/utils';
 import { useColorScheme } from 'nativewind';
 import { THEME } from '@/lib/theme';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -33,9 +33,7 @@ const RoomItemSkeleton = () => (
 
 const RoomItem = memo(({ item, onPress, theme, index }: { item: any; onPress: () => void; theme: any; index: number }) => {
   const distanceText = item.distanceMeters !== undefined 
-    ? item.distanceMeters < 100 
-      ? 'Under 100m away' 
-      : `${(item.distanceMeters / 1000).toFixed(1)}km away`
+    ? `${formatGeographicDistance(item.distanceMeters)} away`
     : null;
 
   return (

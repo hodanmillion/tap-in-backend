@@ -282,7 +282,7 @@ export default function ChatsScreen() {
               <FlashList
                 data={sections}
                 keyExtractor={(item, index) => item.id || `extra-${index}`}
-                onRefresh={refetch}
+                onRefresh={() => { refetch(); }}
                 refreshing={isFetching}
                 renderItem={renderItem}
                 estimatedItemSize={80}

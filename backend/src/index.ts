@@ -211,63 +211,61 @@ app.get('/profiles/nearby', async (c) => {
   const radius = parseInt(c.req.query('radius') || '5000');
   const userId = c.req.query('userId');
 
-    const { data, error } = await supabase.rpc('find_nearby_users', {
+  const { data, error } = await supabase.rpc('find_nearby_users', {
+    lat,
+    lng,
+    max_dist_meters: radius,
+    exclude_id: userId || null,
+  });
+
+  if (error) return c.json({ error: error.message }, 500);
+  
+  return c.json(await enrichProfiles(data || [], userId));
+});
+
+app.get('/profiles/search', async (c) => {
+  const q = c.req.query('q') || '';
+  const userId = c.req.query('userId');
+  const lat = c.req.query('lat') ? parseFloat(c.req.query('lat')!) : null;
+  const lng = c.req.query('lng') ? parseFloat(c.req.query('lng')!) : null;
+  const radius = c.req.query('radius') ? parseInt(c.req.query('radius')!) : 10000;
+
+  if (lat !== null && lng !== null) {
+    const { data: nearbyData, error: nearbyError } = await supabase.rpc('find_nearby_users', {
       lat,
       lng,
       max_dist_meters: radius,
+      exclude_id: userId || null,
     });
 
-    if (error) return c.json({ error: error.message }, 500);
-    
-    let filtered = userId ? data.filter((u: any) => u.id !== userId) : data;
-    
-    return c.json(await enrichProfiles(filtered || [], userId));
-  });
-
-
-  app.get('/profiles/search', async (c) => {
-    const q = c.req.query('q') || '';
-    const userId = c.req.query('userId');
-    const lat = c.req.query('lat') ? parseFloat(c.req.query('lat')!) : null;
-    const lng = c.req.query('lng') ? parseFloat(c.req.query('lng')!) : null;
-    const radius = c.req.query('radius') ? parseInt(c.req.query('radius')!) : 10000; // Default 10km for search
-  
-    let query = supabase
-      .from('profiles')
-      .select('*')
-      .or(`username.ilike.%${q}%,full_name.ilike.%${q}%`)
-      .eq('is_incognito', false)
-      .neq('id', userId || '')
-      .order('last_seen', { ascending: false })
-      .limit(20);
-
-    if (lat !== null && lng !== null) {
-      // If location is provided, we use the RPC to find nearby users matching the search query
-      // This is more efficient than filtering in JS
-      const { data: nearbyData, error: nearbyError } = await supabase.rpc('find_nearby_users', {
-        lat,
-        lng,
-        max_dist_meters: radius,
+    if (!nearbyError && nearbyData) {
+      const searchTerms = q.toLowerCase();
+      const filteredNearby = nearbyData.filter((u: any) => {
+        const username = (u.username || '').toLowerCase();
+        const fullName = (u.full_name || '').toLowerCase();
+        return username.includes(searchTerms) || fullName.includes(searchTerms);
       });
-
-      if (!nearbyError && nearbyData) {
-        // Filter the nearby users by the search query
-        const searchTerms = q.toLowerCase();
-        const filteredNearby = nearbyData.filter((u: any) => {
-          const username = (u.username || '').toLowerCase();
-          const fullName = (u.full_name || '').toLowerCase();
-          return (username.includes(searchTerms) || fullName.includes(searchTerms)) && u.id !== userId;
-        });
-        
-        // Return these results
-        return c.json(await enrichProfiles(filteredNearby, userId));
-      }
+      
+      return c.json(await enrichProfiles(filteredNearby, userId));
     }
+  }
 
-    const { data, error } = await query;
-    if (error) return c.json({ error: error.message }, 500);
-    
-    return c.json(await enrichProfiles(data || [], userId));
+  let query = supabase
+    .from('profiles')
+    .select('*')
+    .or(`username.ilike.%${q}%,full_name.ilike.%${q}%`)
+    .eq('is_incognito', false)
+    .order('last_seen', { ascending: false })
+    .limit(20);
+
+  if (userId) {
+    query = query.neq('id', userId);
+  }
+
+  const { data, error } = await query;
+  if (error) return c.json({ error: error.message }, 500);
+  
+  return c.json(await enrichProfiles(data || [], userId));
 });
 
 async function enrichProfiles(profiles: any[], userId: string | undefined | null) {
@@ -462,7 +460,14 @@ app.post(
     const publicRooms = (existingRooms || []).filter((r: any) => r.type === 'public');
 
       if (publicRooms.length > 0) {
-        const nearestRoom = publicRooms[0];
+        // Find the absolute nearest room
+        const sortedByDistance = publicRooms.sort((a: any, b: any) => {
+          const distA = calculateDistance(latitude, longitude, a.latitude, a.longitude);
+          const distB = calculateDistance(latitude, longitude, b.latitude, b.longitude);
+          return distA - distB;
+        });
+        
+        const nearestRoom = sortedByDistance[0];
         
         // If the nearest room has a technical name and we have a real address, update it
         if (address && nearestRoom.name && (nearestRoom.name.includes('Chat Zone') || nearestRoom.name === 'Nearby Zone')) {
@@ -548,12 +553,28 @@ app.get('/rooms/nearby', async (c) => {
 
   if (error) return c.json({ error: error.message }, 500);
   
-  const seenNames = new Set<string>();
-  const dedupedRooms = (rooms || []).filter((room: any) => {
-    if (seenNames.has(room.name)) return false;
-    seenNames.add(room.name);
-    return true;
+  // Proximity-based deduplication
+  // If multiple rooms are very close (e.g., < 200m), we only show one
+  const sortedRooms = (rooms || []).sort((a: any, b: any) => {
+    const distA = calculateDistance(lat, lng, a.latitude, a.longitude);
+    const distB = calculateDistance(lat, lng, b.latitude, b.longitude);
+    return distA - distB;
   });
+
+  const dedupedRooms: any[] = [];
+  const PROXIMITY_THRESHOLD = 200; // meters
+
+  for (const room of sortedRooms) {
+    const isDuplicate = dedupedRooms.some(existing => {
+      // Check if room is too close to an already included room
+      const dist = calculateDistance(room.latitude, room.longitude, existing.latitude, existing.longitude);
+      return dist < PROXIMITY_THRESHOLD;
+    });
+
+    if (!isDuplicate) {
+      dedupedRooms.push(room);
+    }
+  }
   
   return c.json(dedupedRooms);
 });
@@ -562,11 +583,13 @@ app.get('/users/nearby', async (c) => {
   const lat = parseFloat(c.req.query('lat') || '0');
   const lng = parseFloat(c.req.query('lng') || '0');
   const dist = parseInt(c.req.query('dist') || '5000');
+  const userId = c.req.query('userId');
 
   const { data, error } = await supabase.rpc('find_nearby_users', {
     lat,
     lng,
     max_dist_meters: dist,
+    exclude_id: userId || null,
   });
 
   if (error) return c.json({ error: error.message }, 500);
@@ -1005,7 +1028,7 @@ app.post('/rooms/create', async (c) => {
       const { data: existingRooms } = await supabase.rpc('find_nearby_rooms', {
         lat: latitude,
         lng: longitude,
-        max_dist_meters: 300,
+        max_dist_meters: 500,
       });
 
       if (existingRooms && existingRooms.length > 0) {
@@ -1037,7 +1060,7 @@ app.post('/rooms/create', async (c) => {
         const { data: retryRooms } = await supabase.rpc('find_nearby_rooms', {
           lat: latitude,
           lng: longitude,
-          max_dist_meters: 300,
+          max_dist_meters: 500,
         });
         if (retryRooms && retryRooms.length > 0) {
           if (userId) {
@@ -1134,8 +1157,8 @@ app.delete('/notifications/:id', async (c) => {
             .from('friends')
             .select(`
               *,
-              user_1:profiles!user_id_1(*),
-              user_2:profiles!user_id_2(*)
+              user_1:profiles!friends_user_id_1_fkey(*),
+              user_2:profiles!friends_user_id_2_fkey(*)
             `)
             .or(`user_id_1.eq.${userId},user_id_2.eq.${userId}`);
 
@@ -1207,21 +1230,21 @@ app.post('/friends/request', async (c) => {
   return c.json(data);
 });
 
-  app.get('/friend-requests/:userId', async (c) => {
-    const userId = c.req.param('userId');
-    const { data, error } = await supabase
-      .from('friend_requests')
-      .select(`
-        *,
-        sender:profiles!sender_id(id, username, full_name, avatar_url)
-      `)
-      .eq('receiver_id', userId)
-      .eq('status', 'pending')
-      .order('created_at', { ascending: false });
+    app.get('/friend-requests/:userId', async (c) => {
+      const userId = c.req.param('userId');
+      const { data, error } = await supabase
+        .from('friend_requests')
+        .select(`
+          *,
+          sender:profiles!friend_requests_sender_id_fkey(id, username, full_name, avatar_url)
+        `)
+        .eq('receiver_id', userId)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false });
 
-    if (error) return c.json({ error: error.message }, 500);
-    return c.json(data || []);
-  });
+      if (error) return c.json({ error: error.message }, 500);
+      return c.json(data || []);
+    });
 
 app.post('/friend-requests/:id/respond', async (c) => {
   const id = c.req.param('id');
@@ -1275,41 +1298,41 @@ app.post('/friend-requests/:id/respond', async (c) => {
   return c.json({ success: true });
 });
 
-  app.get('/tapins/received/:userId', async (c) => {
-    const userId = c.req.param('userId');
-    
-      const { data, error } = await supabase
-        .from('tapins')
-        .select(`
-          *,
-          sender:profiles!sender_id(id, username, full_name, avatar_url)
-        `)
-      .eq('receiver_id', userId)
-      .is('viewed_at', null)
-      .gt('expires_at', new Date().toISOString())
-      .order('created_at', { ascending: false });
+    app.get('/tapins/received/:userId', async (c) => {
+      const userId = c.req.param('userId');
+      
+        const { data, error } = await supabase
+          .from('tapins')
+          .select(`
+            *,
+            sender:profiles!tapins_sender_id_fkey(id, username, full_name, avatar_url)
+          `)
+        .eq('receiver_id', userId)
+        .is('viewed_at', null)
+        .gt('expires_at', new Date().toISOString())
+        .order('created_at', { ascending: false });
 
-    if (error) return c.json({ error: error.message }, 500);
-    return c.json(data || []);
-  });
+      if (error) return c.json({ error: error.message }, 500);
+      return c.json(data || []);
+    });
 
-  app.get('/tapins/:userId', async (c) => {
-    const userId = c.req.param('userId');
-    
-      const { data, error } = await supabase
-        .from('tapins')
-        .select(`
-          *,
-          sender:profiles!sender_id(id, username, full_name, avatar_url)
-        `)
-      .eq('receiver_id', userId)
-      .is('viewed_at', null)
-      .gt('expires_at', new Date().toISOString())
-      .order('created_at', { ascending: false });
+    app.get('/tapins/:userId', async (c) => {
+      const userId = c.req.param('userId');
+      
+        const { data, error } = await supabase
+          .from('tapins')
+          .select(`
+            *,
+            sender:profiles!tapins_sender_id_fkey(id, username, full_name, avatar_url)
+          `)
+        .eq('receiver_id', userId)
+        .is('viewed_at', null)
+        .gt('expires_at', new Date().toISOString())
+        .order('created_at', { ascending: false });
 
-    if (error) return c.json({ error: error.message }, 500);
-    return c.json(data || []);
-  });
+      if (error) return c.json({ error: error.message }, 500);
+      return c.json(data || []);
+    });
 
 app.post(
   '/tapins',
@@ -1606,11 +1629,29 @@ app.post(
 
     // Remove this token from any other users first to ensure a device only 
     // receives notifications for the most recently logged-in user.
-    await supabase
+    // ALSO: Mark old accounts on this device as "offline" by setting last_seen to 3 hours ago
+    // This prevents them from showing up as "Nearby" when switching accounts on the same device.
+    const { data: oldTokenOwners } = await supabase
       .from('push_tokens')
-      .delete()
+      .select('user_id')
       .eq('token', body.token)
       .neq('user_id', body.user_id);
+
+    if (oldTokenOwners && oldTokenOwners.length > 0) {
+      const oldUserIds = oldTokenOwners.map(o => o.user_id);
+      const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
+      
+      await supabase
+        .from('profiles')
+        .update({ last_seen: threeHoursAgo })
+        .in('id', oldUserIds);
+
+      await supabase
+        .from('push_tokens')
+        .delete()
+        .eq('token', body.token)
+        .neq('user_id', body.user_id);
+    }
 
     const { data, error } = await supabase
       .from('push_tokens')

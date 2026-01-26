@@ -27,3 +27,17 @@ export function formatDistance(date: Date | string | number): string {
   if (diffDays < 7) return `${diffDays}d ago`;
   return then.toLocaleDateString();
 }
+
+export function formatRoomName(name: string): string {
+  if (!name) return 'General Room';
+  return name
+    .split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+}
+
+export function formatGeographicDistance(meters: number): string {
+  if (meters < 100) return 'Under 100m';
+  if (meters < 1000) return `${Math.round(meters)}m`;
+  return `${(meters / 1000).toFixed(1)}km`;
+}

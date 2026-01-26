@@ -11,6 +11,8 @@ interface NotificationContextType {
   expoPushToken: string | undefined;
   notification: Notifications.Notification | undefined;
   requestPermissions: () => Promise<string | undefined>;
+  permissionStatus: Notifications.PermissionStatus | undefined;
+  schedulePushNotification: (title: string, body: string, data?: any) => Promise<void>;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
@@ -28,8 +30,20 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const router = useRouter();
   const [expoPushToken, setExpoPushToken] = useState<string | undefined>(undefined);
   const [notification, setNotification] = useState<Notifications.Notification | undefined>(undefined);
-  const notificationListener = useRef<any>();
-  const responseListener = useRef<any>();
+  const [permissionStatus, setPermissionStatus] = useState<Notifications.PermissionStatus | undefined>(undefined);
+  const notificationListener = useRef<Notifications.Subscription | null>(null);
+  const responseListener = useRef<Notifications.Subscription | null>(null);
+
+  const schedulePushNotification = async (title: string, body: string, data?: any) => {
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title,
+        body,
+        data: data || {},
+      },
+      trigger: null, // show immediately
+    });
+  };
 
   const handleNotificationRouting = (data: any) => {
     if (!data) return;
@@ -49,6 +63,8 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         shouldShowAlert: true,
         shouldPlaySound: true,
         shouldSetBadge: true,
+        shouldShowBanner: true,
+        shouldShowList: true,
       }),
     });
 
@@ -78,14 +94,14 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       handleNotificationRouting(data);
     });
 
-return () => {
-if (notificationListener.current) {
-notificationListener.current.remove();
-}
-if (responseListener.current) {
-responseListener.current.remove();
-}
-};
+    return () => {
+      if (notificationListener.current) {
+        notificationListener.current.remove();
+      }
+      if (responseListener.current) {
+        responseListener.current.remove();
+      }
+    };
   }, []);
 
   const registerForPushNotificationsAsync = async () => {
@@ -99,6 +115,7 @@ responseListener.current.remove();
         const { status } = await Notifications.requestPermissionsAsync();
         finalStatus = status;
       }
+      setPermissionStatus(finalStatus as Notifications.PermissionStatus);
       if (finalStatus !== 'granted') {
         console.log('Failed to get push token for push notification!');
         return;
@@ -143,7 +160,7 @@ responseListener.current.remove();
   };
 
   return (
-    <NotificationContext.Provider value={{ expoPushToken, notification, requestPermissions }}>
+    <NotificationContext.Provider value={{ expoPushToken, notification, requestPermissions, permissionStatus, schedulePushNotification }}>
       {children}
     </NotificationContext.Provider>
   );

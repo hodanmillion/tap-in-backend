@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Bell, MessageCircle, UserPlus, MapPin, CheckCircle2, ChevronLeft, Trash2 } from 'lucide-react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, Stack } from 'expo-router';
 import { useEffect, useCallback, useRef } from 'react';
 import { useColorScheme } from 'nativewind';
 import { THEME } from '@/lib/theme';

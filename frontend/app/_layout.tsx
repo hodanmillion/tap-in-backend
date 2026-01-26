@@ -1,3 +1,4 @@
+import 'react-native-gesture-handler';
 import '@/global.css';
 import { Stack } from 'expo-router';
 import { QueryClient, QueryClientProvider, focusManager } from '@tanstack/react-query';
@@ -49,11 +50,15 @@ function RootLayoutContent() {
 
   useEffect(() => {
     try {
-      setColorScheme('dark');
+      if (typeof setColorScheme === 'function') {
+        setColorScheme('dark');
+      } else {
+        console.warn('setColorScheme is not a function. NativeWind might not be initialized correctly.');
+      }
     } catch (e) {
       console.warn('Failed to set color scheme:', e);
     }
-  }, []);
+  }, [setColorScheme]);
 
   useEffect(() => {
     if (focusManagerSetup.current) return;
