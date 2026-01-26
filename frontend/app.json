@@ -23,7 +23,7 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.TapIn.myapp",
+      "bundleIdentifier": "com.tapin.social",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Allow TapIn to access your location to find nearby users and chat rooms.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Allow TapIn to access your location even when the app is in the background.",
@@ -48,7 +48,7 @@
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.RECORD_AUDIO"
       ],
-      "package": "com.tapin.myapp",
+      "package": "com.tapin.social",
       "runtimeVersion": "1.0.0"
     },
     "web": {
