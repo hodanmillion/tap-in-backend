@@ -20,26 +20,27 @@ platform :ios, podfile_properties['ios.deploymentTarget'] || '15.1'
 
 prepare_react_native_project!
 
+# Shared configuration for both targets
+if ENV['EXPO_USE_COMMUNITY_AUTOLINKING'] == '1'
+  config_command = ['node', '-e', "process.argv=['', '', 'config'];require('@react-native-community/cli').run()"];
+else
+  config_command = [
+    'node',
+    '--no-warnings',
+    '--eval',
+    'require(\'expo/bin/autolinking\')',
+    'expo-modules-autolinking',
+    'react-native-config',
+    '--json',
+    '--platform',
+    'ios'
+  ]
+end
+
+config = use_native_modules!(config_command)
+
 target 'TapIn' do
   use_expo_modules!
-
-  if ENV['EXPO_USE_COMMUNITY_AUTOLINKING'] == '1'
-    config_command = ['node', '-e', "process.argv=['', '', 'config'];require('@react-native-community/cli').run()"];
-  else
-    config_command = [
-      'node',
-      '--no-warnings',
-      '--eval',
-      'require(\'expo/bin/autolinking\')',
-      'expo-modules-autolinking',
-      'react-native-config',
-      '--json',
-      '--platform',
-      'ios'
-    ]
-  end
-
-  config = use_native_modules!(config_command)
 
   use_frameworks! :linkage => podfile_properties['ios.useFrameworks'].to_sym if podfile_properties['ios.useFrameworks']
   use_frameworks! :linkage => ENV['USE_FRAMEWORKS'].to_sym if ENV['USE_FRAMEWORKS']
@@ -51,6 +52,7 @@ target 'TapIn' do
     :app_path => "#{Pod::Config.instance.installation_root}/..",
     :privacy_file_aggregation_enabled => podfile_properties['apple.privacyManifestAggregationEnabled'] != 'false',
   )
+end
 
   post_install do |installer|
     react_native_post_install(
@@ -59,5 +61,38 @@ target 'TapIn' do
       :mac_catalyst_enabled => false,
       :ccache_enabled => ccache_enabled?(podfile_properties),
     )
+
+    # Fix "Multiple commands produce ... privacy.bundle" by deduplicating targets in Pods project
+    seen_bundle_names = []
+    installer.pods_project.targets.each do |target|
+      if target.name.include?('React-Core_privacy') || target.name.include?('RCT-Folly_privacy')
+        # Normalize name to catch duplicates like "React-Core-f955c501-React-Core_privacy"
+        normalized_name = target.name.split('-').last
+        if seen_bundle_names.include?(normalized_name)
+          target.remove_from_project
+        else
+          seen_bundle_names << normalized_name
+        end
+      end
+    end
+
+    # Also deduplicate resources in the main app targets
+    installer.aggregate_targets.each do |aggregate_target|
+      aggregate_target.user_project.targets.each do |target|
+        if target.respond_to?(:resources_build_phase) && target.resources_build_phase
+          seen_resources = []
+          target.resources_build_phase.files.each do |file|
+            if file.file_ref && file.file_ref.path && (file.file_ref.path.end_with?('React-Core_privacy.bundle') || file.file_ref.path.end_with?('RCT-Folly_privacy.bundle'))
+              if seen_resources.include?(file.file_ref.path)
+                target.resources_build_phase.remove_file_reference(file.file_ref)
+              else
+                seen_resources << file.file_ref.path
+              end
+            end
+          end
+        end
+      end
+    end
   end
-end
+
+

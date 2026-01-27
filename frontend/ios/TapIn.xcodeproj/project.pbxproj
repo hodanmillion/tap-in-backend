@@ -253,13 +253,13 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.4.2.6;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-ObjC",
 					"-lc++",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "com.tapin.social";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.TapIn.myapp";
 				PRODUCT_NAME = "TapIn";
 				SWIFT_OBJC_BRIDGING_HEADER = "TapIn/TapIn-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -282,13 +282,13 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.4.2.6;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-ObjC",
 					"-lc++",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "com.tapin.social";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.TapIn.myapp";
 				PRODUCT_NAME = "TapIn";
 				SWIFT_OBJC_BRIDGING_HEADER = "TapIn/TapIn-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;

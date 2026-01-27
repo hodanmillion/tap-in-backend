@@ -64,6 +64,15 @@
         "expo-image-picker",
         "expo-updates",
         [
+          "expo-build-properties",
+          {
+            "ios": {
+              "newArchEnabled": true,
+                "privacyManifestAggregationEnabled": true
+            }
+          }
+        ],
+        [
           "expo-location",
           {
             "locationAlwaysPermission": "Allow TapIn to access your location even when the app is in the background.",

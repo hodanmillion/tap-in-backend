@@ -2,7 +2,7 @@
   "expo": {
     "name": "TapIn",
     "slug": "tap-in",
-    "version": "15.2.0",
+    "version": "1.4.2.6",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "tapin",
@@ -23,7 +23,7 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.tapin.social",
+      "bundleIdentifier": "com.TapIn.myapp",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Allow TapIn to access your location to find nearby users and chat rooms.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Allow TapIn to access your location even when the app is in the background.",
@@ -46,11 +46,11 @@
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.FOREGROUND_SERVICE",
-        "android.permission.RECORD_AUDIO"
-      ],
-      "package": "com.tapin.social",
-      "runtimeVersion": "1.0.0"
-    },
+          "android.permission.RECORD_AUDIO"
+        ],
+        "package": "com.TapIn.myapp",
+        "runtimeVersion": "1.0.0"
+      },
     "web": {
       "bundler": "metro",
       "output": "static",
