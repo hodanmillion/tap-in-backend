@@ -10,51 +10,66 @@ export interface Database {
   public: {
     Tables: {
       profiles: {
-        Row: {
-          id: string;
-          username: string | null;
-          full_name: string | null;
-          avatar_url: string | null;
-          latitude: number | null;
-          longitude: number | null;
-          location: unknown | null;
-          last_seen: string | null;
-          bio: string | null;
-          website: string | null;
-          location_name: string | null;
-          occupation: string | null;
-          created_at: string;
-        };
-        Insert: {
-          id: string;
-          username?: string | null;
-          full_name?: string | null;
-          avatar_url?: string | null;
-          latitude?: number | null;
-          longitude?: number | null;
-          location?: unknown | null;
-          last_seen?: string | null;
-          bio?: string | null;
-          website?: string | null;
-          location_name?: string | null;
-          occupation?: string | null;
-          created_at?: string;
-        };
-        Update: {
-          id?: string;
-          username?: string | null;
-          full_name?: string | null;
-          avatar_url?: string | null;
-          latitude?: number | null;
-          longitude?: number | null;
-          location?: unknown | null;
-          last_seen?: string | null;
-          bio?: string | null;
-          website?: string | null;
-          location_name?: string | null;
-          occupation?: string | null;
-          created_at?: string;
-        };
+          Row: {
+            id: string;
+            username: string | null;
+            full_name: string | null;
+            email: string | null;
+            avatar_url: string | null;
+            latitude: number | null;
+            longitude: number | null;
+            location: unknown | null;
+            last_seen: string | null;
+            bio: string | null;
+            website: string | null;
+            linkedin_url: string | null;
+            instagram_url: string | null;
+            location_name: string | null;
+            occupation: string | null;
+            push_notifications_enabled: boolean | null;
+            is_incognito: boolean | null;
+            created_at: string;
+          };
+          Insert: {
+            id: string;
+            username?: string | null;
+            full_name?: string | null;
+            email?: string | null;
+            avatar_url?: string | null;
+            latitude?: number | null;
+            longitude?: number | null;
+            location?: unknown | null;
+            last_seen?: string | null;
+            bio?: string | null;
+            website?: string | null;
+            linkedin_url?: string | null;
+            instagram_url?: string | null;
+            location_name?: string | null;
+            occupation?: string | null;
+            push_notifications_enabled?: boolean | null;
+            is_incognito?: boolean | null;
+            created_at?: string;
+          };
+          Update: {
+            id?: string;
+            username?: string | null;
+            full_name?: string | null;
+            email?: string | null;
+            avatar_url?: string | null;
+            latitude?: number | null;
+            longitude?: number | null;
+            location?: unknown | null;
+            last_seen?: string | null;
+            bio?: string | null;
+            website?: string | null;
+            linkedin_url?: string | null;
+            instagram_url?: string | null;
+            location_name?: string | null;
+            occupation?: string | null;
+            push_notifications_enabled?: boolean | null;
+            is_incognito?: boolean | null;
+            created_at?: string;
+          };
         Relationships: [];
       };
       messages: {

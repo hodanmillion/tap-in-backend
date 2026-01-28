@@ -21,27 +21,43 @@ export default function RegisterScreen() {
   const theme = THEME[colorScheme ?? 'light'];
 
     async function signUpWithEmail() {
-    setLoading(true);
-    try {
-      const generatedUsername = email.split('@')[0] + Math.floor(Math.random() * 1000);
-      
-      const response = await apiRequest('/auth/signup', {
-        method: 'POST',
-        body: JSON.stringify({
-          email,
-          password,
-          full_name: fullName,
-          username: generatedUsername,
-        }),
-      });
-
-      if (response.error) {
-        Alert.alert('Error', response.error);
-      } else {
-        Alert.alert('Success', 'Check your email for verification link!');
-        router.replace('/(auth)/login');
+      if (!email || !password || !fullName) {
+        Alert.alert('Error', 'Please fill in all fields');
+        return;
       }
-    } catch (err: any) {
+
+      setLoading(true);
+      try {
+        const generatedUsername = email.split('@')[0] + Math.floor(Math.random() * 1000);
+        
+        const response = await apiRequest('/auth/signup', {
+          method: 'POST',
+          body: JSON.stringify({
+            email,
+            password,
+            full_name: fullName,
+            username: generatedUsername,
+          }),
+        });
+  
+        if (response.error) {
+          if (response.error.includes('Email is already registered')) {
+            Alert.alert(
+              'Account Exists',
+              'An account with this email already exists. Would you like to log in instead?',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Log In', onPress: () => router.push('/(auth)/login') }
+              ]
+            );
+          } else {
+            Alert.alert('Error', response.error);
+          }
+        } else {
+          Alert.alert('Success', 'Account created! You can now log in.');
+          router.replace('/(auth)/login');
+        }
+      } catch (err: any) {
       console.error('Registration error:', err);
       Alert.alert('Error', err.message || 'An unexpected error occurred during registration.');
     } finally {
@@ -67,40 +83,40 @@ export default function RegisterScreen() {
                   </Text>
                 </View>
 
-              <View className="space-y-4">
                 <View>
-                  <Text className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 ml-1">Full Name</Text>
-                  <Input
-                    placeholder="John Doe"
-                    value={fullName}
-                    onChangeText={setFullName}
-                    className="h-14 rounded-2xl bg-secondary/40 border-0 px-5 font-semibold"
-                  />
-                </View>
-
-                <View>
-                  <Text className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 ml-1">Email</Text>
-                  <Input
-                    placeholder="email@example.com"
-                    value={email}
-                    onChangeText={setEmail}
-                    autoCapitalize="none"
-                    keyboardType="email-address"
-                    className="h-14 rounded-2xl bg-secondary/40 border-0 px-5 font-semibold"
-                  />
-                </View>
-
-                <View>
-                  <Text className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 ml-1">Password</Text>
-                  <Input
-                    placeholder="••••••••"
-                    value={password}
-                    onChangeText={setPassword}
-                    secureTextEntry
-                    autoCapitalize="none"
-                    className="h-14 rounded-2xl bg-secondary/40 border-0 px-5 font-semibold"
-                  />
-                </View>
+                  <View className="mb-4">
+                    <Text className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 ml-1">Full Name</Text>
+                    <Input
+                      placeholder="John Doe"
+                      value={fullName}
+                      onChangeText={setFullName}
+                      className="h-14 rounded-2xl bg-secondary/40 border-0 px-5 font-semibold"
+                    />
+                  </View>
+  
+                  <View className="mb-4">
+                    <Text className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 ml-1">Email</Text>
+                    <Input
+                      placeholder="email@example.com"
+                      value={email}
+                      onChangeText={setEmail}
+                      autoCapitalize="none"
+                      keyboardType="email-address"
+                      className="h-14 rounded-2xl bg-secondary/40 border-0 px-5 font-semibold"
+                    />
+                  </View>
+  
+                  <View className="mb-4">
+                    <Text className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 ml-1">Password</Text>
+                    <Input
+                      placeholder="••••••••"
+                      value={password}
+                      onChangeText={setPassword}
+                      secureTextEntry
+                      autoCapitalize="none"
+                      className="h-14 rounded-2xl bg-secondary/40 border-0 px-5 font-semibold"
+                    />
+                  </View>
 
                 <TouchableOpacity
                   onPress={signUpWithEmail}

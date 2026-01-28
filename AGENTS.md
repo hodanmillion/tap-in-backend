@@ -3,7 +3,7 @@ TapIn is a mobile-first social application built with React Native (Expo) and a 
 
 ## Tech Stack
 - **Frontend**: React Native, Expo, Expo Router, NativeWind (Tailwind CSS), TanStack Query (React Query), Lucide Icons.
-- **Backend**: Hono (running on Node.js/Bun), Supabase (Auth, Database, Storage - Project: `pcthejcpujqtnurpdmxs`), Resend (Transactional Emails), Expo Push Notifications. Hosted on Render for production.
+- **Backend**: Hono (running on Node.js/Bun), Supabase (Auth, Database, Storage - Project: `bcijrphffxfolptawwpv`), Resend (Transactional Emails), Expo Push Notifications. Hosted on Render for production.
 - **Communication**: REST API for data, Supabase Realtime for live updates. Primary API URL: `https://tap-in-backend.onrender.com`.
 
 

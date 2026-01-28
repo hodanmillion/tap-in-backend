@@ -146,12 +146,14 @@ export default function NotificationsScreen() {
 
     const rDeleteStyle = useAnimatedStyle(() => ({
       opacity: Math.min(1, Math.abs(translateX.value) / SWIPE_THRESHOLD),
+      transform: [{ scale: Math.min(1, Math.abs(translateX.value) / SWIPE_THRESHOLD) }],
     }));
 
     return (
       <Animated.View style={rContainerStyle}>
-        <View className="absolute right-0 top-0 bottom-0 w-24 items-center justify-center rounded-3xl bg-red-500">
-          <Animated.View style={rDeleteStyle}>
+        <View className="absolute right-0 top-0 bottom-0 w-24 overflow-hidden rounded-3xl">
+          <Animated.View 
+            style={[rDeleteStyle, { backgroundColor: '#ef4444', flex: 1, alignItems: 'center', justifyContent: 'center' }]}>
             <Trash2 size={24} color="#fff" />
           </Animated.View>
         </View>

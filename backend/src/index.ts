@@ -99,24 +99,35 @@ function getEmailHtml(fullName: string, verificationLink: string, isWelcome: boo
 
 async function sendVerificationEmail(email: string, fullName: string, type: 'signup' | 'welcome' = 'signup') {
   // Use backend proxy for verification redirect
-  const redirectTo = 'https://tap-in-backend.onrender.com/auth/callback';
-  console.log(`Generating verification link for ${email}, redirecting to ${redirectTo}`);
+  const baseUrl = process.env.BACKEND_URL || process.env.RENDER_EXTERNAL_URL || 'https://tap-in-backend.onrender.com';
+  const redirectTo = `${baseUrl}/auth/callback`;
+  console.log(`Email Service: Processing ${type} email for ${email}`);
   
-  const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
-    type: 'signup',
-    email,
-    options: { redirectTo },
-  });
+  // For 'welcome' type, we now use a dedicated success page
+  let verificationLink = `${baseUrl}/auth/welcome?email=${encodeURIComponent(email)}&name=${encodeURIComponent(fullName)}`;
 
-  if (linkError) throw linkError;
+  // Only generate a verification link if we actually need to verify (type === 'signup')
+  // Note: This is usually for when we want Supabase to handle the verification state
+  if (type === 'signup') {
+    const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+      type: 'signup',
+      email,
+      options: { redirectTo },
+    });
 
-  const verificationLink = linkData.properties.action_link;
+    if (linkError) {
+      console.error('Error generating signup link:', linkError);
+      throw linkError;
+    }
+    verificationLink = linkData.properties.action_link;
+  }
+
   const isWelcome = type === 'welcome';
 
   return resend.emails.send({
     from: 'TapIn <noreply@securim.ca>',
     to: [email],
-    subject: isWelcome ? 'Welcome to TapIn!' : 'Verify your email for TapIn!',
+    subject: isWelcome ? `Welcome to TapIn, ${fullName}!` : 'Verify your email for TapIn!',
     html: getEmailHtml(fullName, verificationLink, isWelcome),
   });
 }
@@ -1508,72 +1519,204 @@ app.delete('/tapins/:id', async (c) => {
       `);
     });
 
-  app.post(
-    '/auth/signup',
-    zValidator(
-      'json',
-      z.object({
-        email: z.string().email(),
-        password: z.string().min(6),
-        full_name: z.string(),
-        username: z.string(),
-      })
-    ),
-    async (c) => {
-      const { email, password, full_name, username } = c.req.valid('json');
-      console.log(`Signup request for email: ${email}, username: ${username}`);
+    app.get('/auth/welcome', async (c) => {
+      const email = c.req.query('email');
+      const name = c.req.query('name') || 'Friend';
 
-      try {
-        const { data: userData, error: userError } = await supabase.auth.admin.createUser({
-          email,
-          password,
-          email_confirm: false,
-          user_metadata: { full_name, username },
-        });
+      return c.html(`
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Welcome to TapIn</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; display: flex; align-items: center; justify-content: center; min-height: 100vh;">
+  <div style="max-width: 480px; width: 100%; padding: 40px 24px; text-align: center;">
+    <div style="display: inline-block; width: 80px; height: 80px; background-color: #000; border-radius: 24px; color: #fff; font-size: 40px; line-height: 80px; font-weight: 900; text-align: center; margin-bottom: 32px; box-shadow: 0 8px 20px rgba(0,0,0,0.12);">T</div>
+    
+    <h1 style="font-size: 32px; font-weight: 900; margin: 0 0 16px 0; letter-spacing: -1.5px; color: #000;">Email Verified!</h1>
+    
+    <p style="font-size: 18px; color: #333; line-height: 1.6; margin-bottom: 40px; font-weight: 500;">
+      Welcome to TapIn, <strong>${name}</strong>!<br/>
+      Your email (${email}) has been successfully verified.
+    </p>
 
-        if (userError) {
-          if (userError.message.includes('already registered')) {
-            const { data: existingUsers } = await supabase.auth.admin.listUsers();
-            const existingUser = existingUsers?.users.find(u => u.email === email);
-            if (existingUser && !existingUser.email_confirmed_at) {
-              const resendResult = await sendVerificationEmail(email, existingUser.user_metadata?.full_name || 'User', 'signup');
-              
-              if (resendResult.error) {
-                return c.json({ success: false, error: resendResult.error.message }, 500);
-              }
-              
-              return c.json({ success: true, userId: existingUser.id, resend: true });
-            } else {
-              return c.json({ error: 'User already exists' }, 400);
-            }
-          } else {
+    <div style="background-color: #f8f8f8; border-radius: 24px; padding: 24px; margin-bottom: 40px; border: 1px solid #eee;">
+      <p style="margin: 0; font-size: 15px; color: #666; line-height: 1.5;">
+        You can now close this window and return to the TapIn app to start connecting with people nearby.
+      </p>
+    </div>
+
+    <a href="tapin://auth/login" style="display: inline-block; background-color: #000; color: #fff; padding: 20px 48px; border-radius: 24px; text-decoration: none; font-weight: 800; font-size: 18px; box-shadow: 8px 8px 0px #000; border: 2px solid #000;">
+      Back to TapIn App
+    </a>
+  </div>
+</body>
+</html>
+      `);
+    });
+
+    app.get('/auth/verify', async (c) => {
+      const email = c.req.query('email');
+      if (!email) return c.json({ error: 'Email query parameter required' }, 400);
+
+      const realEmail = email.toLowerCase().trim();
+      
+      // Check for profile
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id, username, email, created_at')
+        .ilike('email', realEmail)
+        .maybeSingle();
+
+      // Check for auth user
+      const { data: authUser } = await supabase.auth.admin.listUsers();
+      const userMatch = authUser?.users.find(u => 
+        u.email?.toLowerCase() === realEmail || 
+        u.user_metadata?.real_email?.toLowerCase() === realEmail
+      );
+
+      return c.json({
+        email: realEmail,
+        profile_found: !!profile,
+        profile: profile || null,
+        auth_user_found: !!userMatch,
+        auth_user_id: userMatch?.id || null,
+        internal_email: userMatch?.email || null,
+        timestamp: new Date().toISOString()
+      });
+    });
+
+    app.post('/auth/signup',
+      zValidator(
+        'json',
+        z.object({
+          email: z.string().email(),
+          password: z.string().min(6),
+          full_name: z.string(),
+          username: z.string(),
+        })
+      ),
+      async (c) => {
+        const { email: rawEmail, password, full_name, username } = c.req.valid('json');
+        const realEmail = rawEmail.toLowerCase().trim();
+        console.log(`Signup request for realEmail: ${realEmail}, username: ${username}`);
+
+        try {
+          // 1. Check if username is taken in public.profiles
+          const { data: existingProfile } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('username', username)
+            .maybeSingle();
+
+          if (existingProfile) {
+            return c.json({ error: 'Username is already taken' }, 400);
+          }
+
+          // 2. Use username-based internal email to allow multiple accounts per real email
+          const authEmail = `${username.toLowerCase()}@tapin.internal`;
+
+          // 3. Create user (auto-confirmed)
+          const { data: userData, error: userError } = await supabase.auth.admin.createUser({
+            email: authEmail,
+            password,
+            email_confirm: true,
+            user_metadata: { 
+              full_name, 
+              username,
+              real_email: realEmail // Store the actual email in metadata
+            },
+          });
+
+          if (userError) {
+            console.error('Auth User Creation error:', userError);
             return c.json({ error: userError.message }, 400);
           }
+
+          const user = userData.user;
+          if (!user) throw new Error('Failed to create user');
+
+            // 4. Update/Upsert profile
+            // Since the trigger handle_new_user also inserts the profile, 
+            // we use upsert here to ensure all fields (especially email) are correctly set.
+            // We wrap this in a retry block to handle potential race conditions with the trigger.
+            let profileError;
+            let profileCreated = false;
+            
+            for (let i = 0; i < 3; i++) {
+              console.log(`Profile creation attempt ${i + 1} for ${user.id}`);
+              const { error } = await supabase.from('profiles').upsert({
+                id: user.id,
+                full_name,
+                username,
+                email: realEmail,
+                last_seen: new Date().toISOString(),
+              }, { onConflict: 'id' });
+              
+              if (!error) {
+                // Verify it actually exists and has the email
+                const { data: verifyProfile } = await supabase
+                  .from('profiles')
+                  .select('id, email')
+                  .eq('id', user.id)
+                  .single();
+                  
+                if (verifyProfile && verifyProfile.email === realEmail) {
+                  console.log(`Profile successfully verified for ${user.id}`);
+                  profileCreated = true;
+                  break;
+                }
+                console.log(`Profile verification failed for ${user.id}, retrying...`);
+              } else {
+                console.error(`Profile creation error (attempt ${i + 1}):`, error);
+                profileError = error;
+              }
+              
+              await new Promise(resolve => setTimeout(resolve, 200 * (i + 1)));
+            }
+
+            if (!profileCreated) {
+              console.error('Final profile creation failure:', profileError);
+              // Clean up the auth user if we absolutely couldn't create a profile
+              await supabase.auth.admin.deleteUser(user.id);
+              return c.json({ error: 'Failed to create user profile. Our systems are a bit busy, please try again in a moment.' }, 500);
+            }
+
+          // 5. Send welcome email to real email
+          try {
+            await sendVerificationEmail(realEmail, full_name, 'welcome');
+          } catch (emailErr) {
+            console.error('Failed to send welcome email:', emailErr);
+          }
+
+          return c.json({ success: true, userId: user.id });
+        } catch (err: any) {
+          console.error('Signup error:', err);
+          return c.json({ error: err.message }, 500);
         }
-
-        const user = userData.user;
-        if (!user) throw new Error('Failed to create user');
-
-        await supabase.from('profiles').upsert({
-          id: user.id,
-          full_name,
-          username,
-          display_name: full_name || username,
-        });
-
-        const resendResult = await sendVerificationEmail(email, full_name, 'signup');
-
-        if (resendResult.error) {
-          return c.json({ success: false, error: resendResult.error.message }, 500);
-        }
-
-        return c.json({ success: true, userId: user.id });
-      } catch (err: any) {
-        console.error('Signup error:', err);
-        return c.json({ error: err.message }, 500);
       }
+    );
+
+  app.get('/auth/me', async (c) => {
+    const user = c.get('user');
+    if (!user) {
+      return c.json({ error: 'Not authenticated' }, 401);
     }
-  );
+
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single();
+
+    if (profileError || !profile) {
+      return c.json({ error: 'Profile not found', user_id: user.id }, 404);
+    }
+
+    return c.json({ user, profile });
+  });
 
   app.post('/auth/welcome', async (c) => {
     const { email, full_name } = await c.req.json();
