@@ -286,10 +286,10 @@ return (
                       <Users size={20} color={theme.mutedForeground} />
                     </View>
                     <Text className="text-foreground font-semibold text-sm">No friends yet</Text>
-                    <TouchableOpacity
-                      onPress={() => router.push('/users')}
-                      activeOpacity={0.8}
-                      className="mt-3 px-5 py-2.5 rounded-xl bg-primary">
+                      <TouchableOpacity
+                        onPress={() => router.push('/(tabs)/users')}
+                        activeOpacity={0.8}
+                        className="mt-3 px-5 py-2.5 rounded-xl bg-primary">
                       <Text className="text-primary-foreground font-semibold text-sm">Find Friends</Text>
                     </TouchableOpacity>
                   </View>

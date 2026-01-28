@@ -191,7 +191,7 @@ export default function FriendsScreen() {
               </Text>
             </View>
             <TouchableOpacity
-              onPress={() => router.push('/users')}
+              onPress={() => router.push('/(tabs)/users')}
               activeOpacity={0.8}
               className="h-12 w-12 items-center justify-center rounded-2xl bg-primary shadow-lg shadow-primary/25">
               <UserPlus size={22} color={theme.primaryForeground} />

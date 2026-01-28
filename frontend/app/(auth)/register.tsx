@@ -53,10 +53,13 @@ export default function RegisterScreen() {
           } else {
             Alert.alert('Error', response.error);
           }
-        } else {
-          Alert.alert('Success', 'Account created! You can now log in.');
-          router.replace('/(auth)/login');
-        }
+          } else {
+            Alert.alert(
+              'Success', 
+              `Account created! Your username is: ${generatedUsername}\n\nYou can now log in using this username or your email.`,
+              [{ text: 'OK', onPress: () => router.replace('/(auth)/login') }]
+            );
+          }
       } catch (err: any) {
       console.error('Registration error:', err);
       Alert.alert('Error', err.message || 'An unexpected error occurred during registration.');

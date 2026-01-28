@@ -31,21 +31,29 @@ export default function VerifyEmailScreen() {
     }
   };
 
-  const resendEmail = async () => {
-    if (!user?.email) return;
-    setLoading(true);
-    const { error } = await supabase.auth.resend({
-      type: 'signup',
-      email: user.email,
-    });
-    setLoading(false);
-    
-    if (error) {
-      Alert.alert('Error', error.message);
-    } else {
-      Alert.alert('Sent', 'Verification email has been resent.');
-    }
-  };
+    const resendEmail = async () => {
+      if (!user?.email) return;
+      setLoading(true);
+      
+      try {
+        const response = await apiRequest('/auth/resend-verification', {
+          method: 'POST',
+          body: JSON.stringify({
+            email: user.email,
+          }),
+        });
+
+        if (response.error) {
+          Alert.alert('Error', response.error);
+        } else {
+          Alert.alert('Sent', 'A new welcome and verification email has been sent to your registered email address.');
+        }
+      } catch (err: any) {
+        Alert.alert('Error', 'Failed to resend email. Please try again later.');
+      } finally {
+        setLoading(false);
+      }
+    };
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();

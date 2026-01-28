@@ -130,7 +130,6 @@ function RootLayoutContent() {
         name="chat/[id]"
         options={{ headerShown: true, presentation: 'card', animation: 'slide_from_right' }}
       />
-      <Stack.Screen name="friends" options={{ headerShown: false, presentation: 'card' }} />
       <Stack.Screen name="index" options={{ headerShown: false }} />
     </Stack>
   );

@@ -24,8 +24,16 @@ export default function AuthCallback() {
 
       if (error) {
         console.error('Auth Error:', error, error_description);
-        Alert.alert('Authentication Error', error_description || error);
-        router.replace('/(auth)/login');
+        if (error_description?.includes('expired') || error.includes('invalid')) {
+          Alert.alert(
+            'Link Expired',
+            'This verification link has expired or has already been used. If you just registered, please try logging in directly. If that fails, your account might have been created in a previous version of the app and you should sign up again.',
+            [{ text: 'OK', onPress: () => router.replace('/(auth)/login') }]
+          );
+        } else {
+          Alert.alert('Authentication Error', error_description || error);
+          router.replace('/(auth)/login');
+        }
         return;
       }
 

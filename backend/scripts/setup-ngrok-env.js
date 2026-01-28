@@ -47,12 +47,22 @@ async function writeBackendUrlToEnv(url) {
     if (fs.existsSync(backendEnvPath)) {
       let backendEnvContent = fs.readFileSync(backendEnvPath, 'utf-8');
       const authRedirectUrl = `${url}/auth/callback`;
+      
+      // Update AUTH_REDIRECT_URL
       backendEnvContent = backendEnvContent.replace(/^AUTH_REDIRECT_URL=.*$/m, `AUTH_REDIRECT_URL=${authRedirectUrl}`);
       if (!backendEnvContent.includes('AUTH_REDIRECT_URL=')) {
         backendEnvContent += `\nAUTH_REDIRECT_URL=${authRedirectUrl}`;
       }
+      
+      // Update NGROK_URL (so the backend knows its own public URL)
+      backendEnvContent = backendEnvContent.replace(/^NGROK_URL=.*$/m, `NGROK_URL=${url}`);
+      if (!backendEnvContent.includes('NGROK_URL=')) {
+        backendEnvContent += `\nNGROK_URL=${url}`;
+      }
+      
       fs.writeFileSync(backendEnvPath, backendEnvContent, 'utf-8');
       console.log(`✅ Auth redirect URL written to backend/.env: ${authRedirectUrl}`);
+      console.log(`✅ NGROK_URL written to backend/.env: ${url}`);
     }
   } catch (error) {
     console.error('Failed to write env files:', error);

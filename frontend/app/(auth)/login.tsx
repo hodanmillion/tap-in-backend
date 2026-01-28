@@ -1,20 +1,18 @@
 import { View, Text, Alert, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity } from 'react-native';
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { Link, useRouter } from 'expo-router';
+import { Link } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Logo } from '@/components/Logo';
 import { useColorScheme } from 'nativewind';
 import { THEME } from '@/lib/theme';
-import { ChevronRight, Mail, Lock } from 'lucide-react-native';
+import { ChevronRight } from 'lucide-react-native';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
   const { colorScheme } = useColorScheme();
   const theme = THEME[colorScheme ?? 'light'];
 
@@ -26,63 +24,75 @@ export default function LoginScreen() {
 
         setLoading(true);
         
-        const rawIdentifier = email.trim();
-        let authIdentifier = rawIdentifier.toLowerCase();
-        
-        try {
-          // Support Login with Username or Email
-          if (authIdentifier.includes('@')) {
-            // If it's an email, we need to find the username to get the internal auth email
-            // We use ilike for case-insensitive lookup
-            console.log(`Checking profile for email: ${authIdentifier}`);
-            const { data: profileData, error: profileError } = await supabase
+          const rawIdentifier = email.trim();
+          const rawPassword = password.trim();
+          let authIdentifier = rawIdentifier.toLowerCase();
+          
+          try {
+            // Support Login with Username or Email
+            const identifiersToTry = new Set<string>();
+            
+            // Always add the raw input (normalized)
+            identifiersToTry.add(authIdentifier);
+
+            // 1. Try to find a profile by email OR username
+            // Using exact matching for better reliability with special characters
+            const { data: profileData } = await supabase
               .from('profiles')
-              .select('username')
-              .ilike('email', authIdentifier)
+              .select('username, email')
+              .or(`email.eq.${authIdentifier},username.eq.${authIdentifier}`)
               .maybeSingle();
             
-            if (profileData?.username) {
-              console.log(`Found profile for ${authIdentifier}, using internal email for ${profileData.username}`);
-              authIdentifier = `${profileData.username.toLowerCase()}@tapin.internal`;
-            } else {
-              // Fallback: If no profile found, try logging in with the raw email directly
-              // This supports users registered before the internal email system
-              console.log(`No profile found for ${authIdentifier}. Error:`, profileError);
-              authIdentifier = rawIdentifier;
+            if (profileData) {
+              // If we found a profile, try its canonical internal email and its registered real email
+              if (profileData.username) {
+                identifiersToTry.add(`${profileData.username.toLowerCase()}@tapin.internal`);
+              }
+              if (profileData.email) {
+                identifiersToTry.add(profileData.email.toLowerCase());
+              }
+            } else if (!authIdentifier.includes('@')) {
+              // If no profile found but it's not an email, try the internal format anyway
+              identifiersToTry.add(`${authIdentifier}@tapin.internal`);
             }
-          } else {
-            // If it's just a username, convert to internal format
-            authIdentifier = `${authIdentifier.toLowerCase()}@tapin.internal`;
-          }
 
-          console.log(`Attempting login with identifier: ${authIdentifier}`);
-          const { data, error } = await supabase.auth.signInWithPassword({
-            email: authIdentifier,
-            password: password,
-          });
+            console.log(`Identifiers to attempt: ${Array.from(identifiersToTry).join(', ')}`);
+            
+            let lastError = null;
+            let success = false;
 
-            if (error) {
-              console.error('Login failed:', error.message);
-              if (error.message.includes('Invalid login credentials')) {
-                // Check if user exists in auth but lacks a profile (rare split-brain case)
-                const { data: authCheck } = await supabase.auth.signInWithPassword({
-                  email: authIdentifier,
-                  password: 'dummy-password-check',
-                });
-                
-                if (authCheck.user) {
-                   Alert.alert('Profile Missing', 'Your account exists but your profile is missing. Please contact support.');
-                } else {
-                  Alert.alert(
-                    'Login Failed', 
-                    'Invalid email or password. If you recently registered, please ensure you are using the same email. If the problem persists, try registering a new account.'
-                  );
+            for (const identifier of identifiersToTry) {
+              console.log(`Attempting login with: ${identifier}`);
+              const { data, error } = await supabase.auth.signInWithPassword({
+                email: identifier,
+                password: rawPassword,
+              });
+
+                  if (!error) {
+                    success = true;
+                    break;
+                  }
+                  
+                  lastError = error;
+                  // If it's something other than credentials (like rate limit), stop immediately
+                  if (!error.message.includes('Invalid login credentials') && !error.message.includes('Email not found')) {
+                    break;
+                  }
                 }
+
+            if (!success && lastError) {
+              console.error('Login failed after all attempts:', lastError.message);
+              
+              if (lastError.message.includes('Invalid login credentials')) {
+                Alert.alert(
+                  'Login Failed', 
+                  'Invalid email/username or password. Please try again or create a new account.'
+                );
               } else {
-                Alert.alert('Error', error.message);
+                Alert.alert('Error', lastError.message);
               }
             }
-        } catch (err: any) {
+          } catch (err: any) {
           console.error('Unexpected login error:', err);
           Alert.alert('Error', 'An unexpected error occurred. Please try again.');
         } finally {

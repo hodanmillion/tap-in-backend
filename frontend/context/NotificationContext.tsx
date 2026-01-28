@@ -139,25 +139,32 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     return token;
   };
 
-  const requestPermissions = async () => {
-    const token = await registerForPushNotificationsAsync();
-    if (token && user?.id) {
-      setExpoPushToken(token);
-      try {
-        await apiRequest('/push-tokens', {
-          method: 'POST',
-          body: JSON.stringify({
-            user_id: user.id,
-            token: token,
-            platform: Platform.OS,
-          }),
-        });
-      } catch (error) {
-        console.error('Error saving push token:', error);
+    const requestPermissions = async (retryCount = 0) => {
+      const token = await registerForPushNotificationsAsync();
+      if (token && user?.id) {
+        setExpoPushToken(token);
+        try {
+          await apiRequest('/push-tokens', {
+            method: 'POST',
+            body: JSON.stringify({
+              user_id: user.id,
+              token: token,
+              platform: Platform.OS,
+            }),
+          });
+        } catch (error: any) {
+          // If it's a foreign key error, it might be a race condition where the user 
+          // is authenticated but not yet fully "visible" to the public schema's constraints.
+          if (error.message?.includes('foreign key constraint') && retryCount < 2) {
+            console.log(`Push token save failed (FK constraint), retrying in 2s... (attempt ${retryCount + 1})`);
+            setTimeout(() => requestPermissions(retryCount + 1), 2000);
+          } else {
+            console.error('Error saving push token:', error);
+          }
+        }
       }
-    }
-    return token;
-  };
+      return token;
+    };
 
   return (
     <NotificationContext.Provider value={{ expoPushToken, notification, requestPermissions, permissionStatus, schedulePushNotification }}>
