@@ -86,7 +86,7 @@ function getEmailHtml(fullName: string, verificationLink: string, isWelcome: boo
   `;
 }
 
-async function sendVerificationEmail(email: string, fullName: string, type: 'signup' | 'welcome' = 'signup') {
+async function sendVerificationEmail(email: string, fullName: string, type: 'signup' | 'welcome' = 'signup', userId?: string) {
   let baseUrl = process.env.BACKEND_URL || 
                 process.env.RENDER_EXTERNAL_URL || 
                 (process.env.AUTH_REDIRECT_URL ? process.env.AUTH_REDIRECT_URL.replace('/auth/callback', '') : 'https://tap-in-backend.onrender.com');
@@ -96,9 +96,10 @@ async function sendVerificationEmail(email: string, fullName: string, type: 'sig
   }
   
   const redirectTo = `${baseUrl}/auth/callback`;
-  console.log(`Email Service: Processing ${type} email for ${email}`);
+  console.log(`Email Service: Processing ${type} email for ${email} (UserID: ${userId || 'unknown'})`);
   
   let verificationLink = `${baseUrl}/auth/welcome?email=${encodeURIComponent(email)}&name=${encodeURIComponent(fullName)}`;
+  let isAlreadyVerified = false;
 
   if (type === 'signup') {
     const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
@@ -113,32 +114,73 @@ async function sendVerificationEmail(email: string, fullName: string, type: 'sig
     }
     verificationLink = linkData.properties.action_link;
   } else if (type === 'welcome') {
-    const { data: { users: allUsers } } = await supabase.auth.admin.listUsers({ perPage: 1000 });
-    const searchEmail = email.toLowerCase().trim();
-    const user = allUsers.find(u => {
-      const authEmail = u.email?.toLowerCase();
-      const realEmail = u.user_metadata?.real_email?.toLowerCase();
-      return authEmail === searchEmail || realEmail === searchEmail;
-    });
-  
-    if (user && !user.email_confirmed_at) {
-      console.log(`User ${email} is not confirmed, upgrading welcome email to signup link`);
-      const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
-        type: 'signup',
-        email: user.email!,
-        options: { redirectTo },
+    let user = null;
+    
+    if (userId) {
+      const { data: userData } = await supabase.auth.admin.getUserById(userId);
+      user = userData.user;
+    } else {
+      const { data: { users: allUsers } } = await supabase.auth.admin.listUsers({ perPage: 1000 });
+      const searchEmail = email.toLowerCase().trim();
+      user = allUsers.find(u => {
+        const authEmail = u.email?.toLowerCase();
+        const realEmail = u.user_metadata?.real_email?.toLowerCase();
+        return authEmail === searchEmail || realEmail === searchEmail;
       });
-      if (!linkError) verificationLink = linkData.properties.action_link;
+    }
+  
+    if (user) {
+      if (!user.email_confirmed_at) {
+        console.log(`User ${email} is not confirmed, upgrading welcome email to signup link`);
+        const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+          type: 'signup',
+          email: user.email!,
+          options: { redirectTo },
+        });
+        if (!linkError) verificationLink = linkData.properties.action_link;
+      } else {
+        isAlreadyVerified = true;
+        console.log(`User ${email} is already confirmed, sending welcome link`);
+      }
     }
   }
 
-  const isWelcome = type === 'welcome';
-  return resend.emails.send({
-    from: 'TapIn <noreply@securim.ca>',
-    to: [email],
-    subject: isWelcome ? `Welcome to TapIn, ${fullName}!` : 'Verify your email for TapIn!',
-    html: getEmailHtml(fullName, verificationLink, isWelcome),
-  });
+    const isWelcome = type === 'welcome';
+    const buttonText = (isAlreadyVerified || type === 'welcome') ? 'Explore TapIn' : 'Verify Your Email';
+    const subject = isWelcome 
+      ? (isAlreadyVerified ? `Welcome back to TapIn, ${fullName}!` : `Verify your account, ${fullName}!`)
+      : 'Verify your email for TapIn!';
+
+    try {
+      // Use magic link for already verified users to provide one-click login
+      if (isAlreadyVerified && user) {
+        const { data: magicData, error: magicError } = await supabase.auth.admin.generateLink({
+          type: 'magiclink',
+          email: user.email!,
+          options: { redirectTo },
+        });
+        if (!magicError) verificationLink = magicData.properties.action_link;
+      }
+
+      const htmlContent = getEmailHtml(fullName, verificationLink, isWelcome).replace('Verify Your Email', buttonText);
+      
+      const { data, error } = await resend.emails.send({
+        from: 'TapIn <team@securim.ca>',
+        to: [email],
+        subject,
+        html: htmlContent,
+      });
+    
+    if (error) {
+      console.error('Resend Error:', error);
+    } else {
+      console.log('Email sent successfully:', data?.id);
+    }
+    return { data, error };
+  } catch (err) {
+    console.error('Unexpected email error:', err);
+    return { data: null, error: err };
+  }
 }
 
 const messageRateLimit = new Map<string, number[]>();
@@ -294,15 +336,88 @@ app.get('/auth/welcome', async (c) => {
   return c.html(`<!DOCTYPE html><html><body><h1>Welcome, ${name}!</h1><p>Email ${email} verified.</p><a href="tapin://auth/login">Back to App</a></body></html>`);
 });
 
-app.post('/auth/signup', zValidator('json', z.object({ email: z.string().email(), password: z.string().min(6), full_name: z.string(), username: z.string() })), async (c) => {
-  const { email: realEmail, password, full_name, username } = c.req.valid('json');
-  const authEmail = `${username.toLowerCase()}@tapin.internal`;
-  const { data: userData, error: userError } = await supabase.auth.admin.createUser({ email: authEmail, password, email_confirm: true, user_metadata: { full_name, username, real_email: realEmail } });
-  if (userError) return c.json({ error: userError.message }, 400);
-  await supabase.from('profiles').upsert({ id: userData.user.id, full_name, username, email: realEmail }, { onConflict: 'id' });
-  await sendVerificationEmail(realEmail, full_name, 'welcome');
-  return c.json({ success: true, userId: userData.user.id });
-});
+  app.post('/auth/resend-verification', zValidator('json', z.object({ email: z.string().email() })), async (c) => {
+    const { email } = c.req.valid('json');
+    try {
+      // Find the user in Auth
+      const { data: { users: allUsers } } = await supabase.auth.admin.listUsers({ perPage: 1000 });
+      const searchEmail = email.toLowerCase().trim();
+      const user = allUsers.find(u => {
+        const authEmail = u.email?.toLowerCase();
+        const realEmail = u.user_metadata?.real_email?.toLowerCase();
+        return authEmail === searchEmail || realEmail === searchEmail;
+      });
+
+      if (!user) {
+        return c.json({ error: 'User not found' }, 404);
+      }
+
+      const fullName = user.user_metadata?.full_name || 'Friend';
+      await sendVerificationEmail(email, fullName, 'welcome', user.id);
+      return c.json({ success: true });
+    } catch (err: any) {
+      return c.json({ error: err.message }, 500);
+    }
+  });
+
+  app.post('/auth/signup', zValidator('json', z.object({ 
+    email: z.string().email(), 
+    password: z.string().min(6), 
+    full_name: z.string(), 
+    username: z.string().regex(/^[a-zA-Z0-9._]+$/, 'Username can only contain letters, numbers, dots, and underscores') 
+  })), async (c) => {
+    const { email: realEmail, password, full_name, username } = c.req.valid('json');
+    
+    // Check if username already exists in profiles
+    const { data: existingUsername } = await supabase
+      .from('profiles')
+      .select('username')
+      .ilike('username', username)
+      .maybeSingle();
+      
+    if (existingUsername) {
+      return c.json({ error: 'This username is already taken. Please try another one.' }, 400);
+    }
+
+    // Check if email already exists in profiles
+    const { data: existingEmail } = await supabase
+      .from('profiles')
+      .select('email')
+      .ilike('email', realEmail)
+      .maybeSingle();
+      
+    if (existingEmail) {
+      return c.json({ error: 'This email is already registered. Please log in instead.' }, 400);
+    }
+
+    const authEmail = `${username.toLowerCase()}@tapin.internal`;
+    const { data: userData, error: userError } = await supabase.auth.admin.createUser({ 
+      email: authEmail, 
+      password, 
+      email_confirm: true, 
+      user_metadata: { full_name, username, real_email: realEmail } 
+    });
+    
+    if (userError) {
+      if (userError.message.includes('already registered')) {
+        return c.json({ error: 'This username is already taken.' }, 400);
+      }
+      return c.json({ error: userError.message }, 400);
+    }
+
+    // Double-ensure the user is confirmed (Supabase bug mitigation)
+    await supabase.auth.admin.updateUserById(userData.user.id, { email_confirm: true });
+    
+    await supabase.from('profiles').upsert({ 
+      id: userData.user.id, 
+      full_name, 
+      username, 
+      email: realEmail 
+    }, { onConflict: 'id' });
+    
+    await sendVerificationEmail(realEmail, full_name, 'welcome', userData.user.id);
+    return c.json({ success: true, userId: userData.user.id });
+  });
 
 async function sendPushToUser(userId: string, title: string, body: string, data?: Record<string, any>) {
   try {

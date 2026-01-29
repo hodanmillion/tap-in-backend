@@ -28,57 +28,64 @@ export default function LoginScreen() {
           const rawPassword = password.trim();
           let authIdentifier = rawIdentifier.toLowerCase();
           
-          try {
-            // Support Login with Username or Email
-            const identifiersToTry = new Set<string>();
-            
-            // Always add the raw input (normalized)
-            identifiersToTry.add(authIdentifier);
+            try {
+              // Support Login with Username or Email
+              const identifiersToTry = new Set<string>();
+              
+              // Always add the raw input (normalized)
+              identifiersToTry.add(authIdentifier);
 
-            // 1. Try to find a profile by email OR username
-            // Using exact matching for better reliability with special characters
-            const { data: profileData } = await supabase
-              .from('profiles')
-              .select('username, email')
-              .or(`email.eq.${authIdentifier},username.eq.${authIdentifier}`)
-              .maybeSingle();
-            
-            if (profileData) {
-              // If we found a profile, try its canonical internal email and its registered real email
-              if (profileData.username) {
-                identifiersToTry.add(`${profileData.username.toLowerCase()}@tapin.internal`);
-              }
-              if (profileData.email) {
-                identifiersToTry.add(profileData.email.toLowerCase());
-              }
-            } else if (!authIdentifier.includes('@')) {
-              // If no profile found but it's not an email, try the internal format anyway
-              identifiersToTry.add(`${authIdentifier}@tapin.internal`);
-            }
-
-            console.log(`Identifiers to attempt: ${Array.from(identifiersToTry).join(', ')}`);
-            
-            let lastError = null;
-            let success = false;
-
-            for (const identifier of identifiersToTry) {
-              console.log(`Attempting login with: ${identifier}`);
-              const { data, error } = await supabase.auth.signInWithPassword({
-                email: identifier,
-                password: rawPassword,
-              });
-
-                  if (!error) {
-                    success = true;
-                    break;
+              // 1. Try to find a profile by email OR username (exact match preferred)
+              console.log(`Searching profile for: ${authIdentifier}`);
+              const { data: profileData, error: profileError } = await supabase
+                .from('profiles')
+                .select('username, email')
+                .or(`email.eq.${authIdentifier},username.eq.${authIdentifier}`)
+                .maybeSingle();
+              
+              if (profileError) console.warn('Profile search error:', profileError);
+              
+                if (profileData) {
+                  console.log('Profile found:', profileData);
+                  // If we found a profile, try its canonical internal email AND its real email
+                  if (profileData.username) {
+                    identifiersToTry.add(`${profileData.username.toLowerCase()}@tapin.internal`);
                   }
-                  
-                  lastError = error;
-                  // If it's something other than credentials (like rate limit), stop immediately
-                  if (!error.message.includes('Invalid login credentials') && !error.message.includes('Email not found')) {
-                    break;
+                  if (profileData.email) {
+                    identifiersToTry.add(profileData.email.toLowerCase());
                   }
+                } else if (!authIdentifier.includes('@')) {
+                // If no profile found but it's not an email, try the internal format anyway
+                identifiersToTry.add(`${authIdentifier}@tapin.internal`);
+              }
+
+              const attemptList = Array.from(identifiersToTry);
+              console.log(`Login sequence: ${attemptList.join(' -> ')}`);
+              
+              let lastError = null;
+              let success = false;
+
+              for (const identifier of attemptList) {
+                console.log(`Trying auth: ${identifier}`);
+                const { data, error } = await supabase.auth.signInWithPassword({
+                  email: identifier,
+                  password: rawPassword,
+                });
+
+                if (!error) {
+                  console.log(`Successfully signed in with: ${identifier}`);
+                  success = true;
+                  break;
                 }
+                
+                lastError = error;
+                console.log(`Failed with ${identifier}: ${error.message}`);
+                
+                // If it's a critical error (rate limit, etc), stop
+                if (!error.message.includes('Invalid login credentials') && !error.message.includes('Email not found')) {
+                  break;
+                }
+              }
 
             if (!success && lastError) {
               console.error('Login failed after all attempts:', lastError.message);

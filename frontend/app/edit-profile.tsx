@@ -171,9 +171,17 @@ export default function EditProfileScreen() {
     }
   };
 
-    const handleUpdateProfile = async () => {
-      if (!profile) return;
-      setUploading(true);
+      const handleUpdateProfile = async () => {
+        if (!profile) return;
+
+        // Validate username
+        const usernameRegex = /^[a-zA-Z0-9._]+$/;
+        if (formData.username && !usernameRegex.test(formData.username)) {
+          Alert.alert('Invalid Username', 'Username can only contain letters, numbers, dots, and underscores.');
+          return;
+        }
+
+        setUploading(true);
       try {
         const updates: any = {};
         if (formData.full_name !== (profile.full_name || '')) updates.full_name = formData.full_name;

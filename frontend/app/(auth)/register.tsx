@@ -27,10 +27,12 @@ export default function RegisterScreen() {
       }
 
       setLoading(true);
-      try {
-        const generatedUsername = email.split('@')[0] + Math.floor(Math.random() * 1000);
-        
-        const response = await apiRequest('/auth/signup', {
+        try {
+          // Generate a safe username: lowercase, alphanumeric, dots, and underscores only
+          const emailPrefix = email.split('@')[0].toLowerCase().replace(/[^a-z0-9._]/g, '');
+          const generatedUsername = emailPrefix + Math.floor(Math.random() * 1000);
+          
+          const response = await apiRequest('/auth/signup', {
           method: 'POST',
           body: JSON.stringify({
             email,
