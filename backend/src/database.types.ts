@@ -328,29 +328,25 @@ export interface Database {
           distance: number;
         }[];
       };
-      find_nearby_users: {
-        Args: {
-          lat: number;
-          lng: number;
-          max_dist_meters: number;
+        find_nearby_users: {
+          Args: {
+            lat: number;
+            lng: number;
+            max_dist_meters: number;
+            exclude_id?: string | null;
+          };
+          Returns: {
+            id: string;
+            username: string;
+            full_name: string;
+            avatar_url: string | null;
+            latitude: number | null;
+            longitude: number | null;
+            last_seen: string | null;
+            is_incognito: boolean;
+            distance: number;
+          }[];
         };
-        Returns: {
-          id: string;
-          username: string | null;
-          full_name: string | null;
-          avatar_url: string | null;
-          latitude: number | null;
-          longitude: number | null;
-          location: unknown | null;
-          last_seen: string | null;
-          bio: string | null;
-          website: string | null;
-          location_name: string | null;
-          occupation: string | null;
-          created_at: string;
-          distance: number;
-        }[];
-      };
     };
     Enums: {
       [_ in never]: never;

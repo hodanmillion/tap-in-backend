@@ -16,17 +16,18 @@ export default function LoginScreen() {
   const { colorScheme } = useColorScheme();
   const theme = THEME[colorScheme ?? 'light'];
 
-      async function signInWithEmail() {
-        if (!email || !password) {
-          Alert.alert('Error', 'Please enter both email and password');
-          return;
-        }
+        async function signInWithEmail() {
+          const trimmedEmail = email.trim();
+          if (!trimmedEmail || !password) {
+            Alert.alert('Error', 'Please enter both email and password');
+            return;
+          }
 
-        setLoading(true);
-        
-          const rawIdentifier = email.trim();
-          const rawPassword = password.trim();
-          let authIdentifier = rawIdentifier.toLowerCase();
+          setLoading(true);
+          
+            const rawIdentifier = trimmedEmail;
+            const rawPassword = password.trim();
+            let authIdentifier = rawIdentifier.toLowerCase();
           
             try {
               // Support Login with Username or Email
@@ -35,26 +36,44 @@ export default function LoginScreen() {
               // Always add the raw input (normalized)
               identifiersToTry.add(authIdentifier);
 
-              // 1. Try to find a profile by email OR username (exact match preferred)
-              console.log(`Searching profile for: ${authIdentifier}`);
-              const { data: profileData, error: profileError } = await supabase
-                .from('profiles')
-                .select('username, email')
-                .or(`email.eq.${authIdentifier},username.eq.${authIdentifier}`)
-                .maybeSingle();
-              
-              if (profileError) console.warn('Profile search error:', profileError);
-              
-                if (profileData) {
-                  console.log('Profile found:', profileData);
-                  // If we found a profile, try its canonical internal email AND its real email
-                  if (profileData.username) {
-                    identifiersToTry.add(`${profileData.username.toLowerCase()}@tapin.internal`);
+                // 1. Try to find a profile by email OR username (exact match preferred)
+                console.log(`Searching profile for: ${authIdentifier}`);
+                const { data: profileData, error: profileError } = await supabase
+                  .from('profiles')
+                  .select('username, email')
+                  .or(`email.eq.${authIdentifier},username.eq.${authIdentifier}`)
+                  .maybeSingle();
+                
+                let targetProfile = profileData;
+
+                // 1b. If no exact match, try prefix match for usernames (helpful for generated suffixes)
+                if (!targetProfile && !authIdentifier.includes('@') && authIdentifier.length >= 3) {
+                  console.log(`Trying prefix search for: ${authIdentifier}%`);
+                  const { data: prefixMatches } = await supabase
+                    .from('profiles')
+                    .select('username, email')
+                    .ilike('username', `${authIdentifier}%`)
+                    .limit(2);
+                  
+                  if (prefixMatches && prefixMatches.length === 1) {
+                    console.log('Unique prefix match found:', prefixMatches[0]);
+                    targetProfile = prefixMatches[0];
                   }
-                  if (profileData.email) {
-                    identifiersToTry.add(profileData.email.toLowerCase());
-                  }
-                } else if (!authIdentifier.includes('@')) {
+                }
+                
+                if (profileError) console.warn('Profile search error:', profileError);
+                
+                  if (targetProfile) {
+                    console.log('Profile targeted for login:', targetProfile);
+                    // If we found a profile, try its canonical internal email AND its real email
+                    if (targetProfile.username) {
+                      identifiersToTry.add(`${targetProfile.username.toLowerCase()}@tapin.internal`);
+                    }
+                    if (targetProfile.email) {
+                      identifiersToTry.add(targetProfile.email.toLowerCase());
+                    }
+                  } else if (!authIdentifier.includes('@')) {
+
                 // If no profile found but it's not an email, try the internal format anyway
                 identifiersToTry.add(`${authIdentifier}@tapin.internal`);
               }

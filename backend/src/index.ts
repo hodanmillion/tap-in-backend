@@ -321,8 +321,57 @@ app.get('/rooms/user-rooms', async (c) => {
 app.post('/messages', zValidator('json', z.object({ room_id: z.string(), sender_id: z.string(), content: z.string(), type: z.string().default('text') })), async (c) => {
   const body = c.req.valid('json');
   if (!checkRateLimit(body.sender_id)) return c.json({ error: 'Rate limit exceeded' }, 429);
-  const { data, error } = await supabase.from('messages').insert({ room_id: body.room_id, sender_id: body.sender_id, content: body.content, type: body.type }).select().single();
+  
+  const { data, error } = await supabase.from('messages').insert({ 
+    room_id: body.room_id, 
+    sender_id: body.sender_id, 
+    content: body.content, 
+    type: body.type 
+  }).select().single();
+  
   if (error) return c.json({ error: error.message }, 400);
+
+  // Background: Handle Push Notifications
+  (async () => {
+    try {
+      // 1. Get room info and sender info
+      const [{ data: room }, { data: sender }] = await Promise.all([
+        supabase.from('chat_rooms').select('name, type').eq('id', body.room_id).single(),
+        supabase.from('profiles').select('full_name, username').eq('id', body.sender_id).single()
+      ]);
+
+      if (!sender) return;
+
+      // 2. Get all other participants in the room
+      const { data: participants } = await supabase
+        .from('room_participants')
+        .select('user_id, profiles(active_room_id, full_name)')
+        .eq('room_id', body.room_id)
+        .neq('user_id', body.sender_id);
+
+      if (!participants || participants.length === 0) return;
+
+      const senderName = sender.full_name || `@${sender.username}`;
+      const notificationTitle = room?.type === 'private' ? senderName : (room?.name || 'New Message');
+      const notificationBody = body.type === 'image' ? `${senderName} sent a photo` : 
+                               body.type === 'gif' ? `${senderName} sent a GIF` : 
+                               room?.type === 'private' ? body.content : `${senderName}: ${body.content}`;
+
+      // 3. Send to those not currently in this chat room
+      for (const p of participants) {
+        const profile = p.profiles as any;
+        if (profile?.active_room_id !== body.room_id) {
+          await sendPushToUser(p.user_id, notificationTitle, notificationBody, { 
+            room_id: body.room_id,
+            type: 'chat_message'
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Error in background push notification logic:', err);
+    }
+  })();
+
   return c.json(data);
 });
 
@@ -336,8 +385,8 @@ app.get('/auth/welcome', async (c) => {
   return c.html(`<!DOCTYPE html><html><body><h1>Welcome, ${name}!</h1><p>Email ${email} verified.</p><a href="tapin://auth/login">Back to App</a></body></html>`);
 });
 
-  app.post('/auth/resend-verification', zValidator('json', z.object({ email: z.string().email() })), async (c) => {
-    const { email } = c.req.valid('json');
+    app.post('/auth/resend-verification', zValidator('json', z.object({ email: z.string().trim().email() })), async (c) => {
+      const { email } = c.req.valid('json');
     try {
       // Find the user in Auth
       const { data: { users: allUsers } } = await supabase.auth.admin.listUsers({ perPage: 1000 });
@@ -360,12 +409,12 @@ app.get('/auth/welcome', async (c) => {
     }
   });
 
-  app.post('/auth/signup', zValidator('json', z.object({ 
-    email: z.string().email(), 
-    password: z.string().min(6), 
-    full_name: z.string(), 
-    username: z.string().regex(/^[a-zA-Z0-9._]+$/, 'Username can only contain letters, numbers, dots, and underscores') 
-  })), async (c) => {
+    app.post('/auth/signup', zValidator('json', z.object({ 
+      email: z.string().trim().email(), 
+      password: z.string().min(6), 
+      full_name: z.string(), 
+      username: z.string().regex(/^[a-zA-Z0-9._]+$/, 'Username can only contain letters, numbers, dots, and underscores') 
+    })), async (c) => {
     const { email: realEmail, password, full_name, username } = c.req.valid('json');
     
     // Check if username already exists in profiles

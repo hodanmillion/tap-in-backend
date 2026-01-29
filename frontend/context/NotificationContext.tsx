@@ -13,6 +13,7 @@ interface NotificationContextType {
   requestPermissions: () => Promise<string | undefined>;
   permissionStatus: Notifications.PermissionStatus | undefined;
   schedulePushNotification: (title: string, body: string, data?: any) => Promise<void>;
+  setActiveChatRoomId: (id: string | null) => void;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
@@ -31,8 +32,14 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [expoPushToken, setExpoPushToken] = useState<string | undefined>(undefined);
   const [notification, setNotification] = useState<Notifications.Notification | undefined>(undefined);
   const [permissionStatus, setPermissionStatus] = useState<Notifications.PermissionStatus | undefined>(undefined);
+  const [activeChatRoomId, setActiveChatRoomId] = useState<string | null>(null);
   const notificationListener = useRef<Notifications.Subscription | null>(null);
   const responseListener = useRef<Notifications.Subscription | null>(null);
+  const activeChatRoomIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    activeChatRoomIdRef.current = activeChatRoomId;
+  }, [activeChatRoomId]);
 
   const schedulePushNotification = async (title: string, body: string, data?: any) => {
     await Notifications.scheduleNotificationAsync({
@@ -72,6 +79,12 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       setNotification(notification);
       
       const { title, body, data } = notification.request.content;
+      
+      // Silence if we are already in this chat room
+      if (data?.room_id && activeChatRoomIdRef.current === data.room_id) {
+        console.log('Silencing notification for active chat room:', data.room_id);
+        return;
+      }
       
       // Show in-app alert when foregrounded
       if (data) {
@@ -167,7 +180,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     };
 
   return (
-    <NotificationContext.Provider value={{ expoPushToken, notification, requestPermissions, permissionStatus, schedulePushNotification }}>
+    <NotificationContext.Provider value={{ expoPushToken, notification, requestPermissions, permissionStatus, schedulePushNotification, setActiveChatRoomId }}>
       {children}
     </NotificationContext.Provider>
   );

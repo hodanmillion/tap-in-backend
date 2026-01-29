@@ -20,27 +20,39 @@ export default function RegisterScreen() {
   const { colorScheme } = useColorScheme();
   const theme = THEME[colorScheme ?? 'light'];
 
-    async function signUpWithEmail() {
-      if (!email || !password || !fullName) {
-        Alert.alert('Error', 'Please fill in all fields');
-        return;
-      }
+      async function signUpWithEmail() {
+        const trimmedEmail = email.trim();
+        if (!trimmedEmail || !password || !fullName) {
+          Alert.alert('Error', 'Please fill in all fields');
+          return;
+        }
 
-      setLoading(true);
-        try {
-          // Generate a safe username: lowercase, alphanumeric, dots, and underscores only
-          const emailPrefix = email.split('@')[0].toLowerCase().replace(/[^a-z0-9._]/g, '');
-          const generatedUsername = emailPrefix + Math.floor(Math.random() * 1000);
-          
-          const response = await apiRequest('/auth/signup', {
-          method: 'POST',
-          body: JSON.stringify({
-            email,
-            password,
-            full_name: fullName,
-            username: generatedUsername,
-          }),
-        });
+        setLoading(true);
+          try {
+              // Generate a safe username: lowercase, alphanumeric, dots, and underscores only
+              const emailPrefix = trimmedEmail.split('@')[0].toLowerCase().replace(/[^a-z0-9._]/g, '');
+              
+              // First check if the email prefix itself is available as a username
+              const { data: existing } = await supabase
+                .from('profiles')
+                .select('username')
+                .ilike('username', emailPrefix)
+                .maybeSingle();
+
+              const generatedUsername = existing 
+                ? emailPrefix + Math.floor(Math.random() * 1000)
+                : emailPrefix;
+              
+              const response = await apiRequest('/auth/signup', {
+
+            method: 'POST',
+            body: JSON.stringify({
+              email: trimmedEmail,
+              password,
+              full_name: fullName,
+              username: generatedUsername,
+            }),
+          });
   
         if (response.error) {
           if (response.error.includes('Email is already registered')) {

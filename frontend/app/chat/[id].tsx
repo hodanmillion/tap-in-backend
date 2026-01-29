@@ -42,6 +42,7 @@ import { useColorScheme } from 'nativewind';
 import { THEME } from '@/lib/theme';
 import * as Haptics from 'expo-haptics';
 import { apiRequest } from '@/lib/api';
+import { useNotifications } from '@/context/NotificationContext';
 import { generateUUID, formatDistance, formatRoomName, formatGeographicDistance } from '@/lib/utils';
 
 const CHAT_RADIUS_METERS = 500;
@@ -164,6 +165,7 @@ export default function ChatScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const { drafts, setDraft, clearDraft } = useChat();
+  const { setActiveChatRoomId } = useNotifications();
   const [id, setId] = useState<string | null>(null);
   const [newMessage, setNewMessage] = useState('');
   const [isResolvingId, setIsResolvingId] = useState(true);
@@ -537,11 +539,39 @@ export default function ChatScreen() {
       ) {
         fetchMessagesSince(lastSeenCreatedAtRef.current);
       }
+      
+      // Update active_room_id when app state changes
+      if (user?.id && id) {
+        if (nextAppState === 'active') {
+          supabase.from('profiles').update({ active_room_id: id }).eq('id', user.id).then();
+        } else {
+          supabase.from('profiles').update({ active_room_id: null }).eq('id', user.id).then();
+        }
+      }
+      
       appStateRef.current = nextAppState;
     });
 
     return () => subscription.remove();
-  }, [id, fetchMessagesSince]);
+  }, [id, fetchMessagesSince, user?.id]);
+
+  useEffect(() => {
+    if (id) {
+      setActiveChatRoomId(id);
+      return () => {
+        setActiveChatRoomId(null);
+      };
+    }
+  }, [id, setActiveChatRoomId]);
+
+  useEffect(() => {
+    if (user?.id && id) {
+      supabase.from('profiles').update({ active_room_id: id }).eq('id', user.id).then();
+      return () => {
+        supabase.from('profiles').update({ active_room_id: null }).eq('id', user.id).then();
+      };
+    }
+  }, [id, user?.id]);
 
   function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
     const R = 6371000;
