@@ -3,8 +3,8 @@ services:
     name: tapin-api
     runtime: bun
     region: oregon
-    buildCommand: bun install
-    startCommand: bun run src/index.ts
+      buildCommand: bun install && node build.js
+      startCommand: node dist/index.cjs
     envVars:
       - key: NODE_ENV
         value: production

@@ -25,18 +25,12 @@ await build({
   bundle: true,
   platform: 'node',
   target: 'node20',
-  format: 'esm',
-  outfile: 'dist/index.js',
+  format: 'cjs',
+  outfile: 'dist/index.cjs',
   external: nodeBuiltins,
   sourcemap: true,
   minify: false,
   logLevel: 'info',
-  banner: {
-    js: `
-import { createRequire } from 'module';
-const require = createRequire(import.meta.url);
-    `.trim(),
-  },
 });
 
 console.log('Build complete!');
