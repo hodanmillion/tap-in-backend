@@ -101,6 +101,7 @@ async function sendVerificationEmail(email: string, fullName: string, type: 'sig
   
   let verificationLink = `${baseUrl}/auth/welcome?email=${encodeURIComponent(email)}&name=${encodeURIComponent(fullName)}`;
   let isAlreadyVerified = false;
+  let user: any = null;
 
   if (type === 'signup') {
     const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
@@ -115,8 +116,6 @@ async function sendVerificationEmail(email: string, fullName: string, type: 'sig
     }
     verificationLink = linkData.properties.action_link;
   } else if (type === 'welcome') {
-    let user = null;
-    
     if (userId) {
       const { data: userData } = await supabase.auth.admin.getUserById(userId);
       user = userData.user;
@@ -165,6 +164,12 @@ async function sendVerificationEmail(email: string, fullName: string, type: 'sig
 
       const htmlContent = getEmailHtml(fullName, verificationLink, isWelcome).replace('Verify Your Email', buttonText);
       
+      console.log('Attempting to send email via Resend...', {
+        from: 'TapIn <team@securim.ca>',
+        to: email,
+        subject
+      });
+      
       const { data, error } = await resend.emails.send({
         from: 'TapIn <team@securim.ca>',
         to: [email],
@@ -173,9 +178,9 @@ async function sendVerificationEmail(email: string, fullName: string, type: 'sig
       });
     
     if (error) {
-      console.error('Resend Error:', error);
+      console.error('Resend API Error details:', JSON.stringify(error, null, 2));
     } else {
-      console.log('Email sent successfully:', data?.id);
+      console.log('Email sent successfully! ID:', data?.id);
     }
     return { data, error };
   } catch (err) {
