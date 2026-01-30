@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { serve } from '@hono/node-server';
 import { cors } from 'hono/cors';
 import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
@@ -816,7 +817,21 @@ async function sendPushToUser(userId: string, title: string, body: string, data?
   } catch (err) { console.error('Push Error:', err); }
 }
 
+const port = Number(process.env.PORT) || 3003;
+
+// Check if running in Bun or Node.js
+// @ts-ignore
+if (typeof Bun === 'undefined') {
+  console.log(`Node.js detected. Starting Hono server on port ${port}...`);
+  serve({
+    fetch: app.fetch,
+    port,
+  });
+} else {
+  console.log(`Bun detected. Exporting app config for port ${port}...`);
+}
+
 export default {
-  port: Number(process.env.PORT) || 3003,
+  port,
   fetch: app.fetch,
 };
