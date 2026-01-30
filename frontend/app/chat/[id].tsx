@@ -280,61 +280,6 @@ export default function ChatScreen() {
     }
   }, [initialId, user]);
 
-  const handleRoomNotFound = useCallback(async () => {
-    if (!user?.id || isSyncing) {
-      setRoomNotFound(true);
-      setLoading(false);
-      return;
-    }
-
-    setIsSyncing(true);
-    setLoading(true);
-
-    try {
-      // Get current location if not available
-      let lat = location?.coords.latitude;
-      let lng = location?.coords.longitude;
-      
-      if (!lat || !lng) {
-        const currentPos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-        lat = currentPos.coords.latitude;
-        lng = currentPos.coords.longitude;
-      }
-
-      // Try to sync/auto-create a room for this location
-      const syncResult = await apiRequest('/rooms/sync', {
-        method: 'POST',
-        body: JSON.stringify({ userId: user.id, latitude: lat, longitude: lng }),
-      });
-
-      if (syncResult && syncResult.joinedRoomIds && syncResult.joinedRoomIds.length > 0) {
-        const newRoomId = syncResult.joinedRoomIds[0];
-        if (newRoomId === id) {
-          // If we synced and got the same ID, but it was not found before, it might be a race condition
-          // Let's try to fetch it one last time
-          const { data } = await supabase.from('chat_rooms').select('*').eq('id', id).single();
-          if (data) {
-            setRoom(data);
-            setRoomNotFound(false);
-          } else {
-            setRoomNotFound(true);
-          }
-        } else {
-          // Redirect to the new room
-          router.replace(`/chat/${newRoomId}`);
-        }
-      } else {
-        setRoomNotFound(true);
-      }
-    } catch (error) {
-      console.error('Error handling room not found:', error);
-      setRoomNotFound(true);
-    } finally {
-      setIsSyncing(false);
-      setLoading(false);
-    }
-  }, [id, user?.id, location, isSyncing, router]);
-
   useEffect(() => {
     if (user) {
       resolveRoomId();
@@ -347,12 +292,8 @@ export default function ChatScreen() {
     if (!id || !user?.id) return;
     const { data } = await supabase.from('chat_rooms').select('*').eq('id', id).single();
     if (!data) {
-      handleRoomNotFound();
-      return;
-    }
-
-    if (data.expires_at && new Date(data.expires_at) < new Date()) {
-      handleRoomNotFound();
+      setRoomNotFound(true);
+      setLoading(false);
       return;
     }
 

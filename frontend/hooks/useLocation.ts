@@ -76,11 +76,15 @@ export function useLocation(userId: string | undefined) {
         let initialLocation = await Location.getLastKnownPositionAsync();
 
         if (initialLocation) {
+          // Check if the last known location is fresh (within 10 minutes)
+          const isFresh = Date.now() - initialLocation.timestamp < 10 * 60 * 1000;
+          
           setLocation(initialLocation);
           locationRef.current = initialLocation;
           lastUpdateRef.current = initialLocation;
           AsyncStorage.setItem(LOCATION_CACHE_KEY, JSON.stringify(initialLocation));
-          if (userId) {
+
+          if (userId && isFresh) {
             maybeSyncLocation(
               userId,
               initialLocation.coords.latitude,
@@ -90,7 +94,7 @@ export function useLocation(userId: string | undefined) {
         }
 
         const currentPosition = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
+          accuracy: Location.Accuracy.Highest,
         });
 
         setLocation(currentPosition);
@@ -108,9 +112,9 @@ export function useLocation(userId: string | undefined) {
 
         subscription = await Location.watchPositionAsync(
           {
-            accuracy: Location.Accuracy.High,
-            timeInterval: 10000, // 10 seconds
-            distanceInterval: 10, // 10 meters
+            accuracy: Location.Accuracy.Highest,
+            timeInterval: 5000, // 5 seconds (more frequent)
+            distanceInterval: 5, // 5 meters (more sensitive)
           },
           (newLocation) => {
             // Always update ref for latest data
@@ -174,21 +178,24 @@ export function useLocation(userId: string | undefined) {
         let address = '';
         try {
           const reverseGeocode = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
-          if (reverseGeocode && reverseGeocode.length > 0) {
-            const loc = reverseGeocode[0];
-            const street = loc.street || loc.name;
-            const streetNumber = loc.streetNumber || '';
-            const city = loc.city || '';
-            const district = loc.district || '';
-            
-            if (street && street !== 'Unnamed Road' && street.toLowerCase() !== 'general room') {
-              address = streetNumber ? `${streetNumber} ${street}` : street;
-            } else if (district) {
-              address = `${district}, ${city}`;
-            } else if (city) {
-              address = city;
+            if (reverseGeocode && reverseGeocode.length > 0) {
+              const loc = reverseGeocode[0];
+              const street = loc.street;
+              const streetNumber = loc.streetNumber;
+              const name = loc.name;
+              const city = loc.city || '';
+              const district = loc.district || '';
+              
+              if (street && street !== 'Unnamed Road') {
+                address = streetNumber ? `${streetNumber} ${street}` : street;
+              } else if (name && name !== 'Unnamed Road') {
+                address = name;
+              } else if (district) {
+                address = `${district}, ${city}`;
+              } else if (city) {
+                address = city;
+              }
             }
-          }
         } catch (geocodeErr) {
         console.error('Reverse geocode failed in useLocation:', geocodeErr);
       }

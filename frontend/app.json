@@ -2,12 +2,12 @@
   "expo": {
     "name": "TapIn",
     "slug": "tap-in",
-    "version": "15.2.1",
+    "version": "15.2.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "tapin",
     "userInterfaceStyle": "dark",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "splash": {
       "image": "./assets/images/splash.png",
       "resizeMode": "contain",
@@ -63,15 +63,15 @@
       "expo-router",
       "expo-image-picker",
       "expo-updates",
-      [
-        "expo-build-properties",
-        {
-          "ios": {
-            "newArchEnabled": true,
-            "privacyManifestAggregationEnabled": false
+        [
+          "expo-build-properties",
+          {
+            "ios": {
+              "newArchEnabled": false,
+              "privacyManifestAggregationEnabled": false
+            }
           }
-        }
-      ],
+        ],
       [
         "expo-location",
         {

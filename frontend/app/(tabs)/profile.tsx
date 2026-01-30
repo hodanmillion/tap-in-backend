@@ -68,9 +68,9 @@ export default function ProfileScreen() {
       if (error) throw error;
       return data;
     },
-    enabled: !!user?.id,
-    staleTime: 5 * 60 * 1000,
-    gcTime: 1000 * 60 * 30,
+      enabled: !!user?.id,
+      staleTime: 10000, // 10 seconds
+      gcTime: 1000 * 60 * 30,
     refetchOnMount: false,
     refetchOnWindowFocus: false,
   });

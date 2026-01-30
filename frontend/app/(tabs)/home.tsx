@@ -93,13 +93,6 @@ export default function HomeScreen() {
     const router = useRouter();
     const queryClient = useQueryClient();
     const [isCreating, setIsCreating] = useState(false);
-    const [isInitialSync, setIsInitialSync] = useState(true);
-
-    useEffect(() => {
-      if (lastSyncTime > 0) {
-        setIsInitialSync(false);
-      }
-    }, [lastSyncTime]);
   
     const { data: notifications } = useQuery({
     queryKey: ['notifications', user?.id],
@@ -312,15 +305,9 @@ export default function HomeScreen() {
                 <Text className="text-base font-bold text-white">Retry</Text>
               </TouchableOpacity>
             </Animated.View>
-            ) : (isLoading || isInitialSync) && rooms.length === 0 ? (
+            ) : isLoading && rooms.length === 0 ? (
               <View className="flex-1 pt-4">
-                <Animated.View entering={FadeIn} className="items-center justify-center py-24">
-                  <ActivityIndicator size="large" color={theme.primary} />
-                  <Text className="mt-6 text-base font-bold text-muted-foreground uppercase tracking-widest">
-                    Finding your zone...
-                  </Text>
-                </Animated.View>
-                {[1, 2].map((i) => (
+                {[1, 2, 3].map((i) => (
                   <RoomItemSkeleton key={i} />
                 ))}
               </View>
@@ -333,20 +320,15 @@ export default function HomeScreen() {
                     <RoomItem item={item} theme={theme} index={index} onPress={() => handleRoomPress(item.id)} />
                   )}
                   ListEmptyComponent={
-                    !isFetching && !isInitialSync ? (
+                    !isFetching ? (
                         <Animated.View entering={FadeIn} className="items-center justify-center py-32 px-8">
                           <View className="h-28 w-28 items-center justify-center rounded-full bg-primary/10 mb-6">
-                            <MapPin size={48} color={theme.primary} strokeWidth={1.5} />
+                            <MessageCircle size={48} color={theme.primary} strokeWidth={1.5} />
                           </View>
-                          <Text className="text-2xl font-bold text-foreground text-center">Creating Your Zone</Text>
+                          <Text className="text-2xl font-bold text-foreground text-center">No Active Zones</Text>
                           <Text className="mt-3 text-center text-base text-muted-foreground leading-7 max-w-[260px]">
-                            Hang tight! We're setting up a local chat for your current location.
+                            Be the first to start a conversation in your area, or match with someone nearby
                           </Text>
-                          <TouchableOpacity 
-                            onPress={() => refetch()}
-                            className="mt-8 bg-secondary px-6 py-3 rounded-2xl">
-                            <Text className="font-bold text-foreground">Refresh Area</Text>
-                          </TouchableOpacity>
                         </Animated.View>
                     ) : null
                   }

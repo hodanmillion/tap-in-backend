@@ -65,7 +65,9 @@ export default function EditProfileScreen() {
         return;
       }
 
-      const loc = await Location.getCurrentPositionAsync({});
+      const loc = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Highest,
+      });
       const reverse = await Location.reverseGeocodeAsync({
         latitude: loc.coords.latitude,
         longitude: loc.coords.longitude,
@@ -73,9 +75,24 @@ export default function EditProfileScreen() {
 
       if (reverse && reverse.length > 0) {
         const address = reverse[0];
-        const parts = [address.street, address.name, address.city].filter(Boolean);
-        const locationName = parts.length > 0 ? parts.join(', ') : 'Unknown Location';
-        setFormData((prev) => ({ ...prev, location_name: locationName }));
+        let locationName = '';
+        const street = address.street;
+        const streetNumber = address.streetNumber;
+        const name = address.name;
+        const city = address.city || '';
+        const district = address.district || '';
+        
+        if (street && street !== 'Unnamed Road') {
+          locationName = streetNumber ? `${streetNumber} ${street}` : street;
+        } else if (name && name !== 'Unnamed Road') {
+          locationName = name;
+        } else if (district) {
+          locationName = `${district}, ${city}`;
+        } else if (city) {
+          locationName = city;
+        }
+        
+        setFormData((prev) => ({ ...prev, location_name: locationName || 'Unknown Location' }));
       }
     } catch (err) {
       Alert.alert('Error', 'Failed to get current location.');
