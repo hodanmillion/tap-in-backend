@@ -19,6 +19,7 @@ import { THEME } from '@/lib/theme';
 import { apiRequest } from '@/lib/api';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
+import { formatGeographicDistance } from '@/lib/utils';
 
 const UserItemSkeleton = () => (
   <View className="mb-4 flex-row items-center rounded-3xl border border-border bg-card p-4 opacity-50">
@@ -142,13 +143,15 @@ export default function UsersScreen() {
             <Text className="text-lg font-bold text-foreground leading-tight" numberOfLines={1}>
               {item.full_name || item.username || 'Anonymous'}
             </Text>
-            <View className="mt-1 flex-row items-center">
-              {item.latitude ? (
-                <View className="flex-row items-center bg-green-500/10 px-2 py-0.5 rounded-full">
-                  <View className="h-1.5 w-1.5 rounded-full bg-green-500 mr-1.5" />
-                  <Text className="text-[9px] font-bold uppercase text-green-600 tracking-wider">Nearby</Text>
-                </View>
-              ) : (
+              <View className="mt-1 flex-row items-center">
+                {item.latitude ? (
+                  <View className="flex-row items-center bg-green-500/10 px-2 py-0.5 rounded-full">
+                    <View className="h-1.5 w-1.5 rounded-full bg-green-500 mr-1.5" />
+                    <Text className="text-[9px] font-bold uppercase text-green-600 tracking-wider">
+                      {item.distance != null ? formatGeographicDistance(item.distance) : 'Nearby'}
+                    </Text>
+                  </View>
+                ) : (
                 <Text className="text-xs font-semibold text-muted-foreground">@{item.username}</Text>
               )}
             </View>

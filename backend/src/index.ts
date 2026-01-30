@@ -266,8 +266,22 @@ app.get('/profiles/nearby', async (c) => {
   const lng = parseFloat(c.req.query('lng') || '0');
   const radius = parseInt(c.req.query('radius') || '5000');
   const userId = c.req.query('userId');
-  const { data, error } = await supabase.rpc('find_nearby_users', { lat, lng, max_dist_meters: radius, exclude_id: userId || null });
-  if (error) return c.json({ error: error.message }, 500);
+  
+  // Ensure userId is a valid UUID string or null
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const validUserId = userId && uuidRegex.test(userId) ? userId : null;
+
+  const { data, error } = await supabase.rpc('find_nearby_users', { 
+    lat, 
+    lng, 
+    max_dist_meters: radius, 
+    exclude_id: validUserId 
+  });
+  
+  if (error) {
+    console.error('RPC Error (find_nearby_users):', error);
+    return c.json({ error: error.message }, 500);
+  }
   return c.json(await enrichProfiles(data || [], userId));
 });
 
@@ -289,7 +303,8 @@ app.post('/rooms/sync', zValidator('json', z.object({ userId: z.string(), latitu
   const { userId, latitude, longitude, address } = c.req.valid('json');
   try {
     await supabase.rpc('cleanup_expired_rooms');
-    await supabase.from('profiles').update({ latitude, longitude, location_name: address, last_seen: new Date().toISOString() }).eq('id', userId);
+      await supabase.from('profiles').update({ latitude, longitude, location_name: address, last_seen: new Date().toISOString() }).eq('id', userId);
+      // Only find rooms within the actual chat radius (1000m) to ensure the user can actually chat
     const { data: existingRooms } = await supabase.rpc('find_nearby_rooms', { lat: latitude, lng: longitude, max_dist_meters: 1000 });
     const publicRooms = (existingRooms || []).filter((r: any) => r.type === 'public');
     if (publicRooms.length > 0) {
@@ -297,18 +312,131 @@ app.post('/rooms/sync', zValidator('json', z.object({ userId: z.string(), latitu
       await supabase.from('room_participants').upsert({ room_id: nearestRoom.id, user_id: userId, left_at: null }, { onConflict: 'room_id,user_id' });
       return c.json({ joinedRoomIds: [nearestRoom.id], activeRoomIds: publicRooms.map((r: any) => r.id), serverTime: new Date().toISOString() });
     }
-    const { data: newRoom } = await supabase.from('chat_rooms').insert({ name: address || 'Nearby Zone', type: 'public', latitude, longitude, radius: 500 }).select().single();
+
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 24);
+
+    const { data: newRoom } = await supabase.from('chat_rooms').insert({ 
+      name: address || 'Nearby Zone', 
+      type: 'public', 
+      latitude, 
+      longitude, 
+      radius: 1000,
+      expires_at: expiresAt.toISOString()
+    }).select().single();
     if (newRoom) await supabase.from('room_participants').insert({ room_id: newRoom.id, user_id: userId });
     return c.json({ joinedRoomIds: newRoom ? [newRoom.id] : [], activeRoomIds: newRoom ? [newRoom.id] : [], serverTime: new Date().toISOString() });
   } catch (err: any) { return c.json({ error: err.message }, 500); }
+});
+
+app.get('/rooms/nearby', async (c) => {
+  const lat = parseFloat(c.req.query('lat') || '0');
+  const lng = parseFloat(c.req.query('lng') || '0');
+  const radius = parseInt(c.req.query('radius') || '1000');
+  
+  const { data, error } = await supabase.rpc('find_nearby_rooms', { 
+    lat, 
+    lng, 
+    max_dist_meters: radius 
+  });
+  
+  if (error) {
+    console.error('RPC Error (find_nearby_rooms):', error);
+    return c.json({ error: error.message }, 500);
+  }
+  
+  return c.json((data || []).filter((r: any) => r.type === 'public'));
+});
+
+app.post('/rooms/create', zValidator('json', z.object({ 
+  name: z.string(), 
+  latitude: z.number(), 
+  longitude: z.number(), 
+  radius: z.number().default(500),
+  userId: z.string()
+})), async (c) => {
+  const { name, latitude, longitude, radius, userId } = c.req.valid('json');
+  
+  try {
+    // 1. Update user location first
+    await supabase.from('profiles').update({ 
+      latitude, 
+      longitude, 
+      last_seen: new Date().toISOString() 
+    }).eq('id', userId);
+
+    // 2. Check for existing public rooms very close (within 50m) to avoid duplicates
+    const { data: existing } = await supabase.rpc('find_nearby_rooms', { 
+      lat: latitude, 
+      lng: longitude, 
+      max_dist_meters: 50 
+    });
+
+    const existingPublic = (existing || []).find((r: any) => r.type === 'public');
+    if (existingPublic) {
+      // Join existing instead
+      await supabase.from('room_participants').upsert({ 
+        room_id: existingPublic.id, 
+        user_id: userId,
+        left_at: null 
+      }, { onConflict: 'room_id,user_id' });
+      
+      return c.json({ room: existingPublic, joined: true });
+    }
+
+    // 3. Create new room with 24h expiration
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 24);
+
+    const { data: room, error } = await supabase
+      .from('chat_rooms')
+      .insert({
+        name,
+        type: 'public',
+        latitude,
+        longitude,
+        radius,
+        expires_at: expiresAt.toISOString()
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // 4. Join the room
+    await supabase.from('room_participants').insert({
+      room_id: room.id,
+      user_id: userId
+    });
+
+    return c.json({ room, joined: true });
+  } catch (err: any) {
+    console.error('Error creating room:', err);
+    return c.json({ error: err.message }, 500);
+  }
 });
 
 app.get('/rooms/user-rooms', async (c) => {
   const userId = c.req.query('userId');
   const lat = parseFloat(c.req.query('lat') || '0');
   const lng = parseFloat(c.req.query('lng') || '0');
-  const { data: rooms, error } = await supabase.rpc('get_user_rooms_v3', { p_user_id: userId, p_lat: lat, p_lng: lng });
-  if (error) return c.json({ error: error.message }, 500);
+  
+  // Ensure userId is a valid UUID string
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!userId || !uuidRegex.test(userId)) {
+    return c.json({ error: 'Invalid user ID' }, 400);
+  }
+
+  const { data: rooms, error } = await supabase.rpc('get_user_rooms_v3', { 
+    p_user_id: userId, 
+    p_lat: lat, 
+    p_lng: lng 
+  });
+  
+  if (error) {
+    console.error('RPC Error (get_user_rooms_v3):', error);
+    return c.json({ error: error.message }, 500);
+  }
   return c.json((rooms || []).map((room: any) => ({
     id: room.id,
     name: room.type === 'private' ? (room.other_user_full_name || `@${room.other_user_username}` || 'Private Chat') : room.name,
@@ -318,9 +446,41 @@ app.get('/rooms/user-rooms', async (c) => {
   })));
 });
 
-app.post('/messages', zValidator('json', z.object({ room_id: z.string(), sender_id: z.string(), content: z.string(), type: z.string().default('text') })), async (c) => {
+app.post('/messages', zValidator('json', z.object({ 
+  room_id: z.string(), 
+  sender_id: z.string(), 
+  content: z.string(), 
+  type: z.string().default('text'),
+  sender_lat: z.number().optional(),
+  sender_lng: z.number().optional()
+})), async (c) => {
   const body = c.req.valid('json');
   if (!checkRateLimit(body.sender_id)) return c.json({ error: 'Rate limit exceeded' }, 429);
+  
+  // 1. Proximity Enforcement for Public Rooms
+  const { data: room } = await supabase.from('chat_rooms').select('type, latitude, longitude, radius, expires_at').eq('id', body.room_id).single();
+  
+  if (!room) return c.json({ error: 'Room not found' }, 404);
+
+  // Check expiration
+  if (room.expires_at && new Date(room.expires_at) < new Date()) {
+    return c.json({ error: 'Chat has expired' }, 403);
+  }
+
+  // Check proximity for public/auto-generated rooms
+  if (room.type !== 'private' && body.sender_lat != null && body.sender_lng != null) {
+    const distance = calculateDistance(body.sender_lat, body.sender_lng, room.latitude!, room.longitude!);
+    const radius = room.radius || 1000;
+    
+    // We allow a 5km grace radius for users who are already in the room
+    const graceRadius = 5000;
+    if (distance > graceRadius) {
+      return c.json({ 
+        error: 'Out of range', 
+        message: `You are too far from this location (${Math.round(distance)}m). Max allowed: ${graceRadius}m.` 
+      }, 403);
+    }
+  }
   
   const { data, error } = await supabase.from('messages').insert({ 
     room_id: body.room_id, 
@@ -334,11 +494,8 @@ app.post('/messages', zValidator('json', z.object({ room_id: z.string(), sender_
   // Background: Handle Push Notifications
   (async () => {
     try {
-      // 1. Get room info and sender info
-      const [{ data: room }, { data: sender }] = await Promise.all([
-        supabase.from('chat_rooms').select('name, type').eq('id', body.room_id).single(),
-        supabase.from('profiles').select('full_name, username').eq('id', body.sender_id).single()
-      ]);
+      // 1. Get sender info
+      const { data: sender } = await supabase.from('profiles').select('full_name, username').eq('id', body.sender_id).single();
 
       if (!sender) return;
 
@@ -373,6 +530,188 @@ app.post('/messages', zValidator('json', z.object({ room_id: z.string(), sender_
   })();
 
   return c.json(data);
+});
+
+app.get('/messages/:roomId', async (c) => {
+  const roomId = c.req.param('roomId');
+  const limit = parseInt(c.req.query('limit') || '50');
+  const cursor = c.req.query('cursor');
+  const since = c.req.query('since');
+
+  let query = supabase
+    .from('messages')
+    .select('*, sender:profiles(id, username, full_name, avatar_url)')
+    .eq('room_id', roomId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (cursor) {
+    query = query.lt('created_at', cursor);
+  }
+  if (since) {
+    query = query.gt('created_at', since);
+  }
+
+  const { data, error } = await query;
+  if (error) return c.json({ error: error.message }, 500);
+
+  const hasMore = (data || []).length === limit;
+  const nextCursor = hasMore ? data[data.length - 1].created_at : null;
+
+  return c.json({
+    messages: data || [],
+    nextCursor,
+    hasMore
+  });
+});
+
+app.post('/rooms/private', zValidator('json', z.object({ user1_id: z.string(), user2_id: z.string() })), async (c) => {
+  const { user1_id, user2_id } = c.req.valid('json');
+  const sortedIds = [user1_id, user2_id].sort();
+  const roomName = `private_${sortedIds[0]}_${sortedIds[1]}`;
+
+  // 1. Check if room exists
+  const { data: existingRoom } = await supabase
+    .from('chat_rooms')
+    .select('id')
+    .eq('name', roomName)
+    .eq('type', 'private')
+    .maybeSingle();
+
+  if (existingRoom) {
+    return c.json({ room_id: existingRoom.id });
+  }
+
+  // 2. Create room
+  const { data: newRoom, error: roomError } = await supabase
+    .from('chat_rooms')
+    .insert({ name: roomName, type: 'private' })
+    .select()
+    .single();
+
+  if (roomError) return c.json({ error: roomError.message }, 500);
+
+  // 3. Add participants
+  await supabase.from('room_participants').insert([
+    { room_id: newRoom.id, user_id: user1_id },
+    { room_id: newRoom.id, user_id: user2_id }
+  ]);
+
+  return c.json({ room_id: newRoom.id });
+});
+
+app.post('/rooms/:id/join', zValidator('json', z.object({ userId: z.string() })), async (c) => {
+  const roomId = c.req.param('id');
+  const { userId } = c.req.valid('json');
+  
+  const { error } = await supabase
+    .from('room_participants')
+    .upsert({ room_id: roomId, user_id: userId, left_at: null }, { onConflict: 'room_id,user_id' });
+    
+  if (error) return c.json({ error: error.message }, 500);
+  return c.json({ success: true });
+});
+
+app.get('/friends/:userId', async (c) => {
+  const userId = c.req.param('userId');
+  const { data, error } = await supabase
+    .from('friends')
+    .select('user_id_1, user_id_2')
+    .or(`user_id_1.eq.${userId},user_id_2.eq.${userId}`);
+
+  if (error) return c.json({ error: error.message }, 500);
+
+  const friendIds = (data || []).map(f => f.user_id_1 === userId ? f.user_id_2 : f.user_id_1);
+  if (friendIds.length === 0) return c.json([]);
+
+  const { data: profiles, error: profileError } = await supabase
+    .from('profiles')
+    .select('*')
+    .in('id', friendIds);
+
+  if (profileError) return c.json({ error: profileError.message }, 500);
+  return c.json(profiles || []);
+});
+
+app.get('/friend-requests/:userId', async (c) => {
+  const userId = c.req.param('userId');
+  const { data, error } = await supabase
+    .from('friend_requests')
+    .select('*, sender:profiles!friend_requests_sender_id_fkey(*)')
+    .eq('receiver_id', userId)
+    .eq('status', 'pending');
+
+  if (error) return c.json({ error: error.message }, 500);
+  return c.json(data || []);
+});
+
+app.post('/friends/request', zValidator('json', z.object({ sender_id: z.string(), receiver_id: z.string() })), async (c) => {
+  const { sender_id, receiver_id } = c.req.valid('json');
+
+  // Check if they are already friends
+  const sorted = [sender_id, receiver_id].sort();
+  const { data: existingFriend } = await supabase
+    .from('friends')
+    .select('id')
+    .eq('user_id_1', sorted[0])
+    .eq('user_id_2', sorted[1])
+    .maybeSingle();
+
+  if (existingFriend) return c.json({ error: 'You are already friends' }, 400);
+
+  // Check if request already exists
+  const { data: existingRequest } = await supabase
+    .from('friend_requests')
+    .select('id, status, sender_id')
+    .or(`and(sender_id.eq.${sender_id},receiver_id.eq.${receiver_id}),and(sender_id.eq.${receiver_id},receiver_id.eq.${sender_id})`)
+    .maybeSingle();
+
+  if (existingRequest) {
+    if (existingRequest.status === 'accepted') return c.json({ error: 'Already friends' }, 400);
+    if (existingRequest.sender_id === sender_id) return c.json({ error: 'Request already sent' }, 400);
+    
+    // If the other person already sent a request, accept it automatically
+    await Promise.all([
+      supabase.from('friend_requests').update({ status: 'accepted' }).eq('id', existingRequest.id),
+      ensureFriendship(sender_id, receiver_id)
+    ]);
+    return c.json({ success: true, status: 'accepted' });
+  }
+
+  const { error } = await supabase
+    .from('friend_requests')
+    .insert({ sender_id, receiver_id, status: 'pending' });
+
+  if (error) return c.json({ error: error.message }, 500);
+
+  // Send push notification
+  const { data: sender } = await supabase.from('profiles').select('full_name, username').eq('id', sender_id).single();
+  if (sender) {
+    await sendPushToUser(receiver_id, 'New Connection Request', `${sender.full_name || `@${sender.username}`} wants to connect with you!`, { type: 'friend_request' });
+  }
+
+  return c.json({ success: true, status: 'pending' });
+});
+
+app.post('/friends/accept', zValidator('json', z.object({ userId: z.string(), requesterId: z.string() })), async (c) => {
+  const { userId, requesterId } = c.req.valid('json');
+  
+  const { data: request, error: fetchError } = await supabase
+    .from('friend_requests')
+    .select('id')
+    .eq('sender_id', requesterId)
+    .eq('receiver_id', userId)
+    .eq('status', 'pending')
+    .maybeSingle();
+
+  if (fetchError || !request) return c.json({ error: 'Request not found' }, 404);
+
+  const success = await ensureFriendship(userId, requesterId);
+  if (!success) return c.json({ error: 'Failed to accept' }, 500);
+
+  await supabase.from('friend_requests').update({ status: 'accepted' }).eq('id', request.id);
+  
+  return c.json({ success: true });
 });
 
 app.get('/auth/callback', async (c) => {

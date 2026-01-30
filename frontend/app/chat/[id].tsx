@@ -45,7 +45,7 @@ import { apiRequest } from '@/lib/api';
 import { useNotifications } from '@/context/NotificationContext';
 import { generateUUID, formatDistance, formatRoomName, formatGeographicDistance } from '@/lib/utils';
 
-const CHAT_RADIUS_METERS = 500;
+const CHAT_RADIUS_METERS = 1000;
 const GIPHY_API_KEY = process.env.EXPO_PUBLIC_GIPHY_API_KEY || 'l1WfAFgqA5WupWoMaCaWKB12G54J6LtZ';
 const REALTIME_BUFFER_MS = 100;
 const PROFILE_FETCH_DEBOUNCE_MS = 100;
@@ -322,36 +322,48 @@ export default function ChatScreen() {
           otherUserId: otherUser?.id,
         });
         } else {
-          let updatedRoom = { ...data };
-          // If it's an auto-generated room OR the name is generic, try to get a better address
-          if (data.type === 'auto_generated' || data.name === 'Nearby Chat' || !data.name || data.name.includes('Chat Zone')) {
-            try {
-              const reverseGeocode = await Location.reverseGeocodeAsync({
-                latitude: data.latitude,
-                longitude: data.longitude,
-              });
-              if (reverseGeocode && reverseGeocode.length > 0) {
-                const loc = reverseGeocode[0];
-                const street = loc.street || loc.name;
-                const streetNumber = loc.streetNumber || '';
-                const city = loc.city || '';
-                
-                let address = '';
-                if (street && street !== 'Unnamed Road') {
-                  address = streetNumber ? `${streetNumber} ${street}` : street;
-                } else if (city) {
-                  address = city;
+            let updatedRoom = { ...data };
+            // If it's an auto-generated room OR the name is generic, try to get a better address
+            const normalizedName = (data.name || '').trim().toLowerCase();
+            const isGenericName = !data.name || 
+              normalizedName === 'nearby chat' || 
+              normalizedName === 'general room' || 
+              normalizedName === 'nearby zone' || 
+              normalizedName === 'chat zone' ||
+              normalizedName.includes('chat zone') || 
+              normalizedName.includes('nearby zone');
+
+            if (data.type === 'auto_generated' || isGenericName) {
+              try {
+                const reverseGeocode = await Location.reverseGeocodeAsync({
+                  latitude: data.latitude,
+                  longitude: data.longitude,
+                });
+                if (reverseGeocode && reverseGeocode.length > 0) {
+                  const loc = reverseGeocode[0];
+                  const street = loc.street || loc.name;
+                  const streetNumber = loc.streetNumber || '';
+                  const city = loc.city || '';
+                  const district = loc.district || '';
+                  
+                  let address = '';
+                  if (street && street !== 'Unnamed Road') {
+                    address = streetNumber ? `${streetNumber} ${street}` : street;
+                  } else if (district) {
+                    address = `${district}, ${city}`;
+                  } else if (city) {
+                    address = city;
+                  }
+                  
+                  if (address && address !== 'Unnamed Road' && address.toLowerCase() !== 'general room') {
+                    updatedRoom.name = address;
+                  }
                 }
-                
-                if (address && address !== 'Unnamed Road') {
-                  updatedRoom.name = address;
-                }
+              } catch (e) {
+                console.log('Header geocode failed', e);
               }
-            } catch (e) {
-              console.log('Header geocode failed', e);
             }
-          }
-          setRoom(updatedRoom);
+            setRoom(updatedRoom);
         }
     setLoading(false);
   }, [id, user?.id]);
@@ -596,10 +608,15 @@ export default function ChatScreen() {
         );
         setCurrentDistance(distance);
         const radius = room.radius || CHAT_RADIUS_METERS;
-      const newIsOutOfRange = distance > radius;
-      
-      // Only update state if it actually changes to prevent redundant renders
-      setIsOutOfRange((prev) => (prev !== newIsOutOfRange ? newIsOutOfRange : prev));
+        
+        // Use a much larger grace radius (5km) for users who have already joined the room
+        // This allows "Groups" to remain active even if users move away slightly,
+        // while still maintaining the "Nearby" feel for discovery.
+        const graceRadius = 5000; 
+        const newIsOutOfRange = distance > graceRadius; 
+        
+        // Only update state if it actually changes to prevent redundant renders
+        setIsOutOfRange((prev) => (prev !== newIsOutOfRange ? newIsOutOfRange : prev));
       
       if (room.expires_at) {
         const now = new Date();
@@ -1056,6 +1073,30 @@ export default function ChatScreen() {
     return (
       <View className="flex-1 bg-background">
         <Stack.Screen options={defaultHeaderOptions} />
+      </View>
+    );
+  }
+
+  if (roomNotFound || isExpired) {
+    return (
+      <View className="flex-1 items-center justify-center bg-background px-6">
+        <Stack.Screen options={defaultHeaderOptions} />
+        <View className="h-20 w-20 items-center justify-center rounded-3xl bg-secondary mb-6">
+          <Lock size={40} color={theme.mutedForeground} opacity={0.5} />
+        </View>
+        <Text className="text-xl font-bold text-foreground text-center">
+          {roomNotFound ? 'Room Not Found' : 'Chat Expired'}
+        </Text>
+        <Text className="mt-2 text-center text-muted-foreground mb-8">
+          {roomNotFound 
+            ? 'This chat room is no longer active or may have been deleted.' 
+            : 'This ephemeral chat has reached its 24-hour limit and is no longer active.'}
+        </Text>
+        <TouchableOpacity
+          onPress={() => router.replace('/(tabs)/chats')}
+          className="bg-primary px-8 py-3.5 rounded-2xl shadow-sm">
+          <Text className="font-bold text-primary-foreground text-base">Back to Chats</Text>
+        </TouchableOpacity>
       </View>
     );
   }

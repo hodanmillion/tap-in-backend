@@ -29,7 +29,13 @@ export function formatDistance(date: Date | string | number): string {
 }
 
 export function formatRoomName(name: string): string {
-  if (!name) return 'General Room';
+  if (!name) return 'Nearby Chat';
+  
+  const normalized = name.trim().toLowerCase();
+  if (normalized === 'general room' || normalized === 'nearby chat' || normalized === 'nearby zone' || normalized === 'chat zone') {
+    return 'Nearby Chat';
+  }
+  
   return name
     .split(' ')
     .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
