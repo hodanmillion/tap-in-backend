@@ -36,7 +36,7 @@ export default function UsersScreen() {
   const { user } = useAuth();
   const { colorScheme } = useColorScheme();
   const theme = THEME[colorScheme ?? 'light'];
-  const { location } = useLocation(user?.id);
+  const { location, lastSyncTime } = useLocation(user?.id);
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [sentRequests, setSentRequests] = useState<Set<string>>(new Set());
@@ -61,6 +61,7 @@ export default function UsersScreen() {
         'nearbyUsers',
         location?.coords.latitude.toFixed(2),
         location?.coords.longitude.toFixed(2),
+        lastSyncTime,
       ],
       queryFn: async () => {
         if (!location || !user?.id) return [];

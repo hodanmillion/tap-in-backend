@@ -79,17 +79,21 @@ export function useLocation(userId: string | undefined) {
           // Check if the last known location is fresh (within 10 minutes)
           const isFresh = Date.now() - initialLocation.timestamp < 10 * 60 * 1000;
           
-          setLocation(initialLocation);
-          locationRef.current = initialLocation;
-          lastUpdateRef.current = initialLocation;
-          AsyncStorage.setItem(LOCATION_CACHE_KEY, JSON.stringify(initialLocation));
+          if (isFresh) {
+            setLocation(initialLocation);
+            locationRef.current = initialLocation;
+            lastUpdateRef.current = initialLocation;
+            AsyncStorage.setItem(LOCATION_CACHE_KEY, JSON.stringify(initialLocation));
 
-          if (userId && isFresh) {
-            maybeSyncLocation(
-              userId,
-              initialLocation.coords.latitude,
-              initialLocation.coords.longitude
-            );
+            if (userId) {
+              maybeSyncLocation(
+                userId,
+                initialLocation.coords.latitude,
+                initialLocation.coords.longitude
+              );
+            }
+          } else {
+            console.log('Last known location is stale, waiting for fresh coordinates...');
           }
         }
 
@@ -178,24 +182,37 @@ export function useLocation(userId: string | undefined) {
         let address = '';
         try {
           const reverseGeocode = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
-            if (reverseGeocode && reverseGeocode.length > 0) {
-              const loc = reverseGeocode[0];
-              const street = loc.street;
-              const streetNumber = loc.streetNumber;
-              const name = loc.name;
-              const city = loc.city || '';
-              const district = loc.district || '';
-              
-              if (street && street !== 'Unnamed Road') {
-                address = streetNumber ? `${streetNumber} ${street}` : street;
-              } else if (name && name !== 'Unnamed Road') {
-                address = name;
-              } else if (district) {
-                address = `${district}, ${city}`;
-              } else if (city) {
-                address = city;
-              }
-            }
+                if (reverseGeocode && reverseGeocode.length > 0) {
+                  const loc = reverseGeocode[0];
+                  const street = loc.street;
+                  const streetNumber = loc.streetNumber;
+                  const name = loc.name;
+                  const city = loc.city || '';
+                  
+                  // Prioritize "Street Number + Street" for maximum clarity
+                  if (street && street !== 'Unnamed Road') {
+                    if (streetNumber) {
+                      address = `${streetNumber} ${street}`;
+                    } else {
+                      address = street;
+                    }
+                  } else if (name && name !== 'Unnamed Road' && !name.includes('+')) {
+                    address = name;
+                  } else if (city) {
+                    address = city;
+                  }
+                  
+                  // Final cleanup: remove redundant suffixes or prefixes
+                  if (address) {
+                    // Remove common duplications like "Greenbank Rd, Greenbank Rd"
+                    const parts = address.split(',').map(p => p.trim());
+                    if (parts.length > 1 && parts[0] === parts[1]) {
+                      address = parts[0];
+                    } else if (parts.length > 1) {
+                      address = parts[0];
+                    }
+                  }
+                }
         } catch (geocodeErr) {
         console.error('Reverse geocode failed in useLocation:', geocodeErr);
       }
