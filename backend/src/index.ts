@@ -306,25 +306,33 @@ app.post('/rooms/sync', zValidator('json', z.object({ userId: z.string(), latitu
     await supabase.rpc('cleanup_expired_rooms');
       await supabase.from('profiles').update({ latitude, longitude, location_name: address, last_seen: new Date().toISOString() }).eq('id', userId);
       // Only find rooms within the actual chat radius (1000m) to ensure the user can actually chat
-    const { data: existingRooms } = await supabase.rpc('find_nearby_rooms', { lat: latitude, lng: longitude, max_dist_meters: 1000 });
-    const publicRooms = (existingRooms || []).filter((r: any) => r.type === 'public');
-    if (publicRooms.length > 0) {
-      const nearestRoom = publicRooms.sort((a: any, b: any) => calculateDistance(latitude, longitude, a.latitude, a.longitude) - calculateDistance(latitude, longitude, b.latitude, b.longitude))[0];
-      await supabase.from('room_participants').upsert({ room_id: nearestRoom.id, user_id: userId, left_at: null }, { onConflict: 'room_id,user_id' });
-      return c.json({ joinedRoomIds: [nearestRoom.id], activeRoomIds: publicRooms.map((r: any) => r.id), serverTime: new Date().toISOString() });
-    }
+      const { data: existingRooms } = await supabase.rpc('find_nearby_rooms', { lat: latitude, lng: longitude, max_dist_meters: 1000 });
+      const publicRooms = (existingRooms || []).filter((r: any) => r.type === 'public');
+      
+      if (publicRooms.length > 0) {
+        const nearestRoom = publicRooms.sort((a: any, b: any) => calculateDistance(latitude, longitude, a.latitude, a.longitude) - calculateDistance(latitude, longitude, b.latitude, b.longitude))[0];
+        await supabase.from('room_participants').upsert({ room_id: nearestRoom.id, user_id: userId, left_at: null }, { onConflict: 'room_id,user_id' });
+        return c.json({ joinedRoomIds: [nearestRoom.id], activeRoomIds: publicRooms.map((r: any) => r.id), serverTime: new Date().toISOString() });
+      }
 
-    const expiresAt = new Date();
-    expiresAt.setHours(expiresAt.getHours() + 24);
+      const expiresAt = new Date();
+      expiresAt.setHours(expiresAt.getHours() + 24);
 
-    const { data: newRoom } = await supabase.from('chat_rooms').insert({ 
-      name: address || 'Nearby Zone', 
-      type: 'public', 
-      latitude, 
-      longitude, 
-      radius: 1000,
-      expires_at: expiresAt.toISOString()
-    }).select().single();
+      // Create a more descriptive name for the auto-generated zone
+      let roomName = address || 'Nearby Zone';
+      if (roomName === 'Unnamed Road' || !roomName) {
+        roomName = 'Nearby Zone';
+      }
+
+      const { data: newRoom } = await supabase.from('chat_rooms').insert({ 
+        name: roomName, 
+        type: 'public', 
+        latitude, 
+        longitude, 
+        radius: 1000,
+        expires_at: expiresAt.toISOString()
+      }).select().single();
+
     if (newRoom) await supabase.from('room_participants').insert({ room_id: newRoom.id, user_id: userId });
     return c.json({ joinedRoomIds: newRoom ? [newRoom.id] : [], activeRoomIds: newRoom ? [newRoom.id] : [], serverTime: new Date().toISOString() });
   } catch (err: any) { return c.json({ error: err.message }, 500); }

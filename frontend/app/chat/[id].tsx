@@ -200,6 +200,7 @@ export default function ChatScreen() {
   const [loading, setLoading] = useState(true);
   const [initialLoading, setInitialLoading] = useState(true);
   const [roomNotFound, setRoomNotFound] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [isOutOfRange, setIsOutOfRange] = useState(false);
   const [isExpired, setIsExpired] = useState(false);
@@ -279,6 +280,61 @@ export default function ChatScreen() {
     }
   }, [initialId, user]);
 
+  const handleRoomNotFound = useCallback(async () => {
+    if (!user?.id || isSyncing) {
+      setRoomNotFound(true);
+      setLoading(false);
+      return;
+    }
+
+    setIsSyncing(true);
+    setLoading(true);
+
+    try {
+      // Get current location if not available
+      let lat = location?.coords.latitude;
+      let lng = location?.coords.longitude;
+      
+      if (!lat || !lng) {
+        const currentPos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        lat = currentPos.coords.latitude;
+        lng = currentPos.coords.longitude;
+      }
+
+      // Try to sync/auto-create a room for this location
+      const syncResult = await apiRequest('/rooms/sync', {
+        method: 'POST',
+        body: JSON.stringify({ userId: user.id, latitude: lat, longitude: lng }),
+      });
+
+      if (syncResult && syncResult.joinedRoomIds && syncResult.joinedRoomIds.length > 0) {
+        const newRoomId = syncResult.joinedRoomIds[0];
+        if (newRoomId === id) {
+          // If we synced and got the same ID, but it was not found before, it might be a race condition
+          // Let's try to fetch it one last time
+          const { data } = await supabase.from('chat_rooms').select('*').eq('id', id).single();
+          if (data) {
+            setRoom(data);
+            setRoomNotFound(false);
+          } else {
+            setRoomNotFound(true);
+          }
+        } else {
+          // Redirect to the new room
+          router.replace(`/chat/${newRoomId}`);
+        }
+      } else {
+        setRoomNotFound(true);
+      }
+    } catch (error) {
+      console.error('Error handling room not found:', error);
+      setRoomNotFound(true);
+    } finally {
+      setIsSyncing(false);
+      setLoading(false);
+    }
+  }, [id, user?.id, location, isSyncing, router]);
+
   useEffect(() => {
     if (user) {
       resolveRoomId();
@@ -291,8 +347,12 @@ export default function ChatScreen() {
     if (!id || !user?.id) return;
     const { data } = await supabase.from('chat_rooms').select('*').eq('id', id).single();
     if (!data) {
-      setRoomNotFound(true);
-      setLoading(false);
+      handleRoomNotFound();
+      return;
+    }
+
+    if (data.expires_at && new Date(data.expires_at) < new Date()) {
+      handleRoomNotFound();
       return;
     }
 
@@ -1077,26 +1137,34 @@ export default function ChatScreen() {
     );
   }
 
-  if (roomNotFound || isExpired) {
+  if (roomNotFound || isExpired || isSyncing) {
     return (
       <View className="flex-1 items-center justify-center bg-background px-6">
         <Stack.Screen options={defaultHeaderOptions} />
         <View className="h-20 w-20 items-center justify-center rounded-3xl bg-secondary mb-6">
-          <Lock size={40} color={theme.mutedForeground} opacity={0.5} />
+          {isSyncing ? (
+            <ActivityIndicator size="large" color={theme.primary} />
+          ) : (
+            <Lock size={40} color={theme.mutedForeground} opacity={0.5} />
+          )}
         </View>
         <Text className="text-xl font-bold text-foreground text-center">
-          {roomNotFound ? 'Room Not Found' : 'Chat Expired'}
+          {isSyncing ? 'Finding Nearby Zone...' : roomNotFound ? 'Room Not Found' : 'Chat Expired'}
         </Text>
         <Text className="mt-2 text-center text-muted-foreground mb-8">
-          {roomNotFound 
-            ? 'This chat room is no longer active or may have been deleted.' 
-            : 'This ephemeral chat has reached its 24-hour limit and is no longer active.'}
+          {isSyncing 
+            ? 'Searching for an active conversation in your area...'
+            : roomNotFound 
+              ? 'This chat room is no longer active or may have been deleted.' 
+              : 'This ephemeral chat has reached its 24-hour limit and is no longer active.'}
         </Text>
-        <TouchableOpacity
-          onPress={() => router.replace('/(tabs)/chats')}
-          className="bg-primary px-8 py-3.5 rounded-2xl shadow-sm">
-          <Text className="font-bold text-primary-foreground text-base">Back to Chats</Text>
-        </TouchableOpacity>
+        {!isSyncing && (
+          <TouchableOpacity
+            onPress={() => router.replace('/(tabs)/home')}
+            className="bg-primary px-8 py-3.5 rounded-2xl shadow-sm">
+            <Text className="font-bold text-primary-foreground text-base">Back to Home</Text>
+          </TouchableOpacity>
+        )}
       </View>
     );
   }

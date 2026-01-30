@@ -93,6 +93,13 @@ export default function HomeScreen() {
     const router = useRouter();
     const queryClient = useQueryClient();
     const [isCreating, setIsCreating] = useState(false);
+    const [isInitialSync, setIsInitialSync] = useState(true);
+
+    useEffect(() => {
+      if (lastSyncTime > 0) {
+        setIsInitialSync(false);
+      }
+    }, [lastSyncTime]);
   
     const { data: notifications } = useQuery({
     queryKey: ['notifications', user?.id],
@@ -141,22 +148,24 @@ export default function HomeScreen() {
       if (!location) return [];
       const { latitude, longitude } = location.coords;
       
-      return (nearbyRooms || [])
-        .map((room: any) => {
-          const distance = calculateDistance(
-            latitude,
-            longitude,
-            room.latitude,
-            room.longitude
-          );
-          return { ...room, distanceMeters: distance };
-        })
-        .filter((room: any) => {
-          // Only show rooms within their specified radius + 50m buffer
-          const radius = room.radius || 500;
-          return room.distanceMeters <= radius + 50;
-        })
-        .sort((a: any, b: any) => a.distanceMeters - b.distanceMeters);
+        return (nearbyRooms || [])
+          .map((room: any) => {
+            const distance = calculateDistance(
+              latitude,
+              longitude,
+              room.latitude,
+              room.longitude
+            );
+            return { ...room, distanceMeters: distance };
+          })
+          .filter((room: any) => {
+            // Only show rooms within their specified radius + buffer
+            // Default to 1000m to match backend sync radius
+            const radius = room.radius || 1000;
+            return room.distanceMeters <= radius + 100;
+          })
+          .sort((a: any, b: any) => a.distanceMeters - b.distanceMeters);
+
     }, [nearbyRooms, location]);
 
     function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
@@ -303,33 +312,45 @@ export default function HomeScreen() {
                 <Text className="text-base font-bold text-white">Retry</Text>
               </TouchableOpacity>
             </Animated.View>
-          ) : isLoading && rooms.length === 0 ? (
-            <View className="flex-1 pt-4">
-              {[1, 2, 3].map((i) => (
-                <RoomItemSkeleton key={i} />
-              ))}
-            </View>
-          ) : (
-            <View className="flex-1">
-              <FlashList
-                data={rooms as any[]}
-                keyExtractor={(item: any) => item.id}
-                renderItem={({ item, index }: { item: any; index: number }) => (
-                  <RoomItem item={item} theme={theme} index={index} onPress={() => handleRoomPress(item.id)} />
-                )}
-                ListEmptyComponent={
-                  !isFetching ? (
-                      <Animated.View entering={FadeIn} className="items-center justify-center py-32 px-8">
-                        <View className="h-28 w-28 items-center justify-center rounded-full bg-primary/10 mb-6">
-                          <MessageCircle size={48} color={theme.primary} strokeWidth={1.5} />
-                        </View>
-                        <Text className="text-2xl font-bold text-foreground text-center">No Active Zones</Text>
-                        <Text className="mt-3 text-center text-base text-muted-foreground leading-7 max-w-[260px]">
-                          Be the first to start a conversation in your area, or match with someone nearby
-                        </Text>
-                      </Animated.View>
-                  ) : null
-                }
+            ) : (isLoading || isInitialSync) && rooms.length === 0 ? (
+              <View className="flex-1 pt-4">
+                <Animated.View entering={FadeIn} className="items-center justify-center py-24">
+                  <ActivityIndicator size="large" color={theme.primary} />
+                  <Text className="mt-6 text-base font-bold text-muted-foreground uppercase tracking-widest">
+                    Finding your zone...
+                  </Text>
+                </Animated.View>
+                {[1, 2].map((i) => (
+                  <RoomItemSkeleton key={i} />
+                ))}
+              </View>
+            ) : (
+              <View className="flex-1">
+                <FlashList
+                  data={rooms as any[]}
+                  keyExtractor={(item: any) => item.id}
+                  renderItem={({ item, index }: { item: any; index: number }) => (
+                    <RoomItem item={item} theme={theme} index={index} onPress={() => handleRoomPress(item.id)} />
+                  )}
+                  ListEmptyComponent={
+                    !isFetching && !isInitialSync ? (
+                        <Animated.View entering={FadeIn} className="items-center justify-center py-32 px-8">
+                          <View className="h-28 w-28 items-center justify-center rounded-full bg-primary/10 mb-6">
+                            <MapPin size={48} color={theme.primary} strokeWidth={1.5} />
+                          </View>
+                          <Text className="text-2xl font-bold text-foreground text-center">Creating Your Zone</Text>
+                          <Text className="mt-3 text-center text-base text-muted-foreground leading-7 max-w-[260px]">
+                            Hang tight! We're setting up a local chat for your current location.
+                          </Text>
+                          <TouchableOpacity 
+                            onPress={() => refetch()}
+                            className="mt-8 bg-secondary px-6 py-3 rounded-2xl">
+                            <Text className="font-bold text-foreground">Refresh Area</Text>
+                          </TouchableOpacity>
+                        </Animated.View>
+                    ) : null
+                  }
+
                 onRefresh={refetch}
                 refreshing={false}
                 showsVerticalScrollIndicator={false}
