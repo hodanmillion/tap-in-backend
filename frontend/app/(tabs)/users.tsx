@@ -124,28 +124,36 @@ export default function UsersScreen() {
 
     return (
       <View className="mb-4 flex-row items-center rounded-3xl border border-border bg-card p-4 shadow-sm">
-        <TouchableOpacity 
-          onPress={() => router.push(`/user/${item.id}`)}
-          className="flex-row items-center flex-1">
-          <View className="h-14 w-14 items-center justify-center overflow-hidden rounded-2xl bg-primary/5">
-            {item.avatar_url ? (
-              <Image 
-                source={{ uri: item.avatar_url }} 
-                style={{ width: 56, height: 56 }}
-                contentFit="cover"
-                cachePolicy="memory-disk"
-                transition={150}
-              />
-            ) : (
-              <Users size={24} color={theme.primary} />
-            )}
-          </View>
-          <View className="ml-4 flex-1">
-            <Text className="text-lg font-bold text-foreground leading-tight" numberOfLines={1}>
-              {item.full_name || item.username || 'Anonymous'}
-            </Text>
-              <View className="mt-1 flex-row items-center">
-                {item.latitude ? (
+          <TouchableOpacity 
+            onPress={() => router.push(`/user/${item.id}`)}
+            className="flex-row items-center flex-1">
+            <View className="h-14 w-14 items-center justify-center overflow-hidden rounded-2xl bg-primary/5">
+              {item.avatar_url ? (
+                <Image 
+                  source={{ uri: item.avatar_url }} 
+                  style={{ width: 56, height: 56 }}
+                  contentFit="cover"
+                  cachePolicy="memory-disk"
+                  transition={150}
+                />
+              ) : (
+                <Users size={24} color={theme.primary} />
+              )}
+            </View>
+            <View className="ml-4 flex-1">
+              <View className="flex-row items-center">
+                <Text className="text-lg font-bold text-foreground leading-tight mr-1.5" numberOfLines={1}>
+                  {item.full_name || item.username || 'Anonymous'}
+                </Text>
+                {item.username && item.full_name && (
+                  <View className="bg-blue-500/10 rounded-full px-1.5 py-0.5">
+                    <Check size={10} color="#3b82f6" strokeWidth={3} />
+                  </View>
+                )}
+              </View>
+                <View className="mt-1 flex-row items-center">
+                  {item.latitude ? (
+
                   <View className="flex-row items-center bg-green-500/10 px-2 py-0.5 rounded-full">
                     <View className="h-1.5 w-1.5 rounded-full bg-green-500 mr-1.5" />
                     <Text className="text-[9px] font-bold uppercase text-green-600 tracking-wider">
@@ -239,7 +247,7 @@ export default function UsersScreen() {
               <View className="mb-8 flex-row items-center rounded-2xl bg-secondary/30 border border-border/50 px-4 py-1">
                 <Search size={18} color={theme.mutedForeground} />
                 <TextInput
-                  placeholder="Search by username..."
+                  placeholder="Search by username or email..."
                   placeholderTextColor={theme.mutedForeground}
                   className="ml-3 h-12 flex-1 text-base font-semibold text-foreground"
                   value={searchQuery}

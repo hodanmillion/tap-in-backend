@@ -215,7 +215,7 @@ export default function ChatScreen() {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [currentDistance, setCurrentDistance] = useState<number | null>(null);
 
-    const { location, locationRef } = useLocation(user?.id);
+    const { location, locationRef, refreshLocation } = useLocation(user?.id);
 
   const { data: messagesData, isLoading: messagesLoading, refetch: refetchMessages } = useQuery({
 
@@ -702,7 +702,10 @@ export default function ChatScreen() {
       }
 
         try {
-          const loc = locationRef.current;
+          // Ensure we have a fresh location for the proximity check
+          const freshLoc = await refreshLocation();
+          const loc = freshLoc || locationRef.current;
+          
           const data = await apiRequest('/messages', {
             method: 'POST',
             body: JSON.stringify({

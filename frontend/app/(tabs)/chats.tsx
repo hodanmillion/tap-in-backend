@@ -165,6 +165,7 @@ export default function ChatsScreen() {
       if (isReadOnly) {
         past.push(room);
       } else {
+        // Include virtual pending rooms in active conversations
         active.push(room);
       }
     });

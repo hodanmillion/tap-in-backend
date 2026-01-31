@@ -99,9 +99,11 @@ export default function FriendsScreen() {
   const queryClient = useQueryClient();
   const [viewerOpen, setViewerOpen] = useState(false);
   const [currentTapinIndex, setCurrentTapinIndex] = useState(0);
-  const [replyText, setReplyText] = useState('');
+    const [replyText, setReplyText] = useState('');
+    const [searchQuery, setSearchQuery] = useState('');
+  
+      const { data: friendsData, isLoading, isError, error, refetch } = useQuery({
 
-    const { data: friendsData, isLoading, isError, error, refetch } = useQuery({
       queryKey: ['friends', user?.id],
       queryFn: async () => {
         if (!user?.id) return [];
@@ -169,7 +171,15 @@ export default function FriendsScreen() {
   const pendingCount = pendingRequests?.length || 0;
 
 
-  const friends = useMemo(() => friendsData || [], [friendsData]);
+  const friends = useMemo(() => {
+    const list = friendsData || [];
+    if (!searchQuery.trim()) return list;
+    const q = searchQuery.toLowerCase().trim();
+    return list.filter((f: any) => 
+      f.username?.toLowerCase().includes(q) || 
+      f.full_name?.toLowerCase().includes(q)
+    );
+  }, [friendsData, searchQuery]);
 
   const renderFriend = useCallback(({ item, index }: { item: any; index: number }) => (
     <FriendItem 
@@ -196,9 +206,28 @@ export default function FriendsScreen() {
               className="h-12 w-12 items-center justify-center rounded-2xl bg-primary shadow-lg shadow-primary/25">
               <UserPlus size={22} color={theme.primaryForeground} />
             </TouchableOpacity>
-          </Animated.View>
+            </Animated.View>
+  
+            <Animated.View entering={FadeInDown.delay(10).springify()} className="mb-6 flex-row items-center rounded-2xl bg-secondary/30 border border-border/50 px-4 py-1">
+              <Search size={18} color={theme.mutedForeground} />
+              <TextInput
+                placeholder="Search friends..."
+                placeholderTextColor={theme.mutedForeground}
+                className="ml-3 h-12 flex-1 text-base font-semibold text-foreground"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setSearchQuery('')} className="p-1">
+                  <X size={16} color={theme.mutedForeground} />
+                </TouchableOpacity>
+              )}
+            </Animated.View>
+  
+  <Animated.View entering={FadeInDown.delay(25).springify()} className="mb-5">
 
-<Animated.View entering={FadeInDown.delay(25).springify()} className="mb-5">
               <View className="bg-card/50 border border-border/30 rounded-2xl p-4">
                 <View className="flex-row items-center justify-between mb-3">
                   <View className="flex-row items-center gap-2">

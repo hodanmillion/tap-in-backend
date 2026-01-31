@@ -21,6 +21,7 @@ console.log('--- STARTING BACKEND SERVER ---');
 console.log('Timestamp:', new Date().toISOString());
 console.log('Environment:', process.env.NODE_ENV || 'development');
 console.log('Port:', process.env.PORT || 3003);
+console.log('Supabase URL:', process.env.SUPABASE_URL);
 
 // 2. Supabase & Resend Configuration
 const supabase = createClient<Database>(
@@ -286,25 +287,103 @@ app.get('/profiles/nearby', async (c) => {
   const validUserId = userId && uuidRegex.test(userId) ? userId : null;
 
   const { data, error } = await supabase.rpc('find_nearby_users', { 
-    lat, 
-    lng, 
-    max_dist_meters: radius, 
-    exclude_id: validUserId 
+    p_lat: lat, 
+    p_lng: lng, 
+    p_max_dist_meters: radius, 
+    p_exclude_id: validUserId 
   });
   
-  if (error) {
-    console.error('RPC Error (find_nearby_users):', error);
-    return c.json({ error: error.message }, 500);
-  }
-  return c.json(await enrichProfiles(data || [], userId));
-});
+    if (error) {
+      console.error('RPC Error (find_nearby_users):', error);
+      return c.json({ error: error.message }, 500);
+    }
+
+    const profiles = data || [];
+    // Ensure unique users by ID
+    const uniqueProfiles = profiles.reduce((acc: any[], profile: any) => {
+      if (!acc.find(p => p.id === profile.id)) {
+        acc.push(profile);
+      }
+      return acc;
+    }, []);
+
+    return c.json(await enrichProfiles(uniqueProfiles, userId));
+  });
+
 
 app.get('/profiles/search', async (c) => {
-  const q = c.req.query('q') || '';
+  const q = (c.req.query('q') || '').trim();
   const userId = c.req.query('userId');
-  const { data, error } = await supabase.from('profiles').select('*').or(`username.ilike.%${q}%,full_name.ilike.%${q}%`).eq('is_incognito', false).order('last_seen', { ascending: false }).limit(20);
+  
+  if (!q) return c.json([]);
+
+  // 1. If query looks like an email, search strictly by email
+  // 2. Otherwise search by username or full name
+  const isEmail = q.includes('@') && q.includes('.');
+  let query = supabase.from('profiles').select('*');
+
+  if (isEmail) {
+    query = query.eq('email', q.toLowerCase());
+  } else {
+    // Check if it's an exact username match (validated user check)
+    // or a partial match for display
+    query = query.or(`username.ilike.%${q}%,full_name.ilike.%${q}%`);
+  }
+
+  const { data, error } = await query
+    .eq('is_incognito', false)
+    .order('last_seen', { ascending: false })
+    .limit(20);
+
   if (error) return c.json({ error: error.message }, 500);
-  return c.json(await enrichProfiles(data || [], userId));
+
+  // Filter for "validated" users - meaning they have at least a username and have completed signup
+  const validatedProfiles = (data || []).filter(p => p.username && p.full_name);
+
+  return c.json(await enrichProfiles(validatedProfiles, userId));
+});
+
+app.post('/friend-requests/:id/respond', zValidator('json', z.object({ status: z.enum(['accepted', 'rejected']) })), async (c) => {
+  const requestId = c.req.param('id');
+  const { status } = c.req.valid('json');
+  const user = c.get('user');
+
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+
+  // 1. Get the request
+  const { data: request, error: fetchError } = await supabase
+    .from('friend_requests')
+    .select('*')
+    .eq('id', requestId)
+    .single();
+
+  if (fetchError || !request) return c.json({ error: 'Request not found' }, 404);
+
+  // 2. Ensure the current user is the receiver
+  if (request.receiver_id !== user.id) {
+    return c.json({ error: 'Not authorized to respond to this request' }, 403);
+  }
+
+  // 3. Update status
+  const { error: updateError } = await supabase
+    .from('friend_requests')
+    .update({ status })
+    .eq('id', requestId);
+
+  if (updateError) return c.json({ error: updateError.message }, 500);
+
+  // 4. If accepted, ensure friendship exists
+  if (status === 'accepted') {
+    await ensureFriendship(request.sender_id, request.receiver_id);
+    
+    // Notify sender
+    const { data: receiverProfile } = await supabase.from('profiles').select('full_name, username').eq('id', user.id).single();
+    if (receiverProfile) {
+      await sendPushToUser(request.sender_id, 'Connection Accepted!', `${receiverProfile.full_name || `@${receiverProfile.username}`} accepted your connection request.`, { type: 'friend_accepted' });
+    }
+  }
+
+  return c.json({ success: true });
 });
 
 app.get('/profiles/:id', async (c) => {
@@ -342,11 +421,11 @@ app.post('/rooms/sync', zValidator('json', z.object({ userId: z.string(), latitu
 
     await supabase.from('profiles').update(profileUpdates).eq('id', userId);
     
-    // 2. Find rooms within 1000m
+    // 2. Find rooms within 500m (improved from 1000m for tighter local grouping)
     const { data: existingRooms } = await supabase.rpc('find_nearby_rooms', { 
-      lat: latitude, 
-      lng: longitude, 
-      max_dist_meters: 1000 
+      p_lat: latitude, 
+      p_lng: longitude, 
+      p_max_dist_meters: 500 
     });
       const publicRooms = (existingRooms || []).filter((r: any) => r.type === 'public');
       
@@ -393,9 +472,9 @@ app.get('/rooms/nearby', async (c) => {
   }
   
   const { data, error } = await supabase.rpc('find_nearby_rooms', { 
-    lat, 
-    lng, 
-    max_dist_meters: radius 
+    p_lat: lat, 
+    p_lng: lng, 
+    p_max_dist_meters: radius 
   });
   
   if (error) {
@@ -403,7 +482,18 @@ app.get('/rooms/nearby', async (c) => {
     return c.json({ error: error.message }, 500);
   }
   
-  return c.json((data || []).filter((r: any) => r.type === 'public'));
+  const publicRooms = (data || []).filter((r: any) => r.type === 'public');
+  
+  // Filter for unique locations by name (address) to prevent duplicates in UI
+  const uniqueRooms = publicRooms.reduce((acc: any[], room: any) => {
+    const isDuplicate = acc.find(r => r.name === room.name);
+    if (!isDuplicate) {
+      acc.push(room);
+    }
+    return acc;
+  }, []);
+
+  return c.json(uniqueRooms);
 });
 
 app.post('/rooms/create', zValidator('json', z.object({ 
@@ -423,23 +513,26 @@ app.post('/rooms/create', zValidator('json', z.object({
       last_seen: new Date().toISOString() 
     }).eq('id', userId);
 
-    // 2. Check for existing public rooms very close (within 50m) to avoid duplicates
+    // 2. Check for existing public rooms with same name OR very close (within 500m) to avoid duplicates
     const { data: existing } = await supabase.rpc('find_nearby_rooms', { 
-      lat: latitude, 
-      lng: longitude, 
-      max_dist_meters: 50 
+      p_lat: latitude, 
+      p_lng: longitude, 
+      p_max_dist_meters: 500 
     });
 
-    const existingPublic = (existing || []).find((r: any) => r.type === 'public');
-    if (existingPublic) {
+    const existingMatch = (existing || []).find((r: any) => 
+      r.type === 'public' && (r.name === name || calculateDistance(latitude, longitude, r.latitude, r.longitude) < 500)
+    );
+
+    if (existingMatch) {
       // Join existing instead
       await supabase.from('room_participants').upsert({ 
-        room_id: existingPublic.id, 
+        room_id: existingMatch.id, 
         user_id: userId,
         left_at: null 
       }, { onConflict: 'room_id,user_id' });
       
-      return c.json({ room: existingPublic, joined: true });
+      return c.json({ room: existingMatch, joined: true });
     }
 
     // 3. Create new room with 24h expiration
@@ -495,13 +588,60 @@ app.get('/rooms/user-rooms', async (c) => {
     console.error('RPC Error (get_user_rooms_v3):', error);
     return c.json({ error: error.message }, 500);
   }
-  return c.json((rooms || []).map((room: any) => ({
-    id: room.id,
-    name: room.type === 'private' ? (room.other_user_full_name || `@${room.other_user_username}` || 'Private Chat') : room.name,
-    type: room.type, distance: room.distance !== null ? Math.round(room.distance) : null,
-    last_message_at: room.last_message_created_at || null,
-    last_message_preview: room.last_message_content ? room.last_message_content.substring(0, 50) : null
-  })));
+
+    const processedRooms = (rooms || []).map((room: any) => {
+      const isPrivate = room.type === 'private';
+      const distance = room.distance !== null ? Math.round(room.distance) : null;
+      
+      let read_only_reason = null;
+      if (!isPrivate && distance !== null && distance > 5000) {
+        read_only_reason = 'Out of Range';
+      }
+
+      return {
+        id: room.id,
+        name: isPrivate ? (room.other_user_full_name || `@${room.other_user_username}` || 'Private Chat') : room.name,
+        type: room.type, 
+        distance,
+        read_only_reason,
+        last_message_at: room.last_message_created_at || null,
+        last_message_preview: room.last_message_content ? room.last_message_content.substring(0, 50) : null,
+        other_user_id: isPrivate ? room.name.replace('private_', '').split('_').find((id: string) => id !== userId) : null
+      };
+    });
+
+
+  // Fetch pending friend requests to show as "Potential Chats"
+  // This fulfills "users once they leave -> should go in chats"
+  const { data: pendingRequests } = await supabase
+    .from('friend_requests')
+    .select('*, sender:profiles!friend_requests_sender_id_fkey(*), receiver:profiles!friend_requests_receiver_id_fkey(*)')
+    .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
+    .eq('status', 'pending');
+
+  const virtualRooms = (pendingRequests || []).map(req => {
+    const isSender = req.sender_id === userId;
+    const otherUser = isSender ? req.receiver : req.sender;
+    const otherUserId = isSender ? req.receiver_id : req.sender_id;
+    
+    // Check if a real room already exists for this user to avoid duplicates
+    const roomExists = processedRooms.find(r => r.other_user_id === otherUserId);
+    if (roomExists) return null;
+
+    return {
+      id: `pending_${otherUserId}`,
+      name: otherUser.full_name || `@${otherUser.username}`,
+      type: 'private',
+      status: 'pending',
+      distance: null,
+      last_message_at: req.created_at,
+      last_message_preview: isSender ? 'Connection request sent' : 'Sent you a connection request',
+      other_user_id: otherUserId,
+      is_pending: true
+    };
+  }).filter(Boolean);
+
+  return c.json([...processedRooms, ...virtualRooms]);
 });
 
 app.post('/messages', zValidator('json', z.object({ 
@@ -526,7 +666,14 @@ app.post('/messages', zValidator('json', z.object({
   }
 
   // Check proximity for public/auto-generated rooms
-  if (room.type !== 'private' && body.sender_lat != null && body.sender_lng != null) {
+  if (room.type !== 'private') {
+    if (body.sender_lat == null || body.sender_lng == null) {
+      return c.json({ 
+        error: 'Out of range', 
+        message: 'Real-time location is required to chat in public zones. Please ensure location services are enabled.' 
+      }, 403);
+    }
+
     const distance = calculateDistance(body.sender_lat, body.sender_lng, room.latitude!, room.longitude!);
     const radius = room.radius || 1000;
     

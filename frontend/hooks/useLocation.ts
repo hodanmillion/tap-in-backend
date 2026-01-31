@@ -6,8 +6,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const LOCATION_CACHE_KEY = 'last_known_location';
 const LAST_SYNC_KEY = 'last_sync_data';
-const MIN_DISTANCE_METERS = 25;
-const MIN_SYNC_INTERVAL_MS = 20000;
+const MIN_DISTANCE_METERS = 10;
+const MIN_SYNC_INTERVAL_MS = 10000;
 
 type LastSyncData = {
   latitude: number;
@@ -73,67 +73,58 @@ export function useLocation(userId: string | undefined) {
           return;
         }
 
+        // Fast initial position check with Balanced accuracy
+        Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        }).then(pos => {
+          if (pos) {
+            setLocation(pos);
+            locationRef.current = pos;
+            lastUpdateRef.current = pos;
+            AsyncStorage.setItem(LOCATION_CACHE_KEY, JSON.stringify(pos));
+            if (userId) {
+              maybeSyncLocation(userId, pos.coords.latitude, pos.coords.longitude);
+            }
+          }
+        }).catch(err => console.log('Fast location check failed:', err));
+
         let initialLocation = await Location.getLastKnownPositionAsync();
 
         if (initialLocation) {
-          // Check if the last known location is fresh (within 10 minutes)
-          const isFresh = Date.now() - initialLocation.timestamp < 10 * 60 * 1000;
-          
-          if (isFresh) {
-            setLocation(initialLocation);
-            locationRef.current = initialLocation;
-            lastUpdateRef.current = initialLocation;
-            AsyncStorage.setItem(LOCATION_CACHE_KEY, JSON.stringify(initialLocation));
+          setLocation(initialLocation);
+          locationRef.current = initialLocation;
+          lastUpdateRef.current = initialLocation;
+          AsyncStorage.setItem(LOCATION_CACHE_KEY, JSON.stringify(initialLocation));
 
-            if (userId) {
-              maybeSyncLocation(
-                userId,
-                initialLocation.coords.latitude,
-                initialLocation.coords.longitude
-              );
-            }
-          } else {
-            console.log('Last known location is stale, waiting for fresh coordinates...');
+          if (userId) {
+            maybeSyncLocation(
+              userId,
+              initialLocation.coords.latitude,
+              initialLocation.coords.longitude
+            );
           }
-        }
-
-        const currentPosition = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Highest,
-        });
-
-        setLocation(currentPosition);
-        locationRef.current = currentPosition;
-        lastUpdateRef.current = currentPosition;
-        AsyncStorage.setItem(LOCATION_CACHE_KEY, JSON.stringify(currentPosition));
-
-        if (userId) {
-          maybeSyncLocation(
-            userId,
-            currentPosition.coords.latitude,
-            currentPosition.coords.longitude
-          );
         }
 
         subscription = await Location.watchPositionAsync(
           {
-            accuracy: Location.Accuracy.Highest,
-            timeInterval: 5000, // 5 seconds (more frequent)
-            distanceInterval: 5, // 5 meters (more sensitive)
+            accuracy: Location.Accuracy.High,
+            timeInterval: 5000,
+            distanceInterval: 10,
           },
           (newLocation) => {
-            // Always update ref for latest data
-            locationRef.current = newLocation;
+              // Always update ref for latest data
+              locationRef.current = newLocation;
 
-            // Only update state (trigger re-render) if moved significantly (> 10m)
-            // or if it's been more than 20 seconds since last state update
-            const shouldUpdateState = !lastUpdateRef.current || 
-              haversineDistance(
-                lastUpdateRef.current.coords.latitude, 
-                lastUpdateRef.current.coords.longitude,
-                newLocation.coords.latitude,
-                newLocation.coords.longitude
-              ) > 10 || 
-              (newLocation.timestamp - lastUpdateRef.current.timestamp) > 20000;
+              // Only update state (trigger re-render) if moved slightly (> 2m)
+              // or if it's been more than 5 seconds since last state update
+              const shouldUpdateState = !lastUpdateRef.current || 
+                haversineDistance(
+                  lastUpdateRef.current.coords.latitude, 
+                  lastUpdateRef.current.coords.longitude,
+                  newLocation.coords.latitude,
+                  newLocation.coords.longitude
+                ) > 2 || 
+                (newLocation.timestamp - lastUpdateRef.current.timestamp) > 5000;
 
             if (shouldUpdateState) {
               setLocation(newLocation);
@@ -236,5 +227,17 @@ export function useLocation(userId: string | undefined) {
     }
   };
 
-  return { location, locationRef, errorMsg, lastSyncTime };
+  return { location, locationRef, errorMsg, lastSyncTime, refreshLocation: async () => {
+    try {
+      const fresh = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Highest,
+      });
+      locationRef.current = fresh;
+      setLocation(fresh);
+      return fresh;
+    } catch (e) {
+      console.error('Failed to refresh location:', e);
+      return locationRef.current;
+    }
+  }};
 }

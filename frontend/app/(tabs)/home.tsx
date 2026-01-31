@@ -120,12 +120,12 @@ export default function HomeScreen() {
       error,
       refetch,
     } = useQuery({
-      queryKey: [
-        'nearbyRooms',
-        location?.coords.latitude.toFixed(2),
-        location?.coords.longitude.toFixed(2),
-        lastSyncTime,
-      ],
+        queryKey: [
+          'nearbyRooms',
+          location?.coords.latitude.toFixed(4),
+          location?.coords.longitude.toFixed(4),
+          lastSyncTime,
+        ],
       queryFn: async () => {
       if (!location) return [];
       const { latitude, longitude } = location.coords;

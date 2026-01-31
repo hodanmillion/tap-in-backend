@@ -53,16 +53,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     // Check active sessions and sets the user
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      const currentUser = session?.user ?? null;
-      setUser(currentUser);
-      if (currentUser) {
-        fetchProfile(currentUser.id).finally(() => setLoading(false));
-      } else {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        setSession(session);
+        const currentUser = session?.user ?? null;
+        setUser(currentUser);
+        if (currentUser) {
+          fetchProfile(currentUser.id);
+        }
         setLoading(false);
-      }
-    });
+      });
+
 
     // Listen for changes on auth state (logged in, signed out, etc.)
     const {

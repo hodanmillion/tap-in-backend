@@ -4,27 +4,41 @@ import { useColorScheme } from 'nativewind';
 import { NAV_THEME, THEME } from '@/lib/theme';
 import { View, TouchableOpacity, Text, Platform } from 'react-native';
 import { BlurView } from 'expo-blur';
+import { memo, useCallback } from 'react';
+
+const HeaderRight = memo(({ theme, router }: { theme: any; router: any }) => (
+  <View className="flex-row items-center mr-5">
+    <View className="mr-3 bg-primary/15 px-3 py-1.5 rounded-xl border border-primary/20">
+      <Text className="text-[10px] font-black text-primary uppercase tracking-wider">Pro</Text>
+    </View>
+    <TouchableOpacity 
+      onPress={() => router.push('/settings')}
+      activeOpacity={0.7}
+      className="h-11 w-11 items-center justify-center rounded-xl bg-secondary/80 border border-border/50"
+    >
+      <Settings size={20} color={theme.mutedForeground} />
+    </TouchableOpacity>
+  </View>
+));
 
 export default function TabsLayout() {
   const { colorScheme } = useColorScheme();
   const theme = THEME[colorScheme ?? 'light'];
-  const navTheme = NAV_THEME[colorScheme ?? 'light'];
   const router = useRouter();
 
-  const headerRight = () => (
-    <View className="flex-row items-center mr-5">
-      <View className="mr-3 bg-primary/15 px-3 py-1.5 rounded-xl border border-primary/20">
-        <Text className="text-[10px] font-black text-primary uppercase tracking-wider">Pro</Text>
-      </View>
-      <TouchableOpacity 
-        onPress={() => router.push('/settings')}
-        activeOpacity={0.7}
-        className="h-11 w-11 items-center justify-center rounded-xl bg-secondary/80 border border-border/50"
-      >
-        <Settings size={20} color={theme.mutedForeground} />
-      </TouchableOpacity>
-    </View>
-  );
+  const renderHeaderRight = useCallback(() => (
+    <HeaderRight theme={theme} router={router} />
+  ), [theme, router]);
+
+  const renderTabBarBackground = useCallback(() => (
+    Platform.OS === 'ios' ? (
+      <BlurView
+        intensity={90}
+        tint={colorScheme === 'dark' ? 'dark' : 'light'}
+        style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+      />
+    ) : null
+  ), [colorScheme]);
 
   return (
     <Tabs
@@ -45,7 +59,7 @@ export default function TabsLayout() {
           letterSpacing: 0.3,
           color: theme.foreground,
         },
-        headerRight: headerRight,
+        headerRight: renderHeaderRight,
         tabBarLabelStyle: {
           fontSize: 10,
           fontWeight: '600',
@@ -64,15 +78,7 @@ export default function TabsLayout() {
           shadowOpacity: 0.1,
           shadowRadius: 16,
         },
-        tabBarBackground: () => (
-          Platform.OS === 'ios' ? (
-            <BlurView
-              intensity={90}
-              tint={colorScheme === 'dark' ? 'dark' : 'light'}
-              style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
-            />
-          ) : null
-        ),
+        tabBarBackground: renderTabBarBackground,
       }}>
         <Tabs.Screen
           name="home"
