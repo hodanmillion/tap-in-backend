@@ -14,6 +14,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import * as ImagePicker from 'expo-image-picker';
 
+import * as Clipboard from 'expo-clipboard';
 import { 
     User, 
     LogOut, 
@@ -33,6 +34,8 @@ import {
     Linkedin,
     Instagram,
     BadgeCheck,
+    Copy,
+    Check,
   } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -55,6 +58,16 @@ export default function ProfileScreen() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<Tab>('About');
   const [uploading, setUploading] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyProfileLink = async () => {
+    if (!profile?.username) return;
+    const link = `https://tapin.app/u/${profile.username}`;
+    await Clipboard.setStringAsync(link);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+    Alert.alert('Copied', 'Profile link copied to clipboard!');
+  };
 
   const profileQuery = useQuery({
     queryKey: ['profile', user?.id],
@@ -325,11 +338,12 @@ export default function ProfileScreen() {
 
                   {profile?.linkedin_url && (
                     <TouchableOpacity 
+                      activeOpacity={0.7}
                       onPress={() => {
                         const linkedinUrl = profile.linkedin_url as string;
                         const url = linkedinUrl.startsWith('http') 
                           ? linkedinUrl 
-                          : `https://linkedin.com/in/${linkedinUrl.replace(/^@/, '')}`;
+                          : `https://linkedin.com/in/${linkedinUrl.replace(/^@/, '').split('/').pop()}`;
                         Linking.openURL(url);
                       }}
                       className="flex-row items-center">
@@ -337,17 +351,19 @@ export default function ProfileScreen() {
                         <Linkedin size={18} color="#0077B5" />
                       </View>
                       <View className="flex-1">
-                        <Text className="text-xs text-muted-foreground font-medium">LinkedIn</Text>
-                        <Text className="text-base font-semibold text-[#0077B5]">{profile.linkedin_url}</Text>
+                        <Text className="text-xs text-muted-foreground font-medium uppercase tracking-tighter">LinkedIn</Text>
+                        <Text className="text-base font-semibold text-[#0077B5]" numberOfLines={1}>{profile.linkedin_url}</Text>
                       </View>
+                      <ChevronRight size={16} color={theme.mutedForeground} opacity={0.5} />
                     </TouchableOpacity>
                   )}
 
                     {profile?.instagram_url && (
                       <TouchableOpacity 
+                        activeOpacity={0.7}
                         onPress={() => {
                           const instagramUrl = profile.instagram_url as string;
-                          const username = instagramUrl.replace(/^@/, '').replace('instagram.com/', '');
+                          const username = instagramUrl.replace(/^@/, '').replace('instagram.com/', '').split('/').pop();
                           Linking.openURL(`https://instagram.com/${username}`);
                         }}
                         className="flex-row items-center">
@@ -356,9 +372,10 @@ export default function ProfileScreen() {
                         <Instagram size={18} color="#E4405F" />
                       </View>
                       <View className="flex-1">
-                        <Text className="text-xs text-muted-foreground font-medium">Instagram</Text>
-                        <Text className="text-base font-semibold text-[#E4405F]">{profile.instagram_url}</Text>
+                        <Text className="text-xs text-muted-foreground font-medium uppercase tracking-tighter">Instagram</Text>
+                        <Text className="text-base font-semibold text-[#E4405F]" numberOfLines={1}>{profile.instagram_url}</Text>
                       </View>
+                      <ChevronRight size={16} color={theme.mutedForeground} opacity={0.5} />
                     </TouchableOpacity>
                   )}
                 </View>
@@ -476,12 +493,25 @@ export default function ProfileScreen() {
             </View>
           </View>
 
-          <TouchableOpacity 
-            onPress={handleUpdateProfile}
-            className="mt-5 flex-row items-center gap-2 bg-card border border-border/50 px-5 py-2.5 rounded-full">
-            <Pencil size={14} color={theme.foreground} />
-            <Text className="text-sm font-bold text-foreground">Edit Profile</Text>
-          </TouchableOpacity>
+            <View className="flex-row items-center gap-3 mt-5">
+              <TouchableOpacity 
+                onPress={handleUpdateProfile}
+                className="flex-row items-center gap-2 bg-card border border-border/50 px-5 py-2.5 rounded-full">
+                <Pencil size={14} color={theme.foreground} />
+                <Text className="text-sm font-bold text-foreground">Edit Profile</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                onPress={handleCopyProfileLink}
+                className="h-10 w-10 items-center justify-center rounded-full bg-card border border-border/50">
+                {copied ? (
+                  <Check size={16} color="#10b981" />
+                ) : (
+                  <Copy size={16} color={theme.mutedForeground} />
+                )}
+              </TouchableOpacity>
+            </View>
+
         </Animated.View>
 
         <View className="flex-row px-5 mb-5">

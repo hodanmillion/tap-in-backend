@@ -104,32 +104,40 @@ async function sendVerificationEmail(email: string, fullName: string, type: 'sig
   let isAlreadyVerified = false;
   let user: any = null;
 
+  // 1. Resolve the User from Auth
+  if (userId) {
+    const { data: userData } = await supabase.auth.admin.getUserById(userId);
+    user = userData.user;
+  } else {
+    const { data: { users: allUsers } } = await supabase.auth.admin.listUsers({ perPage: 1000 });
+    const searchEmail = email.toLowerCase().trim();
+    user = allUsers.find(u => {
+      const authEmail = u.email?.toLowerCase();
+      const realEmail = u.user_metadata?.real_email?.toLowerCase();
+      const username = u.user_metadata?.username?.toLowerCase();
+      return authEmail === searchEmail || realEmail === searchEmail || username === searchEmail;
+    });
+  }
+
   if (type === 'signup') {
+    // For signup, we MUST use the internal email for generating the link
+    const targetEmail = user?.email || email;
+    console.log(`Generating signup link for ${targetEmail}`);
+    
     const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
       type: 'signup',
-      email,
+      email: targetEmail,
       options: { redirectTo },
     });
 
     if (linkError) {
       console.error('Error generating signup link:', linkError);
-      throw linkError;
-    }
-    verificationLink = linkData.properties.action_link;
-  } else if (type === 'welcome') {
-    if (userId) {
-      const { data: userData } = await supabase.auth.admin.getUserById(userId);
-      user = userData.user;
+      // Fallback to a plain link if generateLink fails (e.g. user already confirmed)
+      verificationLink = `${baseUrl}/auth/welcome?email=${encodeURIComponent(email)}&name=${encodeURIComponent(fullName)}`;
     } else {
-      const { data: { users: allUsers } } = await supabase.auth.admin.listUsers({ perPage: 1000 });
-      const searchEmail = email.toLowerCase().trim();
-      user = allUsers.find(u => {
-        const authEmail = u.email?.toLowerCase();
-        const realEmail = u.user_metadata?.real_email?.toLowerCase();
-        return authEmail === searchEmail || realEmail === searchEmail;
-      });
+      verificationLink = linkData.properties.action_link;
     }
-  
+  } else if (type === 'welcome') {
     if (user) {
       if (!user.email_confirmed_at) {
         console.log(`User ${email} is not confirmed, upgrading welcome email to signup link`);
@@ -278,7 +286,7 @@ app.get('/health', async (c) => {
 
   return c.json({ 
     status: 'ok', 
-    version: '1.0.6', 
+    version: '1.0.7', 
     dbStatus,
     timestamp: new Date().toISOString(), 
     environment: process.env.NODE_ENV || 'development',
@@ -1083,9 +1091,10 @@ app.get('/auth/welcome', async (c) => {
         return c.json({ error: 'User not found' }, 404);
       }
 
-      const fullName = user.user_metadata?.full_name || 'Friend';
-      await sendVerificationEmail(email, fullName, 'welcome', user.id);
-      return c.json({ success: true });
+        const fullName = user.user_metadata?.full_name || 'Friend';
+        const type = user.email_confirmed_at ? 'welcome' : 'signup';
+        await sendVerificationEmail(email, fullName, type, user.id);
+        return c.json({ success: true });
     } catch (err: any) {
       return c.json({ error: err.message }, 500);
     }
@@ -1164,7 +1173,7 @@ app.get('/auth/welcome', async (c) => {
       const { data: userData, error: userError } = await supabase.auth.admin.createUser({ 
         email: authEmail, 
         password, 
-        email_confirm: true, 
+        email_confirm: false, 
         user_metadata: { full_name, username, real_email: realEmail } 
       });
       
@@ -1173,9 +1182,6 @@ app.get('/auth/welcome', async (c) => {
         return c.json({ error: userError.message }, 400);
       }
 
-      // Ensure user is confirmed
-      await supabase.auth.admin.updateUserById(userData.user.id, { email_confirm: true });
-      
       // Create profile with retry logic
       let profileCreated = false;
       for (let i = 0; i < 3; i++) {
@@ -1198,7 +1204,7 @@ app.get('/auth/welcome', async (c) => {
         console.error('Failed to create profile after retries');
       }
       
-      await sendVerificationEmail(realEmail, full_name, 'welcome', userData.user.id);
+      await sendVerificationEmail(realEmail, full_name, 'signup', userData.user.id);
       return c.json({ success: true, userId: userData.user.id });
     } catch (err: any) {
       console.error('Signup Error (Unexpected):', err);

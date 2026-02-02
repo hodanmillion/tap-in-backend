@@ -69,8 +69,8 @@ export default function RegisterScreen() {
           }
           } else {
             Alert.alert(
-              'Success', 
-              `Account created! Your username is: ${generatedUsername}\n\nYou can now log in using this username or your email.`,
+              'Verify Your Email', 
+              `Account created! Your username is: ${generatedUsername}\n\nWe've sent a verification link to ${trimmedEmail}. Please check your email and click the link to verify your account before logging in.`,
               [{ text: 'OK', onPress: () => router.replace('/(auth)/login') }]
             );
           }

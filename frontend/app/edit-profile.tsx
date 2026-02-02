@@ -7,10 +7,12 @@ import {
   TextInput,
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ChevronLeft, Camera, User, MapPin, Linkedin, Instagram } from 'lucide-react-native';
+import { ChevronLeft, Camera, User, MapPin, Linkedin, Instagram, Link, X, Clipboard as ClipboardIcon } from 'lucide-react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { apiRequest } from '@/lib/api';
@@ -19,6 +21,7 @@ import { useColorScheme } from 'nativewind';
 import { THEME } from '@/lib/theme';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
+import * as Clipboard from 'expo-clipboard';
 import { Image } from 'expo-image';
 
 export default function EditProfileScreen() {
@@ -55,6 +58,17 @@ export default function EditProfileScreen() {
     linkedin_url: '',
     instagram_url: '',
   });
+
+  const handlePaste = async (field: keyof typeof formData) => {
+    const text = await Clipboard.getStringAsync();
+    if (text) {
+      setFormData(prev => ({ ...prev, [field]: text }));
+    }
+  };
+
+  const handleClear = (field: keyof typeof formData) => {
+    setFormData(prev => ({ ...prev, [field]: '' }));
+  };
 
   const getCurrentLocation = async () => {
     setFetchingLocation(true);
@@ -257,163 +271,234 @@ export default function EditProfileScreen() {
         <Text className="ml-4 text-xl font-black text-foreground uppercase tracking-widest">Edit Profile</Text>
       </View>
 
-      <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
-        <View className="p-8">
-          <View className="items-center mb-10">
-            <TouchableOpacity 
-              onPress={pickImage}
-              disabled={uploading}
-              className="h-32 w-32 items-center justify-center rounded-[40px] bg-card border-4 border-background shadow-lg overflow-hidden"
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        className="flex-1"
+      >
+        <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
+          <View className="p-6">
+            <View className="items-center mb-8">
+              <TouchableOpacity 
+                onPress={pickImage}
+                disabled={uploading}
+                className="h-32 w-32 items-center justify-center rounded-[40px] bg-card border-4 border-background shadow-lg overflow-hidden"
+              >
+                {uploading ? (
+                  <ActivityIndicator color={theme.primary} />
+                ) : profile?.avatar_url ? (
+                  <Image source={{ uri: profile.avatar_url }} className="h-full w-full" />
+                ) : (
+                  <User size={48} color={theme.mutedForeground} opacity={0.3} />
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity 
+                onPress={pickImage}
+                className="mt-4 bg-primary/10 px-4 py-2 rounded-xl"
+              >
+                <Text className="text-xs font-black text-primary uppercase tracking-widest">Change Photo</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View className="space-y-6">
+              {/* Profile Details Section */}
+              <View className="gap-6">
+                <View>
+                  <Text className="text-xs font-black text-muted-foreground uppercase tracking-widest mb-2 ml-1">Full Name</Text>
+                  <TextInput
+                    className="bg-card border border-border/50 rounded-2xl px-5 py-4 text-foreground font-bold text-lg"
+                    value={formData.full_name}
+                    onChangeText={(text) => setFormData({ ...formData, full_name: text })}
+                    placeholder="Enter your full name"
+                    placeholderTextColor={theme.mutedForeground}
+                  />
+                </View>
+
+                <View>
+                  <Text className="text-xs font-black text-muted-foreground uppercase tracking-widest mb-2 ml-1">Username</Text>
+                  <TextInput
+                    className="bg-card border border-border/50 rounded-2xl px-5 py-4 text-foreground font-bold text-lg"
+                    value={formData.username}
+                    onChangeText={(text) => setFormData({ ...formData, username: text })}
+                    placeholder="Enter username"
+                    placeholderTextColor={theme.mutedForeground}
+                    autoCapitalize="none"
+                  />
+                </View>
+
+                <View>
+                  <Text className="text-xs font-black text-muted-foreground uppercase tracking-widest mb-2 ml-1">Bio</Text>
+                  <TextInput
+                    className="bg-card border border-border/50 rounded-2xl px-5 py-4 text-foreground font-medium text-base h-32"
+                    value={formData.bio}
+                    onChangeText={(text) => setFormData({ ...formData, bio: text })}
+                    placeholder="Tell the world about yourself..."
+                    placeholderTextColor={theme.mutedForeground}
+                    multiline
+                    textAlignVertical="top"
+                  />
+                </View>
+
+                <View>
+                  <Text className="text-xs font-black text-muted-foreground uppercase tracking-widest mb-2 ml-1">Occupation</Text>
+                  <TextInput
+                    className="bg-card border border-border/50 rounded-2xl px-5 py-4 text-foreground font-bold text-lg"
+                    value={formData.occupation}
+                    onChangeText={(text) => setFormData({ ...formData, occupation: text })}
+                    placeholder="What do you do?"
+                    placeholderTextColor={theme.mutedForeground}
+                  />
+                </View>
+
+                <View>
+                  <View className="flex-row items-center justify-between mb-2 ml-1">
+                    <Text className="text-xs font-black text-muted-foreground uppercase tracking-widest">Location</Text>
+                    <TouchableOpacity 
+                      onPress={getCurrentLocation}
+                      disabled={fetchingLocation}
+                      className="flex-row items-center"
+                    >
+                      {fetchingLocation ? (
+                        <ActivityIndicator size="small" color={theme.primary} className="mr-1" />
+                      ) : (
+                        <MapPin size={14} color={theme.primary} className="mr-1" />
+                      )}
+                      <Text className="text-xs font-bold text-primary">Use Current Location</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <TextInput
+                    className="bg-card border border-border/50 rounded-2xl px-5 py-4 text-foreground font-bold text-lg"
+                    value={formData.location_name}
+                    onChangeText={(text) => setFormData({ ...formData, location_name: text })}
+                    placeholder="e.g. London, UK"
+                    placeholderTextColor={theme.mutedForeground}
+                  />
+                </View>
+              </View>
+
+              {/* Social Links Section */}
+              <View className="mt-8">
+                <Text className="text-sm font-black text-foreground uppercase tracking-widest mb-4 ml-1">Social Links</Text>
+                
+                <View className="gap-4">
+                  <View>
+                    <View className="flex-row items-center mb-2 ml-1">
+                      <Link size={14} color={theme.mutedForeground} className="mr-2" />
+                      <Text className="text-xs font-black text-muted-foreground uppercase tracking-widest">Website</Text>
+                    </View>
+                    <View className="flex-row items-center gap-2">
+                      <TextInput
+                        className="flex-1 bg-card border border-border/50 rounded-2xl px-5 py-4 text-foreground font-bold text-lg"
+                        value={formData.website}
+                        onChangeText={(text) => setFormData({ ...formData, website: text })}
+                        placeholder="https://..."
+                        placeholderTextColor={theme.mutedForeground}
+                        autoCapitalize="none"
+                        keyboardType="url"
+                      />
+                      {formData.website ? (
+                        <TouchableOpacity 
+                          onPress={() => handleClear('website')}
+                          className="h-14 w-14 items-center justify-center rounded-2xl bg-secondary/30"
+                        >
+                          <X size={20} color={theme.mutedForeground} />
+                        </TouchableOpacity>
+                      ) : (
+                        <TouchableOpacity 
+                          onPress={() => handlePaste('website')}
+                          className="h-14 w-14 items-center justify-center rounded-2xl bg-primary/10"
+                        >
+                          <ClipboardIcon size={20} color={theme.primary} />
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </View>
+
+                  <View>
+                    <View className="flex-row items-center mb-2 ml-1">
+                      <Linkedin size={14} color="#0077B5" className="mr-2" />
+                      <Text className="text-xs font-black text-muted-foreground uppercase tracking-widest">LinkedIn</Text>
+                    </View>
+                    <View className="flex-row items-center gap-2">
+                      <TextInput
+                        className="flex-1 bg-card border border-border/50 rounded-2xl px-5 py-4 text-foreground font-bold text-lg"
+                        value={formData.linkedin_url}
+                        onChangeText={(text) => setFormData({ ...formData, linkedin_url: text })}
+                        placeholder="Paste profile URL or username"
+                        placeholderTextColor={theme.mutedForeground}
+                        autoCapitalize="none"
+                      />
+                      {formData.linkedin_url ? (
+                        <TouchableOpacity 
+                          onPress={() => handleClear('linkedin_url')}
+                          className="h-14 w-14 items-center justify-center rounded-2xl bg-secondary/30"
+                        >
+                          <X size={20} color={theme.mutedForeground} />
+                        </TouchableOpacity>
+                      ) : (
+                        <TouchableOpacity 
+                          onPress={() => handlePaste('linkedin_url')}
+                          className="h-14 w-14 items-center justify-center rounded-2xl bg-[#0077B5]/10"
+                        >
+                          <ClipboardIcon size={20} color="#0077B5" />
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                    <Text className="text-[10px] text-muted-foreground mt-1 ml-2">Tip: Copy your profile link from the LinkedIn app and paste it here.</Text>
+                  </View>
+
+                  <View>
+                    <View className="flex-row items-center mb-2 ml-1">
+                      <Instagram size={14} color="#E4405F" className="mr-2" />
+                      <Text className="text-xs font-black text-muted-foreground uppercase tracking-widest">Instagram</Text>
+                    </View>
+                    <View className="flex-row items-center gap-2">
+                      <TextInput
+                        className="flex-1 bg-card border border-border/50 rounded-2xl px-5 py-4 text-foreground font-bold text-lg"
+                        value={formData.instagram_url}
+                        onChangeText={(text) => setFormData({ ...formData, instagram_url: text })}
+                        placeholder="@username"
+                        placeholderTextColor={theme.mutedForeground}
+                        autoCapitalize="none"
+                      />
+                      {formData.instagram_url ? (
+                        <TouchableOpacity 
+                          onPress={() => handleClear('instagram_url')}
+                          className="h-14 w-14 items-center justify-center rounded-2xl bg-secondary/30"
+                        >
+                          <X size={20} color={theme.mutedForeground} />
+                        </TouchableOpacity>
+                      ) : (
+                        <TouchableOpacity 
+                          onPress={() => handlePaste('instagram_url')}
+                          className="h-14 w-14 items-center justify-center rounded-2xl bg-[#E4405F]/10"
+                        >
+                          <ClipboardIcon size={20} color="#E4405F" />
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </View>
+                </View>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              onPress={handleUpdateProfile}
+              disabled={updateProfileMutation.isPending}
+              className="mt-12 bg-primary py-6 rounded-[32px] items-center shadow-xl shadow-primary/30"
             >
-              {uploading ? (
-                <ActivityIndicator color={theme.primary} />
-              ) : profile?.avatar_url ? (
-                <Image source={{ uri: profile.avatar_url }} className="h-full w-full" />
+              {updateProfileMutation.isPending ? (
+                <ActivityIndicator color="#fff" />
               ) : (
-                <User size={48} color={theme.mutedForeground} opacity={0.3} />
+                <Text className="text-lg font-black text-white uppercase tracking-widest">Save Changes</Text>
               )}
             </TouchableOpacity>
-            <TouchableOpacity 
-              onPress={pickImage}
-              className="mt-4 bg-primary/10 px-4 py-2 rounded-xl"
-            >
-              <Text className="text-xs font-black text-primary uppercase tracking-widest">Change Photo</Text>
-            </TouchableOpacity>
+            
+            <View className="h-20" />
           </View>
-
-          <View className="space-y-6">
-            <View>
-              <Text className="text-xs font-black text-muted-foreground uppercase tracking-widest mb-2 ml-1">Full Name</Text>
-              <TextInput
-                className="bg-card border border-border rounded-2xl px-5 py-4 text-foreground font-bold text-lg"
-                value={formData.full_name}
-                onChangeText={(text) => setFormData({ ...formData, full_name: text })}
-                placeholder="Enter your full name"
-                placeholderTextColor={theme.mutedForeground}
-              />
-            </View>
-
-            <View>
-              <Text className="text-xs font-black text-muted-foreground uppercase tracking-widest mb-2 ml-1">Username</Text>
-              <TextInput
-                className="bg-card border border-border rounded-2xl px-5 py-4 text-foreground font-bold text-lg"
-                value={formData.username}
-                onChangeText={(text) => setFormData({ ...formData, username: text })}
-                placeholder="Enter username"
-                placeholderTextColor={theme.mutedForeground}
-                autoCapitalize="none"
-              />
-            </View>
-
-            <View>
-              <Text className="text-xs font-black text-muted-foreground uppercase tracking-widest mb-2 ml-1">Bio</Text>
-              <TextInput
-                className="bg-card border border-border rounded-2xl px-5 py-4 text-foreground font-medium text-base h-32"
-                value={formData.bio}
-                onChangeText={(text) => setFormData({ ...formData, bio: text })}
-                placeholder="Tell the world about yourself..."
-                placeholderTextColor={theme.mutedForeground}
-                multiline
-                textAlignVertical="top"
-              />
-            </View>
-
-            <View>
-              <Text className="text-xs font-black text-muted-foreground uppercase tracking-widest mb-2 ml-1">Occupation</Text>
-              <TextInput
-                className="bg-card border border-border rounded-2xl px-5 py-4 text-foreground font-bold text-lg"
-                value={formData.occupation}
-                onChangeText={(text) => setFormData({ ...formData, occupation: text })}
-                placeholder="What do you do?"
-                placeholderTextColor={theme.mutedForeground}
-              />
-            </View>
-
-              <View>
-                <View className="flex-row items-center justify-between mb-2 ml-1">
-                  <Text className="text-xs font-black text-muted-foreground uppercase tracking-widest">Location</Text>
-                  <TouchableOpacity 
-                    onPress={getCurrentLocation}
-                    disabled={fetchingLocation}
-                    className="flex-row items-center"
-                  >
-                    {fetchingLocation ? (
-                      <ActivityIndicator size="small" color={theme.primary} className="mr-1" />
-                    ) : (
-                      <MapPin size={14} color={theme.primary} className="mr-1" />
-                    )}
-                    <Text className="text-xs font-bold text-primary">Use Current Location</Text>
-                  </TouchableOpacity>
-                </View>
-                <TextInput
-                  className="bg-card border border-border rounded-2xl px-5 py-4 text-foreground font-bold text-lg"
-                  value={formData.location_name}
-                  onChangeText={(text) => setFormData({ ...formData, location_name: text })}
-                  placeholder="e.g. London, UK"
-                  placeholderTextColor={theme.mutedForeground}
-                />
-              </View>
-
-
-            <View>
-              <Text className="text-xs font-black text-muted-foreground uppercase tracking-widest mb-2 ml-1">Website</Text>
-              <TextInput
-                className="bg-card border border-border rounded-2xl px-5 py-4 text-foreground font-bold text-lg"
-                value={formData.website}
-                onChangeText={(text) => setFormData({ ...formData, website: text })}
-                placeholder="https://..."
-                placeholderTextColor={theme.mutedForeground}
-                autoCapitalize="none"
-              />
-            </View>
-
-            <View>
-              <View className="flex-row items-center mb-2 ml-1">
-                <Linkedin size={14} color={theme.primary} className="mr-2" />
-                <Text className="text-xs font-black text-muted-foreground uppercase tracking-widest">LinkedIn</Text>
-              </View>
-              <TextInput
-                className="bg-card border border-border rounded-2xl px-5 py-4 text-foreground font-bold text-lg"
-                value={formData.linkedin_url}
-                onChangeText={(text) => setFormData({ ...formData, linkedin_url: text })}
-                placeholder="linkedin.com/in/username"
-                placeholderTextColor={theme.mutedForeground}
-                autoCapitalize="none"
-              />
-            </View>
-
-            <View>
-              <View className="flex-row items-center mb-2 ml-1">
-                <Instagram size={14} color="#E4405F" className="mr-2" />
-                <Text className="text-xs font-black text-muted-foreground uppercase tracking-widest">Instagram</Text>
-              </View>
-              <TextInput
-                className="bg-card border border-border rounded-2xl px-5 py-4 text-foreground font-bold text-lg"
-                value={formData.instagram_url}
-                onChangeText={(text) => setFormData({ ...formData, instagram_url: text })}
-                placeholder="@username"
-                placeholderTextColor={theme.mutedForeground}
-                autoCapitalize="none"
-              />
-            </View>
-          </View>
-
-          <TouchableOpacity
-            onPress={handleUpdateProfile}
-            disabled={updateProfileMutation.isPending}
-            className="mt-10 bg-primary py-6 rounded-[32px] items-center shadow-xl shadow-primary/30"
-          >
-            {updateProfileMutation.isPending ? (
-              <ActivityIndicator color={theme.primaryForeground} />
-            ) : (
-              <Text className="text-lg font-black text-primary-foreground uppercase tracking-widest">Save Changes</Text>
-            )}
-          </TouchableOpacity>
-          
-          <View className="h-10" />
-        </View>
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
-    );
+  );
+
 }
 
