@@ -293,7 +293,7 @@ app.get('/health', async (c) => {
     supabaseUrl: process.env.SUPABASE_URL?.split('//')[1]?.split('.')[0]
   });
 });
-app.get('/', (c) => c.text('Tap In API v1.0.6 is Running'));
+app.get('/', (c) => c.text('Tap In API v1.0.7 is Running'));
 
 app.get('/profiles/nearby', async (c) => {
   const latStr = c.req.query('lat');
