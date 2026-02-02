@@ -37,120 +37,140 @@ export function useLocation(userId: string | undefined) {
   const lastSyncRef = useRef<LastSyncData | null>(null);
   const appStateRef = useRef(AppState.currentState);
 
-  useEffect(() => {
-    let subscription: Location.LocationSubscription | null = null;
+    useEffect(() => {
+      let subscription: Location.LocationSubscription | null = null;
+      let appStateSub: any = null;
 
-    const loadLastSync = async () => {
-      try {
-        const stored = await AsyncStorage.getItem(LAST_SYNC_KEY);
-        if (stored) {
-          lastSyncRef.current = JSON.parse(stored);
-        }
-      } catch {}
-    };
-
-    loadLastSync();
-
-    const appStateSub = AppState.addEventListener('change', (nextState) => {
-      appStateRef.current = nextState;
-    });
-
-    (async () => {
-      try {
-        if (typeof window !== 'undefined' || Platform.OS !== 'web') {
-          const cached = await AsyncStorage.getItem(LOCATION_CACHE_KEY);
-          if (cached) {
-            const parsedCache = JSON.parse(cached);
-            setLocation(parsedCache);
-            locationRef.current = parsedCache;
-            lastUpdateRef.current = parsedCache;
+      const loadLastSync = async () => {
+        try {
+          const stored = await AsyncStorage.getItem(LAST_SYNC_KEY);
+          if (stored) {
+            lastSyncRef.current = JSON.parse(stored);
           }
-        }
+        } catch {}
+      };
 
-        let { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-          setErrorMsg('Permission to access location was denied');
-          return;
-        }
+      loadLastSync();
 
-        // Fast initial position check with Balanced accuracy
-        Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
-        }).then(pos => {
-          if (pos) {
-            setLocation(pos);
-            locationRef.current = pos;
-            lastUpdateRef.current = pos;
-            AsyncStorage.setItem(LOCATION_CACHE_KEY, JSON.stringify(pos));
-            if (userId) {
-              maybeSyncLocation(userId, pos.coords.latitude, pos.coords.longitude);
+      try {
+        appStateSub = AppState.addEventListener('change', (nextState) => {
+          appStateRef.current = nextState;
+        });
+      } catch (err) {
+        console.error('Failed to add AppState listener:', err);
+      }
+
+      (async () => {
+        try {
+          if (typeof window !== 'undefined' || Platform.OS !== 'web') {
+            try {
+              const cached = await AsyncStorage.getItem(LOCATION_CACHE_KEY);
+              if (cached) {
+                const parsedCache = JSON.parse(cached);
+                setLocation(parsedCache);
+                locationRef.current = parsedCache;
+                lastUpdateRef.current = parsedCache;
+              }
+            } catch (cacheErr) {
+              console.warn('Failed to load cached location:', cacheErr);
             }
           }
-        }).catch(err => console.log('Fast location check failed:', err));
 
-        let initialLocation = await Location.getLastKnownPositionAsync();
-
-        if (initialLocation) {
-          setLocation(initialLocation);
-          locationRef.current = initialLocation;
-          lastUpdateRef.current = initialLocation;
-          AsyncStorage.setItem(LOCATION_CACHE_KEY, JSON.stringify(initialLocation));
-
-          if (userId) {
-            maybeSyncLocation(
-              userId,
-              initialLocation.coords.latitude,
-              initialLocation.coords.longitude
-            );
+          let { status } = await Location.requestForegroundPermissionsAsync();
+          if (status !== 'granted') {
+            setErrorMsg('Permission to access location was denied');
+            return;
           }
-        }
 
-        subscription = await Location.watchPositionAsync(
-          {
-            accuracy: Location.Accuracy.High,
-            timeInterval: 5000,
-            distanceInterval: 10,
-          },
-          (newLocation) => {
-              // Always update ref for latest data
-              locationRef.current = newLocation;
+          // Fast initial position check with Balanced accuracy
+          Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+          }).then(pos => {
+            if (pos) {
+              setLocation(pos);
+              locationRef.current = pos;
+              lastUpdateRef.current = pos;
+              AsyncStorage.setItem(LOCATION_CACHE_KEY, JSON.stringify(pos)).catch(() => {});
+              if (userId) {
+                maybeSyncLocation(userId, pos.coords.latitude, pos.coords.longitude);
+              }
+            }
+          }).catch(err => console.log('Fast location check failed:', err));
 
-              // Only update state (trigger re-render) if moved slightly (> 2m)
-              // or if it's been more than 5 seconds since last state update
-              const shouldUpdateState = !lastUpdateRef.current || 
-                haversineDistance(
-                  lastUpdateRef.current.coords.latitude, 
-                  lastUpdateRef.current.coords.longitude,
+          try {
+            let initialLocation = await Location.getLastKnownPositionAsync();
+            if (initialLocation) {
+              setLocation(initialLocation);
+              locationRef.current = initialLocation;
+              lastUpdateRef.current = initialLocation;
+              AsyncStorage.setItem(LOCATION_CACHE_KEY, JSON.stringify(initialLocation)).catch(() => {});
+
+              if (userId) {
+                maybeSyncLocation(
+                  userId,
+                  initialLocation.coords.latitude,
+                  initialLocation.coords.longitude
+                );
+              }
+            }
+          } catch (lastKnownErr) {
+            console.log('Get last known position error:', lastKnownErr);
+          }
+
+          subscription = await Location.watchPositionAsync(
+            {
+              accuracy: Location.Accuracy.High,
+              timeInterval: 5000,
+              distanceInterval: 10,
+            },
+            (newLocation) => {
+                // Always update ref for latest data
+                locationRef.current = newLocation;
+
+                // Only update state (trigger re-render) if moved slightly (> 2m)
+                // or if it's been more than 5 seconds since last state update
+                const shouldUpdateState = !lastUpdateRef.current || 
+                  haversineDistance(
+                    lastUpdateRef.current.coords.latitude, 
+                    lastUpdateRef.current.coords.longitude,
+                    newLocation.coords.latitude,
+                    newLocation.coords.longitude
+                  ) > 2 || 
+                  (newLocation.timestamp - lastUpdateRef.current.timestamp) > 5000;
+
+              if (shouldUpdateState) {
+                setLocation(newLocation);
+                lastUpdateRef.current = newLocation;
+              }
+
+              if (userId && appStateRef.current === 'active') {
+                maybeSyncLocation(
+                  userId,
                   newLocation.coords.latitude,
                   newLocation.coords.longitude
-                ) > 2 || 
-                (newLocation.timestamp - lastUpdateRef.current.timestamp) > 5000;
-
-            if (shouldUpdateState) {
-              setLocation(newLocation);
-              lastUpdateRef.current = newLocation;
+                );
+              }
             }
+          );
+        } catch (err) {
+          console.error('Error getting location:', err);
+          setErrorMsg('Error getting location');
+        }
+      })();
 
-            if (userId && appStateRef.current === 'active') {
-              maybeSyncLocation(
-                userId,
-                newLocation.coords.latitude,
-                newLocation.coords.longitude
-              );
-            }
+      return () => {
+        try {
+          if (subscription && typeof subscription.remove === 'function') {
+            subscription.remove();
           }
-        );
-      } catch (err) {
-        console.error('Error getting location:', err);
-        setErrorMsg('Error getting location');
-      }
-    })();
-
-    return () => {
-      if (subscription) subscription.remove();
-      appStateSub.remove();
-    };
-  }, [userId]);
+        } catch {}
+        try {
+          if (appStateSub && typeof appStateSub.remove === 'function') {
+            appStateSub.remove();
+          }
+        } catch {}
+      };
+    }, [userId]);
 
   const maybeSyncLocation = async (uid: string, lat: number, lng: number) => {
     const now = Date.now();

@@ -121,11 +121,68 @@ export default function UserProfileScreen() {
     },
   });
 
-  const goToChat = () => {
-    router.push(`/chat/private_${id}`);
-  };
+    const goToChat = () => {
+      router.push(`/chat/private_${id}`);
+    };
 
-  if (isLoading) {
+    const blockUser = async () => {
+      Alert.alert(
+        'Block User',
+        `Are you sure you want to block ${profile?.full_name || 'this user'}? They won't be able to message you or see you nearby.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'Block', 
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                await apiRequest('/blocks', {
+                  method: 'POST',
+                  body: JSON.stringify({ blocker_id: user?.id, blocked_id: id })
+                });
+                Alert.alert('Blocked', 'User has been blocked.');
+                router.back();
+              } catch (err: any) {
+                Alert.alert('Error', err.message || 'Failed to block user');
+              }
+            }
+          }
+        ]
+      );
+    };
+
+    const reportUser = () => {
+      Alert.prompt(
+        'Report User',
+        'Why are you reporting this user?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Report',
+            onPress: async (reason) => {
+              if (!reason) return;
+              try {
+                await apiRequest('/reports', {
+                  method: 'POST',
+                  body: JSON.stringify({
+                    reporter_id: user?.id,
+                    target_id: id,
+                    target_type: 'user',
+                    reason
+                  })
+                });
+                Alert.alert('Reported', 'Thank you for your report. We will review it shortly.');
+              } catch (err: any) {
+                Alert.alert('Error', err.message || 'Failed to report user');
+              }
+            }
+          }
+        ]
+      );
+    };
+
+    if (isLoading) {
+
     return (
       <SafeAreaView className="flex-1 bg-background items-center justify-center" edges={['top']}>
         <ActivityIndicator color={theme.primary} size="large" />
@@ -256,10 +313,14 @@ export default function UserProfileScreen() {
                 </View>
               )}
               
-              {profile?.website && (
-                <TouchableOpacity 
-                  onPress={() => Linking.openURL(profile.website.startsWith('http') ? profile.website : `https://${profile.website}`)}
-                  className="flex-row items-center">
+                {profile?.website && (
+                  <TouchableOpacity 
+                    onPress={() => {
+                      const website = profile.website as string;
+                      Linking.openURL(website.startsWith('http') ? website : `https://${website}`);
+                    }}
+                    className="flex-row items-center">
+
                   <View className="h-10 w-10 items-center justify-center rounded-xl bg-blue-500/10 mr-4">
                     <Globe size={18} color="#3b82f6" />
                   </View>
@@ -270,15 +331,17 @@ export default function UserProfileScreen() {
                 </TouchableOpacity>
               )}
 
-              {profile?.linkedin_url && (
-                <TouchableOpacity 
-                  onPress={() => {
-                    const url = profile.linkedin_url.startsWith('http') 
-                      ? profile.linkedin_url 
-                      : `https://linkedin.com/in/${profile.linkedin_url.replace(/^@/, '')}`;
-                    Linking.openURL(url);
-                  }}
-                  className="flex-row items-center">
+                {profile?.linkedin_url && (
+                  <TouchableOpacity 
+                    onPress={() => {
+                      const linkedinUrl = profile.linkedin_url as string;
+                      const url = linkedinUrl.startsWith('http') 
+                        ? linkedinUrl 
+                        : `https://linkedin.com/in/${linkedinUrl.replace(/^@/, '')}`;
+                      Linking.openURL(url);
+                    }}
+                    className="flex-row items-center">
+
                   <View className="h-10 w-10 items-center justify-center rounded-xl bg-[#0077B5]/10 mr-4">
                     <Linkedin size={18} color="#0077B5" />
                   </View>
@@ -289,13 +352,15 @@ export default function UserProfileScreen() {
                 </TouchableOpacity>
               )}
 
-              {profile?.instagram_url && (
-                <TouchableOpacity 
-                  onPress={() => {
-                    const username = profile.instagram_url.replace(/^@/, '').replace('instagram.com/', '');
-                    Linking.openURL(`https://instagram.com/${username}`);
-                  }}
-                  className="flex-row items-center">
+                {profile?.instagram_url && (
+                  <TouchableOpacity 
+                    onPress={() => {
+                      const instagramUrl = profile.instagram_url as string;
+                      const username = instagramUrl.replace(/^@/, '').replace('instagram.com/', '');
+                      Linking.openURL(`https://instagram.com/${username}`);
+                    }}
+                    className="flex-row items-center">
+
                   <View className="h-10 w-10 items-center justify-center rounded-xl bg-[#E4405F]/10 mr-4">
                     <Instagram size={18} color="#E4405F" />
                   </View>
@@ -305,6 +370,22 @@ export default function UserProfileScreen() {
                   </View>
                 </TouchableOpacity>
               )}
+            </View>
+          )}
+
+          {user?.id !== id && (
+            <View className="px-5 mt-8 gap-3">
+              <TouchableOpacity 
+                onPress={reportUser}
+                className="flex-row items-center justify-center gap-2 bg-secondary/50 py-3 rounded-xl border border-border/30">
+                <Text className="text-sm font-bold text-muted-foreground">Report User</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                onPress={blockUser}
+                className="flex-row items-center justify-center gap-2 py-3">
+                <Text className="text-sm font-bold text-red-500/70">Block User</Text>
+              </TouchableOpacity>
             </View>
           )}
         </View>

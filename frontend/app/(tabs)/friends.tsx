@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, ScrollView, Modal, Pressable, Dimensions,
 import { FlashList } from '@shopify/flash-list';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Image } from 'expo-image';
-import { User, MessageCircle, Heart, UserPlus, Compass, WifiOff, RefreshCw, Users, ChevronRight, Camera, X, Plus, ImageIcon, Send, ChevronLeft } from 'lucide-react-native';
+import { User, MessageCircle, Heart, UserPlus, Compass, WifiOff, RefreshCw, Users, ChevronRight, Camera, X, Plus, ImageIcon, Send, ChevronLeft, Search } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/context/AuthContext';

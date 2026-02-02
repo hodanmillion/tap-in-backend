@@ -2,42 +2,42 @@
   "expo": {
     "name": "TapIn",
     "slug": "tap-in",
-    "version": "15.2.0",
-    "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
-    "scheme": "tapin",
-    "userInterfaceStyle": "dark",
-    "newArchEnabled": false,
-    "splash": {
-      "image": "./assets/images/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#6366f1",
-      "dark": {
+      "version": "15.5.2",
+      "orientation": "portrait",
+      "icon": "./assets/images/icon.png",
+      "scheme": "tapin",
+      "userInterfaceStyle": "dark",
+      "newArchEnabled": false,
+      "splash": {
         "image": "./assets/images/splash.png",
         "resizeMode": "contain",
-        "backgroundColor": "#1e1b4b"
-      }
-    },
-    "assetBundlePatterns": [
-      "**/*"
-    ],
-    "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.TapIn.myapp",
-        "buildNumber": "199",
-      "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Allow TapIn to access your location to find nearby users and chat rooms.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "Allow TapIn to access your location even when the app is in the background.",
-        "NSLocationAlwaysUsageDescription": "Allow TapIn to access your location even when the app is in the background.",
-        "NSPhotoLibraryUsageDescription": "Allow TapIn to access your photos to update your profile picture.",
-        "NSCameraUsageDescription": "Allow TapIn to use your camera to take a profile picture.",
-        "ITSAppUsesNonExemptEncryption": false
+        "backgroundColor": "#6366f1",
+        "dark": {
+          "image": "./assets/images/splash.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#1e1b4b"
+        }
       },
-      "entitlements": {
-        "aps-environment": "production"
+      "assetBundlePatterns": [
+        "**/*"
+      ],
+      "ios": {
+        "supportsTablet": true,
+        "bundleIdentifier": "com.TapIn.myapp",
+            "buildNumber": "223",
+        "infoPlist": {
+          "NSLocationWhenInUseUsageDescription": "Allow TapIn to access your location to find nearby users and chat rooms.",
+          "NSLocationAlwaysAndWhenInUseUsageDescription": "Allow TapIn to access your location even when the app is in the background.",
+          "NSLocationAlwaysUsageDescription": "Allow TapIn to access your location even when the app is in the background.",
+          "NSPhotoLibraryUsageDescription": "Allow TapIn to access your photos to update your profile picture.",
+          "NSCameraUsageDescription": "Allow TapIn to use your camera to take a profile picture.",
+          "ITSAppUsesNonExemptEncryption": false
+        },
+        "entitlements": {
+          "aps-environment": "production"
+        },
+        "runtimeVersion": "1.0.1"
       },
-      "runtimeVersion": "1.0.0"
-    },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",

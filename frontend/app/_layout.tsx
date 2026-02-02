@@ -5,15 +5,24 @@ import { QueryClient, QueryClientProvider, focusManager } from '@tanstack/react-
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { ChatProvider } from '@/context/ChatContext';
 import { NotificationProvider, useNotifications } from '@/context/NotificationContext';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter, useSegments } from 'expo-router';
-import { View, ActivityIndicator, AppState, Platform, Text } from 'react-native';
+import { View, ActivityIndicator, AppState, Platform, Text, TouchableOpacity } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Updates from 'expo-updates';
+import Constants from 'expo-constants';
 import { ErrorBoundary } from './error-boundary';
 import { useLocation } from '@/hooks/useLocation';
 import { useColorScheme } from 'nativewind';
 import { supabase } from '@/lib/supabase';
 
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+
+import * as SplashScreen from 'expo-splash-screen';
+import { StatusBar } from 'expo-status-bar';
+
+// Keep the splash screen visible while we fetch resources
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -39,12 +48,65 @@ function RootLayoutContent() {
   const router = useRouter();
   const { setColorScheme } = useColorScheme();
   const focusManagerSetup = useRef(false);
+  const [loadingTime, setLoadingTime] = useState(0);
+  const isMounted = useRef(false);
 
   const { requestPermissions } = useNotifications();
 
   useEffect(() => {
+    if (!loading) {
+      // Add a small delay before hiding splash screen to ensure the first route is rendered
+      // and we avoid the "black screen" flash during the first transition
+      const timer = setTimeout(() => {
+        SplashScreen.hideAsync().catch(() => {});
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [loading]);
+
+  // Safety: Force hide splash screen after 15 seconds no matter what
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      SplashScreen.hideAsync().catch(() => {});
+    }, 15000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let interval: any;
+    if (loading) {
+      interval = setInterval(() => {
+        setLoadingTime((prev) => prev + 1);
+      }, 1000);
+    } else {
+      setLoadingTime(0);
+    }
+    return () => clearInterval(interval);
+  }, [loading]);
+
+  const handleManualReset = async () => {
+    try {
+      await AsyncStorage.clear();
+      if (Platform.OS !== 'web') {
+        await Updates.reloadAsync();
+      } else {
+        window.location.reload();
+      }
+    } catch (e) {
+      console.error('Failed to reset:', e);
+    }
+  };
+
+  useEffect(() => {
     if (user?.id && !loading) {
-      requestPermissions().catch(err => console.error('Push permission error:', err));
+      requestPermissions().catch((err) => console.error('Push permission error:', err));
     }
   }, [user?.id, loading]);
 
@@ -52,8 +114,6 @@ function RootLayoutContent() {
     try {
       if (typeof setColorScheme === 'function') {
         setColorScheme('dark');
-      } else {
-        console.warn('setColorScheme is not a function. NativeWind might not be initialized correctly.');
       }
     } catch (e) {
       console.warn('Failed to set color scheme:', e);
@@ -73,40 +133,47 @@ function RootLayoutContent() {
           });
           return () => {
             try {
-              subscription.remove();
+              if (subscription && typeof subscription.remove === 'function') {
+                subscription.remove();
+              }
             } catch {}
           };
         });
       }
-    } catch {}
+    } catch (err) {
+      console.error('Focus manager setup error:', err);
+    }
   }, []);
 
   useLocation(user?.id);
 
   useEffect(() => {
-    if (loading) return;
+    if (loading || !isMounted.current) return;
 
-    const inAuthGroup = segments[0] === '(auth)';
-
-    if (!session) {
-      if (!inAuthGroup) {
-        router.replace('/(auth)/login');
-      }
-    } else {
-      // We have a session
-      if (!session.user.email_confirmed_at) {
-        const inVerifyPage = segments[1] === 'verify';
-        if (!inVerifyPage) {
-          router.replace('/(auth)/verify');
+    try {
+      const inAuthGroup = segments[0] === '(auth)';
+      
+      if (!session) {
+        if (!inAuthGroup) {
+          router.replace('/(auth)/login');
         }
-        return;
-      }
+      } else {
+        if (!session.user.email_confirmed_at) {
+          const inVerifyPage = segments[1] === 'verify';
+          if (!inVerifyPage) {
+            router.replace('/(auth)/verify');
+          }
+          return;
+        }
 
-      if (inAuthGroup && segments[1] !== 'verify') {
-        router.replace('/(tabs)/home');
+        if (inAuthGroup && segments[1] !== 'verify') {
+          router.replace('/(tabs)/home');
+        }
       }
+    } catch (err) {
+      console.error('Navigation error in root layout:', err);
     }
-  }, [session, loading, segments]);
+  }, [session, loading, segments, router]);
 
   if (loading) {
     return (
@@ -115,30 +182,72 @@ function RootLayoutContent() {
           flex: 1,
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor: '#000',
+          backgroundColor: '#1e1b4b', // Use the dark blue from the splash screen instead of almost black
+          padding: 24,
         }}>
-        <ActivityIndicator size="large" color="#fff" />
+        <StatusBar style="light" />
+        <View style={{ marginBottom: 40, alignItems: 'center' }}>
+          <ActivityIndicator size="large" color="#ffffff" />
+          <Text style={{ color: '#ffffff', marginTop: 24, fontSize: 18, fontWeight: '600', opacity: 0.9 }}>
+            Initializing TapIn...
+          </Text>
+        </View>
+
+        {loadingTime > 5 && (
+          <View style={{ marginTop: 20, alignItems: 'center', width: '100%' }}>
+            <Text style={{ color: '#94a3b8', textAlign: 'center', marginBottom: 24, fontSize: 14 }}>
+              Connecting to secure servers...
+            </Text>
+            
+            {loadingTime > 10 && (
+              <TouchableOpacity
+                onPress={handleManualReset}
+                activeOpacity={0.7}
+                style={{
+                  backgroundColor: 'rgba(255,255,255,0.1)',
+                  paddingVertical: 16,
+                  paddingHorizontal: 32,
+                  borderRadius: 20,
+                  borderWidth: 1,
+                  borderColor: 'rgba(255,255,255,0.2)',
+                  width: '100%',
+                }}>
+                <Text style={{ color: '#fff', fontWeight: 'bold', textAlign: 'center' }}>
+                  Force Reset & Update App
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            <Text style={{ color: '#64748b', fontSize: 11, marginTop: 48, textAlign: 'center', lineHeight: 18 }}>
+              Build: {Constants.expoConfig?.ios?.buildNumber || '220'} | v{Constants.expoConfig?.version} | {loadingTime}s{'\n'}
+              System: {Platform.OS} | {Updates.releaseChannel || 'production'}
+            </Text>
+          </View>
+        )}
       </View>
     );
   }
 
   return (
-    <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
-      <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen
-        name="chat/[id]"
-        options={{ headerShown: true, presentation: 'card', animation: 'slide_from_right' }}
-      />
-      <Stack.Screen name="index" options={{ headerShown: false }} />
-    </Stack>
+    <>
+      <StatusBar style="light" />
+      <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
+        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen
+          name="chat/[id]"
+          options={{ headerShown: true, presentation: 'card', animation: 'slide_from_right' }}
+        />
+        <Stack.Screen name="index" options={{ headerShown: false }} />
+      </Stack>
+    </>
   );
 }
 
 export default function RootLayout() {
   return (
     <ErrorBoundary>
-      <GestureHandlerRootView style={{ flex: 1 }}>
+      <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#1e1b4b' }}>
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
             <NotificationProvider>

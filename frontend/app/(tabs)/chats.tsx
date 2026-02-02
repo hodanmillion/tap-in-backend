@@ -280,40 +280,40 @@ export default function ChatsScreen() {
               ))}
             </View>
           ) : (
-              <FlashList
-                data={sections}
-                keyExtractor={(item, index) => item.id || `extra-${index}`}
-                onRefresh={() => { refetch(); }}
-                refreshing={isFetching}
-                renderItem={renderItem}
-                estimatedItemSize={80}
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingBottom: 120 }}
-                ListEmptyComponent={
-                  !isFetching ? (
-                    <Animated.View entering={FadeIn} className="mt-4 items-center justify-center rounded-3xl border border-border/50 bg-card p-8">
-                        <View className="h-16 w-16 items-center justify-center rounded-2xl bg-secondary mb-4">
-                          <MessageSquare size={28} color={theme.mutedForeground} />
-                        </View>
-                        <Text className="text-center text-xl font-bold text-foreground">
-                          No messages yet
-                        </Text>
-                        <Text className="mt-2 text-center text-sm text-muted-foreground px-4">
-                          Join a zone or start a private chat to see messages here
-                        </Text>
-                      <TouchableOpacity
-                        onPress={() => router.push('/home')}
-                        activeOpacity={0.8}
-                        className="mt-6 flex-row items-center gap-2 rounded-2xl bg-primary px-6 py-3.5">
-                        <Compass size={18} color={theme.primaryForeground} />
-                        <Text className="font-bold text-primary-foreground">
-                          Explore Nearby
-                        </Text>
-                      </TouchableOpacity>
-                    </Animated.View>
-                ) : null
-              }
-            />
+                <FlashList
+                  {...({
+                    data: sections,
+                    keyExtractor: (item, index) => item.id || `extra-${index}`,
+                    onRefresh: () => { refetch(); },
+                    refreshing: isFetching,
+                    renderItem: renderItem,
+                    estimatedItemSize: 80,
+                    showsVerticalScrollIndicator: false,
+                    contentContainerStyle: { paddingBottom: 120 },
+                    ListEmptyComponent: !isFetching ? (
+                      <Animated.View entering={FadeIn} className="mt-4 items-center justify-center rounded-3xl border border-border/50 bg-card p-8">
+                          <View className="h-16 w-16 items-center justify-center rounded-2xl bg-secondary mb-4">
+                            <MessageSquare size={28} color={theme.mutedForeground} />
+                          </View>
+                          <Text className="text-center text-xl font-bold text-foreground">
+                            No messages yet
+                          </Text>
+                          <Text className="mt-2 text-center text-sm text-muted-foreground px-4">
+                            Join a zone or start a private chat to see messages here
+                          </Text>
+                        <TouchableOpacity
+                          onPress={() => router.push('/home')}
+                          activeOpacity={0.8}
+                          className="mt-6 flex-row items-center gap-2 rounded-2xl bg-primary px-6 py-3.5">
+                          <Compass size={18} color={theme.primaryForeground} />
+                          <Text className="font-bold text-primary-foreground">
+                            Explore Nearby
+                          </Text>
+                        </TouchableOpacity>
+                      </Animated.View>
+                    ) : null
+                  } as any)}
+                />
           )}
         </View>
     </SafeAreaView>

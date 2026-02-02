@@ -104,7 +104,7 @@ function SettingsContent() {
         const { error } = await supabase
           .from('profiles')
           .update({ push_notifications_enabled: value })
-          .eq('id', user?.id);
+            .eq('id', user?.id || '');
         
         if (error) {
           setNotifications(!value);
@@ -122,7 +122,7 @@ function SettingsContent() {
         const { error } = await supabase
           .from('profiles')
           .update({ is_incognito: value })
-          .eq('id', user?.id);
+            .eq('id', user?.id || '');
         
         if (error) {
           setIncognito(!value);

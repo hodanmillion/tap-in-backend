@@ -1,6 +1,7 @@
 import { View, Text, Alert, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity } from 'react-native';
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { apiRequest } from '@/lib/api';
 import { Input } from '@/components/ui/Input';
 import { Link } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -36,18 +37,44 @@ export default function LoginScreen() {
               // Always add the raw input (normalized)
               identifiersToTry.add(authIdentifier);
 
-                // 1. Try to find a profile by email OR username (exact match preferred)
-                console.log(`Searching profile for: ${authIdentifier}`);
-                const { data: profileData, error: profileError } = await supabase
-                  .from('profiles')
-                  .select('username, email')
-                  .or(`email.eq.${authIdentifier},username.eq.${authIdentifier}`)
-                  .maybeSingle();
+                  // 1. Try to find a profile by email OR username (exact match preferred)
+                  console.log(`Searching profile for: ${authIdentifier}`);
+                  const { data: profileData, error: profileError } = await supabase
+                    .from('profiles')
+                    .select('username, email')
+                    .or(`email.eq."${authIdentifier}",username.eq."${authIdentifier}"`)
+                    .maybeSingle();
                 
-                let targetProfile = profileData;
+                  let targetProfile = profileData;
+                  let authEmailToTry = null;
+  
+                  // 1b. If no profile found, try the backend lookup helper (handles cases where profile is missing but user exists in Auth)
+                  if (!targetProfile) {
+                    console.log('No profile found, trying backend lookup...');
+                    try {
+                      const lookupResponse = await apiRequest('/auth/lookup', {
+                        method: 'POST',
+                        body: JSON.stringify({ identifier: authIdentifier }),
+                      });
+                      
+                        if (lookupResponse.found) {
+                          console.log('Backend lookup found user:', lookupResponse.authEmail);
+                          authEmailToTry = lookupResponse.authEmail;
+                          if (authEmailToTry) {
+                            identifiersToTry.add(authEmailToTry.toLowerCase());
+                          }
+                          if (lookupResponse.username) {
+                            identifiersToTry.add(`${lookupResponse.username.toLowerCase()}@tapin.internal`);
+                          }
+                        }
+                    } catch (err) {
+                      console.warn('Backend lookup failed:', err);
+                    }
+                  }
+  
+                  // 1c. If no exact match, try prefix match for usernames (helpful for generated suffixes)
+                  if (!targetProfile && !authIdentifier.includes('@') && authIdentifier.length >= 3) {
 
-                // 1b. If no exact match, try prefix match for usernames (helpful for generated suffixes)
-                if (!targetProfile && !authIdentifier.includes('@') && authIdentifier.length >= 3) {
                   console.log(`Trying prefix search for: ${authIdentifier}%`);
                   const { data: prefixMatches } = await supabase
                     .from('profiles')
@@ -127,7 +154,11 @@ export default function LoginScreen() {
       }
 
     return (
-      <SafeAreaView className="flex-1 bg-background" edges={['top']}>
+      <SafeAreaView 
+      className="flex-1 bg-background" 
+      edges={['top']}
+      style={{ backgroundColor: '#0a0a0a' }} // Absolute fallback to match the dark theme background
+    >
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           className="flex-1">

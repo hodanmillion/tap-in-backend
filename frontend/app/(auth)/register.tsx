@@ -83,7 +83,11 @@ export default function RegisterScreen() {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-background" edges={['top']}>
+    <SafeAreaView 
+      className="flex-1 bg-background" 
+      edges={['top']}
+      style={{ backgroundColor: '#0a0a0a' }} // Absolute fallback to match the dark theme background
+    >
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         className="flex-1">
@@ -158,9 +162,9 @@ export default function RegisterScreen() {
               </View>
   
             <View className="pb-8 items-center">
-             <Text className="text-[10px] font-black text-muted-foreground/30 uppercase tracking-[0.3em]">
-               Securim Inc. • v15.0.0
-             </Text>
+               <Text className="text-[10px] font-black text-muted-foreground/30 uppercase tracking-[0.3em]">
+                 Securim Inc. • v15.2.0
+               </Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

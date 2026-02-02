@@ -107,44 +107,62 @@ export class ErrorBoundary extends React.Component<Props, State> {
     }
   };
 
-  render() {
-    if (this.state.hasError) {
-      return (
-        <View style={{ flex: 1, backgroundColor: '#000' }}>
-          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-            <Text style={{ marginBottom: 12, textAlign: 'center', fontSize: 28, fontWeight: '900', color: 'white' }}>
-              Oops! A crash occurred.
-            </Text>
-              <Text style={{ marginBottom: 24, textAlign: 'center', fontSize: 16, color: '#9ca3af', lineHeight: 24 }}>
-                {this.state.error?.message || 'An unexpected error occurred.'}
-              </Text>
-            
-            <TouchableOpacity 
-              onPress={this.handleReset}
-              style={{ 
-                backgroundColor: '#6366f1', 
-                paddingVertical: 16, 
-                paddingHorizontal: 32, 
-                borderRadius: 16,
-                shadowColor: '#6366f1',
-                shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: 0.3,
-                shadowRadius: 8,
-                elevation: 5
-              }}
-            >
-              <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 16 }}>Clear Cache & Restart</Text>
-            </TouchableOpacity>
+    render() {
+      if (this.state.hasError) {
+        const errorMessage = this.state.error?.message || String(this.state.error) || 'An unexpected error occurred.';
+        const errorStack = this.state.error?.stack;
 
-            {Platform.OS !== 'web' && (
-              <Text style={{ marginTop: 24, textAlign: 'center', fontSize: 12, color: '#4b5563' }}>
-                Technical details have been logged.
+        return (
+          <View style={{ flex: 1, backgroundColor: '#1e1b4b' }}>
+            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+              <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center', marginBottom: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' }}>
+                <Text style={{ fontSize: 40 }}>⚠️</Text>
+              </View>
+              
+              <Text style={{ marginBottom: 12, textAlign: 'center', fontSize: 24, fontWeight: 'bold', color: 'white' }}>
+                TapIn encountered an error
               </Text>
-            )}
+              
+              <View style={{ backgroundColor: 'rgba(255,255,255,0.05)', padding: 16, borderRadius: 16, marginBottom: 32, width: '100%', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}>
+                <Text style={{ fontSize: 14, color: '#fca5a5', textAlign: 'center', lineHeight: 20, fontWeight: '500' }}>
+                  {errorMessage}
+                </Text>
+              </View>
+              
+              <TouchableOpacity 
+                onPress={this.handleReset}
+                activeOpacity={0.8}
+                style={{ 
+                  backgroundColor: '#6366f1', 
+                  paddingVertical: 18, 
+                  paddingHorizontal: 36, 
+                  borderRadius: 20,
+                  width: '100%',
+                  alignItems: 'center',
+                  shadowColor: '#6366f1',
+                  shadowOffset: { width: 0, height: 10 },
+                  shadowOpacity: 0.3,
+                  shadowRadius: 15,
+                  elevation: 8
+                }}
+              >
+                <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 16 }}>Force Restart App</Text>
+              </TouchableOpacity>
+  
+              <TouchableOpacity 
+                onPress={() => Platform.OS !== 'web' && Updates.reloadAsync()}
+                style={{ marginTop: 24, padding: 10 }}
+              >
+                <Text style={{ color: '#94a3b8', fontSize: 14, fontWeight: '600' }}>Try Soft Reload</Text>
+              </TouchableOpacity>
+
+              <Text style={{ position: 'absolute', bottom: 40, textAlign: 'center', fontSize: 11, color: 'rgba(255,255,255,0.3)', letterSpacing: 0.5 }}>
+                SYSTEM ERROR CAPTURED | BUILD 221
+              </Text>
+            </View>
           </View>
-        </View>
-      );
-    }
+        );
+      }
 
     return this.props.children;
   }

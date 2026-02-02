@@ -4,20 +4,24 @@ import { createClient } from '@supabase/supabase-js';
 import { Platform } from 'react-native';
 import { Database } from './database.types';
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Supabase URL and Anon Key must be provided in environment variables');
+  console.error('Supabase URL and Anon Key are missing!');
 }
 
 const isServer = typeof window === 'undefined';
 
-export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    storage: isServer ? undefined : AsyncStorage,
-    autoRefreshToken: !isServer,
-    persistSession: !isServer,
-    detectSessionInUrl: false,
-  },
-});
+export const supabase = createClient<Database>(
+  supabaseUrl || 'https://placeholder.supabase.co', 
+  supabaseAnonKey || 'placeholder', 
+  {
+    auth: {
+      storage: isServer ? undefined : AsyncStorage,
+      autoRefreshToken: !isServer,
+      persistSession: !isServer,
+      detectSessionInUrl: false,
+    },
+  }
+);

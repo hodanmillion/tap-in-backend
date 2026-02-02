@@ -326,9 +326,10 @@ export default function ProfileScreen() {
                   {profile?.linkedin_url && (
                     <TouchableOpacity 
                       onPress={() => {
-                        const url = profile.linkedin_url.startsWith('http') 
-                          ? profile.linkedin_url 
-                          : `https://linkedin.com/in/${profile.linkedin_url.replace(/^@/, '')}`;
+                        const linkedinUrl = profile.linkedin_url as string;
+                        const url = linkedinUrl.startsWith('http') 
+                          ? linkedinUrl 
+                          : `https://linkedin.com/in/${linkedinUrl.replace(/^@/, '')}`;
                         Linking.openURL(url);
                       }}
                       className="flex-row items-center">
@@ -342,13 +343,15 @@ export default function ProfileScreen() {
                     </TouchableOpacity>
                   )}
 
-                  {profile?.instagram_url && (
-                    <TouchableOpacity 
-                      onPress={() => {
-                        const username = profile.instagram_url.replace(/^@/, '').replace('instagram.com/', '');
-                        Linking.openURL(`https://instagram.com/${username}`);
-                      }}
-                      className="flex-row items-center">
+                    {profile?.instagram_url && (
+                      <TouchableOpacity 
+                        onPress={() => {
+                          const instagramUrl = profile.instagram_url as string;
+                          const username = instagramUrl.replace(/^@/, '').replace('instagram.com/', '');
+                          Linking.openURL(`https://instagram.com/${username}`);
+                        }}
+                        className="flex-row items-center">
+
                       <View className="h-10 w-10 items-center justify-center rounded-xl bg-[#E4405F]/10 mr-4">
                         <Instagram size={18} color="#E4405F" />
                       </View>

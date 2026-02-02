@@ -337,8 +337,8 @@ export default function ChatScreen() {
             if (data.type === 'auto_generated' || isGenericName) {
               try {
                 const reverseGeocode = await Location.reverseGeocodeAsync({
-                  latitude: data.latitude,
-                  longitude: data.longitude,
+                  latitude: data.latitude || 0,
+                  longitude: data.longitude || 0,
                 });
                 if (reverseGeocode && reverseGeocode.length > 0) {
                   const loc = reverseGeocode[0];

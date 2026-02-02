@@ -10,69 +10,69 @@ export interface Database {
   public: {
     Tables: {
       profiles: {
-          Row: {
-            id: string;
-            username: string | null;
-            full_name: string | null;
-            email: string | null;
-            avatar_url: string | null;
-            latitude: number | null;
-            longitude: number | null;
-            location: unknown | null;
-            last_seen: string | null;
-            bio: string | null;
-            website: string | null;
-            linkedin_url: string | null;
-            instagram_url: string | null;
-            location_name: string | null;
-            occupation: string | null;
-            push_notifications_enabled: boolean | null;
-            is_incognito: boolean | null;
-            created_at: string;
-            active_room_id: string | null;
-          };
-          Insert: {
-            id: string;
-            username?: string | null;
-            full_name?: string | null;
-            email?: string | null;
-            avatar_url?: string | null;
-            latitude?: number | null;
-            longitude?: number | null;
-            location?: unknown | null;
-            last_seen?: string | null;
-            bio?: string | null;
-            website?: string | null;
-            linkedin_url?: string | null;
-            instagram_url?: string | null;
-            location_name?: string | null;
-            occupation?: string | null;
-            push_notifications_enabled?: boolean | null;
-            is_incognito?: boolean | null;
-            created_at?: string;
-            active_room_id?: string | null;
-          };
-          Update: {
-            id?: string;
-            username?: string | null;
-            full_name?: string | null;
-            email?: string | null;
-            avatar_url?: string | null;
-            latitude?: number | null;
-            longitude?: number | null;
-            location?: unknown | null;
-            last_seen?: string | null;
-            bio?: string | null;
-            website?: string | null;
-            linkedin_url?: string | null;
-            instagram_url?: string | null;
-            location_name?: string | null;
-            occupation?: string | null;
-            push_notifications_enabled?: boolean | null;
-            is_incognito?: boolean | null;
-            created_at?: string;
-            active_room_id?: string | null;
-          };
+        Row: {
+          id: string;
+          username: string | null;
+          full_name: string | null;
+          email: string | null;
+          avatar_url: string | null;
+          latitude: number | null;
+          longitude: number | null;
+          location: unknown | null;
+          last_seen: string | null;
+          bio: string | null;
+          website: string | null;
+          linkedin_url: string | null;
+          instagram_url: string | null;
+          location_name: string | null;
+          occupation: string | null;
+          push_notifications_enabled: boolean | null;
+          is_incognito: boolean | null;
+          created_at: string;
+          active_room_id: string | null;
+        };
+        Insert: {
+          id: string;
+          username?: string | null;
+          full_name?: string | null;
+          email?: string | null;
+          avatar_url?: string | null;
+          latitude?: number | null;
+          longitude?: number | null;
+          location?: unknown | null;
+          last_seen?: string | null;
+          bio?: string | null;
+          website?: string | null;
+          linkedin_url?: string | null;
+          instagram_url?: string | null;
+          location_name?: string | null;
+          occupation?: string | null;
+          push_notifications_enabled?: boolean | null;
+          is_incognito?: boolean | null;
+          created_at?: string;
+          active_room_id?: string | null;
+        };
+        Update: {
+          id?: string;
+          username?: string | null;
+          full_name?: string | null;
+          email?: string | null;
+          avatar_url?: string | null;
+          latitude?: number | null;
+          longitude?: number | null;
+          location?: unknown | null;
+          last_seen?: string | null;
+          bio?: string | null;
+          website?: string | null;
+          linkedin_url?: string | null;
+          instagram_url?: string | null;
+          location_name?: string | null;
+          occupation?: string | null;
+          push_notifications_enabled?: boolean | null;
+          is_incognito?: boolean | null;
+          created_at?: string;
+          active_room_id?: string | null;
+        };
         Relationships: [];
       };
       messages: {
@@ -84,6 +84,8 @@ export interface Database {
           type: string | null;
           created_at: string | null;
           client_msg_id: string | null;
+          is_read: boolean;
+          metadata: Json;
         };
         Insert: {
           id?: string;
@@ -93,6 +95,8 @@ export interface Database {
           type?: string | null;
           created_at?: string | null;
           client_msg_id?: string | null;
+          is_read?: boolean;
+          metadata?: Json;
         };
         Update: {
           id?: string;
@@ -102,6 +106,8 @@ export interface Database {
           type?: string | null;
           created_at?: string | null;
           client_msg_id?: string | null;
+          is_read?: boolean;
+          metadata?: Json;
         };
         Relationships: [];
       };
@@ -113,47 +119,50 @@ export interface Database {
           latitude: number | null;
           longitude: number | null;
           radius: number | null;
-            created_at: string | null;
-            expires_at: string | null;
-            location: unknown | null;
-            location_hash: string | null;
-            last_message_at: string | null;
-            last_message_content: string | null;
-            last_message_type: string | null;
-          };
-          Insert: {
-            id?: string;
-            name?: string | null;
-            type?: string | null;
-            latitude?: number | null;
-            longitude?: number | null;
-            radius?: number | null;
-            created_at?: string | null;
-            expires_at?: string | null;
-            location?: unknown | null;
-            location_hash?: string | null;
-            last_message_at?: string | null;
-            last_message_content?: string | null;
-            last_message_type?: string | null;
-          };
-          Update: {
-            id?: string;
-            name?: string | null;
-            type?: string | null;
-            latitude?: number | null;
-            longitude?: number | null;
-            radius?: number | null;
-            created_at?: string | null;
-            expires_at?: string | null;
-            location?: unknown | null;
-            location_hash?: string | null;
-            last_message_at?: string | null;
-            last_message_content?: string | null;
-            last_message_type?: string | null;
-          };
+          created_at: string | null;
+          expires_at: string | null;
+          location: unknown | null;
+          location_hash: string | null;
+          last_message_at: string | null;
+          last_message_content: string | null;
+          last_message_type: string | null;
+          creator_id: string | null;
+        };
+        Insert: {
+          id?: string;
+          name?: string | null;
+          type?: string | null;
+          latitude?: number | null;
+          longitude?: number | null;
+          radius?: number | null;
+          created_at?: string | null;
+          expires_at?: string | null;
+          location?: unknown | null;
+          location_hash?: string | null;
+          last_message_at?: string | null;
+          last_message_content?: string | null;
+          last_message_type?: string | null;
+          creator_id?: string | null;
+        };
+        Update: {
+          id?: string;
+          name?: string | null;
+          type?: string | null;
+          latitude?: number | null;
+          longitude?: number | null;
+          radius?: number | null;
+          created_at?: string | null;
+          expires_at?: string | null;
+          location?: unknown | null;
+          location_hash?: string | null;
+          last_message_at?: string | null;
+          last_message_content?: string | null;
+          last_message_type?: string | null;
+          creator_id?: string | null;
+        };
         Relationships: [];
       };
-        friend_requests: {
+      friend_requests: {
         Row: {
           id: string;
           sender_id: string | null;
@@ -198,124 +207,174 @@ export interface Database {
         };
         Relationships: [];
       };
-        notifications: {
-          Row: {
-            id: string;
-            user_id: string;
-            type: string;
-            title: string;
-            content: string;
-            data: Json | null;
-            is_read: boolean | null;
-            created_at: string | null;
-          };
-          Insert: {
-            id?: string;
-            user_id: string;
-            type: string;
-            title: string;
-            content: string;
-            data?: Json | null;
-            is_read?: boolean | null;
-            created_at?: string | null;
-          };
-          Update: {
-            id?: string;
-            user_id?: string;
-            type?: string;
-            title?: string;
-            content?: string;
-            data?: Json | null;
-            is_read?: boolean | null;
-            created_at?: string | null;
-          };
-          Relationships: [];
+      notifications: {
+        Row: {
+          id: string;
+          user_id: string;
+          type: string;
+          title: string;
+          content: string;
+          data: Json | null;
+          is_read: boolean | null;
+          created_at: string | null;
         };
-            tapins: {
-              Row: {
-                id: string;
-                sender_id: string;
-                receiver_id: string;
-                image_url: string;
-                caption: string | null;
-                viewed_at: string | null;
-                created_at: string | null;
-                expires_at: string | null;
-              };
-              Insert: {
-                id?: string;
-                sender_id: string;
-                receiver_id: string;
-                image_url: string;
-                caption?: string | null;
-                viewed_at?: string | null;
-                created_at?: string | null;
-                expires_at?: string | null;
-              };
-              Update: {
-                id?: string;
-                sender_id?: string;
-                receiver_id?: string;
-                image_url?: string;
-                caption?: string | null;
-                viewed_at?: string | null;
-                created_at?: string | null;
-                expires_at?: string | null;
-              };
-              Relationships: [];
-            };
-        push_tokens: {
-          Row: {
-            id: string;
-            user_id: string;
-            token: string;
-            platform: string;
-            created_at: string | null;
-            updated_at: string | null;
-          };
-          Insert: {
-            id?: string;
-            user_id: string;
-            token: string;
-            platform: string;
-            created_at?: string | null;
-            updated_at?: string | null;
-          };
-          Update: {
-            id?: string;
-            user_id?: string;
-            token?: string;
-            platform?: string;
-            created_at?: string | null;
-            updated_at?: string | null;
-          };
-          Relationships: [];
+        Insert: {
+          id?: string;
+          user_id: string;
+          type: string;
+          title: string;
+          content: string;
+          data?: Json | null;
+          is_read?: boolean | null;
+          created_at?: string | null;
         };
-        room_participants: {
-          Row: {
-            id: string;
-            room_id: string | null;
-            user_id: string | null;
-            joined_at: string | null;
-            left_at: string | null;
-          };
-          Insert: {
-            id?: string;
-            room_id?: string | null;
-            user_id?: string | null;
-            joined_at?: string | null;
-            left_at?: string | null;
-          };
-          Update: {
-            id?: string;
-            room_id?: string | null;
-            user_id?: string | null;
-            joined_at?: string | null;
-            left_at?: string | null;
-          };
-          Relationships: [];
+        Update: {
+          id?: string;
+          user_id?: string;
+          type?: string;
+          title?: string;
+          content?: string;
+          data?: Json | null;
+          is_read?: boolean | null;
+          created_at?: string | null;
         };
+        Relationships: [];
       };
+      tapins: {
+        Row: {
+          id: string;
+          sender_id: string;
+          receiver_id: string;
+          image_url: string;
+          caption: string | null;
+          viewed_at: string | null;
+          created_at: string | null;
+          expires_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          sender_id: string;
+          receiver_id: string;
+          image_url: string;
+          caption?: string | null;
+          viewed_at?: string | null;
+          created_at?: string | null;
+          expires_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          sender_id?: string; receiver_id?: string; image_url?: string;
+          caption?: string | null; viewed_at?: string | null;
+          created_at?: string | null; expires_at?: string | null;
+        };
+        Relationships: [];
+      };
+      user_blocks: {
+        Row: {
+          id: string;
+          blocker_id: string;
+          blocked_id: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          blocker_id: string;
+          blocked_id: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          blocker_id?: string;
+          blocked_id?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      reports: {
+        Row: {
+          id: string;
+          reporter_id: string | null;
+          target_id: string;
+          target_type: string;
+          reason: string;
+          details: string | null;
+          status: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          reporter_id?: string | null;
+          target_id: string;
+          target_type: string;
+          reason: string;
+          details?: string | null;
+          status?: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          reporter_id?: string | null;
+          target_id?: string;
+          target_type?: string;
+          reason?: string;
+          details?: string | null;
+          status?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      push_tokens: {
+        Row: {
+          id: string;
+          user_id: string;
+          token: string;
+          platform: string;
+          created_at: string | null;
+          updated_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          token: string;
+          platform: string;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          token?: string;
+          platform?: string;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Relationships: [];
+      };
+      room_participants: {
+        Row: {
+          id: string;
+          room_id: string | null;
+          user_id: string | null;
+          joined_at: string | null;
+          left_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          room_id?: string | null;
+          user_id?: string | null;
+          joined_at?: string | null;
+          left_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          room_id?: string | null;
+          user_id?: string | null;
+          joined_at?: string | null;
+          left_at?: string | null;
+        };
+        Relationships: [];
+      };
+    };
     Views: {
       [_ in never]: never;
     };
@@ -343,25 +402,25 @@ export interface Database {
           distance: number;
         }[];
       };
-        find_nearby_users: {
-          Args: {
-            lat: number;
-            lng: number;
-            max_dist_meters: number;
-            exclude_id?: string | null;
-          };
-          Returns: {
-            id: string;
-            username: string;
-            full_name: string;
-            avatar_url: string | null;
-            latitude: number | null;
-            longitude: number | null;
-            last_seen: string | null;
-            is_incognito: boolean;
-            distance: number;
-          }[];
+      find_nearby_users: {
+        Args: {
+          lat: number;
+          lng: number;
+          max_dist_meters: number;
+          exclude_id?: string | null;
         };
+        Returns: {
+          id: string;
+          username: string;
+          full_name: string;
+          avatar_url: string | null;
+          latitude: number | null;
+          longitude: number | null;
+          last_seen: string | null;
+          is_incognito: boolean;
+          distance: number;
+        }[];
+      };
     };
     Enums: {
       [_ in never]: never;

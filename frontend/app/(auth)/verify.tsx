@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, SafeAreaView, Alert } from 'react-native'
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { apiRequest } from '@/lib/api';
 import { Mail, RefreshCw, LogOut } from 'lucide-react-native';
 import { THEME } from '@/lib/theme';
 import { useColorScheme } from 'nativewind';

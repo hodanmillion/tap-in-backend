@@ -11,7 +11,7 @@ import { Image } from 'expo-image';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocation } from '@/hooks/useLocation';
 import { useState, useEffect } from 'react';
-import { UserPlus, Clock, MapPin, Search, X, Users, MessageCircle, Compass, WifiOff, RefreshCw } from 'lucide-react-native';
+import { UserPlus, Clock, MapPin, Search, X, Users, MessageCircle, Compass, WifiOff, RefreshCw, Check } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/context/AuthContext';
 import { useColorScheme } from 'nativewind';
@@ -94,15 +94,10 @@ export default function UsersScreen() {
 
   const sendRequestMutation = useMutation({
     mutationFn: async (receiverId: string) => {
-      const res = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/friends/request`, {
+      const data = await apiRequest('/friends/request', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sender_id: user?.id, receiver_id: receiverId }),
       });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to send request');
-      }
       return receiverId;
     },
     onSuccess: (receiverId) => {

@@ -23,3 +23,4 @@ TapIn is a mobile-first social application built with React Native (Expo) and a 
 - Proximity-based room access: Users must be within a specific radius (e.g., 500m) to send messages in public rooms.
 - Ephemeral sharing: "TapIns" expire after 24 hours.
 - Transactional emails: Welcome emails sent via Resend upon registration.
+- **API Standards**: Bulk operations (like marking notifications read) are handled via `POST /notifications/read`. Proximity queries use PostGIS geography for accurate discovery.

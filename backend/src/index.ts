@@ -165,18 +165,20 @@ async function sendVerificationEmail(email: string, fullName: string, type: 'sig
 
       const htmlContent = getEmailHtml(fullName, verificationLink, isWelcome).replace('Verify Your Email', buttonText);
       
-      console.log('Attempting to send email via Resend...', {
-        from: 'TapIn <team@securim.ca>',
-        to: email,
-        subject
-      });
-      
-      const { data, error } = await resend.emails.send({
-        from: 'TapIn <team@securim.ca>',
-        to: [email],
-        subject,
-        html: htmlContent,
-      });
+        const fromAddress = process.env.RESEND_FROM_EMAIL || 'TapIn <team@securim.ca>';
+        
+        console.log('Attempting to send email via Resend...', {
+          from: fromAddress,
+          to: email,
+          subject
+        });
+        
+        const { data, error } = await resend.emails.send({
+          from: fromAddress,
+          to: [email],
+          subject,
+          html: htmlContent,
+        });
     
     if (error) {
       console.error('Resend API Error details:', JSON.stringify(error, null, 2));
@@ -265,8 +267,25 @@ async function enrichProfiles(profiles: any[], userId: string | undefined | null
 }
 
 // --- ROUTES ---
-app.get('/health', (c) => c.json({ status: 'ok', version: '1.0.3', timestamp: new Date().toISOString(), environment: process.env.NODE_ENV || 'development' }));
-app.get('/', (c) => c.text('Tap In API v1.0.3 is Running'));
+app.get('/health', async (c) => {
+  let dbStatus = 'checking';
+  try {
+    const { data, error } = await supabase.from('profiles').select('count', { count: 'exact', head: true });
+    dbStatus = error ? `error: ${error.message}` : 'connected';
+  } catch (err: any) {
+    dbStatus = `exception: ${err.message}`;
+  }
+
+  return c.json({ 
+    status: 'ok', 
+    version: '1.0.6', 
+    dbStatus,
+    timestamp: new Date().toISOString(), 
+    environment: process.env.NODE_ENV || 'development',
+    supabaseUrl: process.env.SUPABASE_URL?.split('//')[1]?.split('.')[0]
+  });
+});
+app.get('/', (c) => c.text('Tap In API v1.0.6 is Running'));
 
 app.get('/profiles/nearby', async (c) => {
   const latStr = c.req.query('lat');
@@ -496,6 +515,122 @@ app.get('/rooms/nearby', async (c) => {
   return c.json(uniqueRooms);
 });
 
+// --- TAPINS ---
+app.post('/tapins', zValidator('json', z.object({
+  sender_id: z.string(),
+  receiver_id: z.string(),
+  image_url: z.string(),
+  caption: z.string().optional()
+})), async (c) => {
+  const body = c.req.valid('json');
+  const { data, error } = await supabase.from('tapins').insert({
+    sender_id: body.sender_id,
+    receiver_id: body.receiver_id,
+    image_url: body.image_url,
+    caption: body.caption,
+    expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+  }).select().single();
+
+  if (error) return c.json({ error: error.message }, 400);
+
+  // Notify receiver
+  const { data: sender } = await supabase.from('profiles').select('full_name, username').eq('id', body.sender_id).single();
+  if (sender) {
+    await sendPushToUser(body.receiver_id, 'New Photo!', `${sender.full_name || `@${sender.username}`} sent you a photo.`, { type: 'tapin' });
+  }
+
+  // Add notification record
+  await supabase.from('notifications').insert({
+    user_id: body.receiver_id,
+    type: 'tapin',
+    title: 'New Photo!',
+    content: `${sender?.full_name || `@${sender?.username}`} sent you a photo.`,
+    data: { tapin_id: data.id, sender_id: body.sender_id }
+  });
+
+  return c.json(data);
+});
+
+app.get('/tapins/received/:userId', async (c) => {
+  const userId = c.req.param('userId');
+  const { data, error } = await supabase
+    .from('tapins')
+    .select('*, sender:profiles(id, username, full_name, avatar_url)')
+    .eq('receiver_id', userId)
+    .gt('expires_at', new Date().toISOString())
+    .order('created_at', { ascending: false });
+
+  if (error) return c.json({ error: error.message }, 500);
+  return c.json(data || []);
+});
+
+app.patch('/tapins/:id/view', async (c) => {
+  const id = c.req.param('id');
+  const { error } = await supabase
+    .from('tapins')
+    .update({ viewed_at: new Date().toISOString() })
+    .eq('id', id);
+
+  if (error) return c.json({ error: error.message }, 500);
+  return c.json({ success: true });
+});
+
+app.get('/notifications/:userId', async (c) => {
+  const userId = c.req.param('userId');
+  const { data, error } = await supabase
+    .from('notifications')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(50);
+
+  if (error) return c.json({ error: error.message }, 500);
+  return c.json(data || []);
+});
+
+app.post('/notifications/read', zValidator('json', z.object({ notificationIds: z.array(z.string()) })), async (c) => {
+  const { notificationIds } = c.req.valid('json');
+  const { error } = await supabase
+    .from('notifications')
+    .update({ is_read: true })
+    .in('id', notificationIds);
+
+  if (error) return c.json({ error: error.message }, 500);
+  return c.json({ success: true });
+});
+
+app.post('/notifications/:id/read', async (c) => {
+  const id = c.req.param('id');
+  const { error } = await supabase
+    .from('notifications')
+    .update({ is_read: true })
+    .eq('id', id);
+
+  if (error) return c.json({ error: error.message }, 500);
+  return c.json({ success: true });
+});
+
+// --- MODERATION ---
+app.post('/blocks', zValidator('json', z.object({ blocker_id: z.string(), blocked_id: z.string() })), async (c) => {
+  const { blocker_id, blocked_id } = c.req.valid('json');
+  const { error } = await supabase.from('user_blocks').insert({ blocker_id, blocked_id });
+  if (error) return c.json({ error: error.message }, 400);
+  return c.json({ success: true });
+});
+
+app.post('/reports', zValidator('json', z.object({ 
+  reporter_id: z.string(), 
+  target_id: z.string(), 
+  target_type: z.enum(['user', 'room', 'message']),
+  reason: z.string(),
+  details: z.string().optional()
+})), async (c) => {
+  const body = c.req.valid('json');
+  const { error } = await supabase.from('reports').insert(body);
+  if (error) return c.json({ error: error.message }, 400);
+  return c.json({ success: true });
+});
+
 app.post('/rooms/create', zValidator('json', z.object({ 
   name: z.string(), 
   latitude: z.number(), 
@@ -547,7 +682,8 @@ app.post('/rooms/create', zValidator('json', z.object({
         latitude,
         longitude,
         radius,
-        expires_at: expiresAt.toISOString()
+        expires_at: expiresAt.toISOString(),
+        creator_id: userId
       })
       .select()
       .single();
@@ -691,7 +827,9 @@ app.post('/messages', zValidator('json', z.object({
     room_id: body.room_id, 
     sender_id: body.sender_id, 
     content: body.content, 
-    type: body.type 
+    type: body.type,
+    is_read: false,
+    metadata: {}
   }).select().single();
   
   if (error) return c.json({ error: error.message }, 400);
@@ -953,6 +1091,53 @@ app.get('/auth/welcome', async (c) => {
     }
   });
 
+    app.post('/auth/lookup', zValidator('json', z.object({ identifier: z.string().trim() })), async (c) => {
+      const { identifier } = c.req.valid('json');
+      const search = identifier.toLowerCase();
+      try {
+        console.log(`Auth Lookup: ${search}`);
+        
+        // 1. Try profiles table first (indexed, fast)
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('username, email')
+          .or(`email.ilike."${search}",username.ilike."${search}"`)
+          .maybeSingle();
+
+        if (profile) {
+          console.log(`Auth Lookup: Found in profiles - ${profile.username}`);
+          return c.json({ 
+            found: true, 
+            authEmail: `${profile.username.toLowerCase()}@tapin.internal`,
+            username: profile.username
+          });
+        }
+
+        // 2. Fallback to admin listUsers (up to 1000)
+        const { data: { users: allUsers } } = await supabase.auth.admin.listUsers({ perPage: 1000 });
+        const user = allUsers.find(u => {
+          const authEmail = u.email?.toLowerCase();
+          const realEmail = u.user_metadata?.real_email?.toLowerCase();
+          const username = u.user_metadata?.username?.toLowerCase();
+          return authEmail === search || realEmail === search || username === search;
+        });
+
+        if (user) {
+          console.log(`Auth Lookup: Found in Auth metadata - ${user.email}`);
+          return c.json({ 
+            found: true, 
+            authEmail: user.email,
+            username: user.user_metadata?.username
+          });
+        }
+
+        return c.json({ found: false });
+      } catch (err: any) {
+        console.error('Auth Lookup Error:', err);
+        return c.json({ error: err.message }, 500);
+      }
+    });
+
     app.post('/auth/signup', zValidator('json', z.object({ 
       email: z.string().trim().email(), 
       password: z.string().min(6), 
@@ -961,55 +1146,64 @@ app.get('/auth/welcome', async (c) => {
     })), async (c) => {
     const { email: realEmail, password, full_name, username } = c.req.valid('json');
     
-    // Check if username already exists in profiles
-    const { data: existingUsername } = await supabase
-      .from('profiles')
-      .select('username')
-      .ilike('username', username)
-      .maybeSingle();
-      
-    if (existingUsername) {
-      return c.json({ error: 'This username is already taken. Please try another one.' }, 400);
-    }
-
-    // Check if email already exists in profiles
-    const { data: existingEmail } = await supabase
-      .from('profiles')
-      .select('email')
-      .ilike('email', realEmail)
-      .maybeSingle();
-      
-    if (existingEmail) {
-      return c.json({ error: 'This email is already registered. Please log in instead.' }, 400);
-    }
-
-    const authEmail = `${username.toLowerCase()}@tapin.internal`;
-    const { data: userData, error: userError } = await supabase.auth.admin.createUser({ 
-      email: authEmail, 
-      password, 
-      email_confirm: true, 
-      user_metadata: { full_name, username, real_email: realEmail } 
-    });
-    
-    if (userError) {
-      if (userError.message.includes('already registered')) {
+    try {
+      // Check if username already exists
+      const { data: existingUsername } = await supabase
+        .from('profiles')
+        .select('username')
+        .ilike('username', username)
+        .maybeSingle();
+        
+      if (existingUsername) {
         return c.json({ error: 'This username is already taken.' }, 400);
       }
-      return c.json({ error: userError.message }, 400);
-    }
 
-    // Double-ensure the user is confirmed (Supabase bug mitigation)
-    await supabase.auth.admin.updateUserById(userData.user.id, { email_confirm: true });
-    
-    await supabase.from('profiles').upsert({ 
-      id: userData.user.id, 
-      full_name, 
-      username, 
-      email: realEmail 
-    }, { onConflict: 'id' });
-    
-    await sendVerificationEmail(realEmail, full_name, 'welcome', userData.user.id);
-    return c.json({ success: true, userId: userData.user.id });
+      const authEmail = `${username.toLowerCase()}@tapin.internal`;
+      
+      // Create the Auth user
+      const { data: userData, error: userError } = await supabase.auth.admin.createUser({ 
+        email: authEmail, 
+        password, 
+        email_confirm: true, 
+        user_metadata: { full_name, username, real_email: realEmail } 
+      });
+      
+      if (userError) {
+        console.error('Signup Error (Auth):', userError);
+        return c.json({ error: userError.message }, 400);
+      }
+
+      // Ensure user is confirmed
+      await supabase.auth.admin.updateUserById(userData.user.id, { email_confirm: true });
+      
+      // Create profile with retry logic
+      let profileCreated = false;
+      for (let i = 0; i < 3; i++) {
+        const { error: profileError } = await supabase.from('profiles').upsert({ 
+          id: userData.user.id, 
+          full_name, 
+          username, 
+          email: realEmail 
+        }, { onConflict: 'id' });
+        
+        if (!profileError) {
+          profileCreated = true;
+          break;
+        }
+        console.warn(`Profile creation retry ${i+1} failed:`, profileError);
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+
+      if (!profileCreated) {
+        console.error('Failed to create profile after retries');
+      }
+      
+      await sendVerificationEmail(realEmail, full_name, 'welcome', userData.user.id);
+      return c.json({ success: true, userId: userData.user.id });
+    } catch (err: any) {
+      console.error('Signup Error (Unexpected):', err);
+      return c.json({ error: err.message }, 500);
+    }
   });
 
 async function sendPushToUser(userId: string, title: string, body: string, data?: Record<string, any>) {
