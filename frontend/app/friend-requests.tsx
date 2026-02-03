@@ -33,7 +33,7 @@ export default function FriendRequestsScreen() {
     mutationFn: async ({ requestId, status }: { requestId: string; status: 'accepted' | 'rejected' }) => {
       return apiRequest(`/friend-requests/${requestId}/respond`, {
         method: 'POST',
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({ status, userId: user?.id }),
       });
     },
     onSuccess: () => {

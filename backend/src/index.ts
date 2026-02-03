@@ -286,7 +286,7 @@ app.get('/health', async (c) => {
 
   return c.json({ 
     status: 'ok', 
-    version: '1.0.7', 
+    version: '1.0.8', 
     dbStatus,
     timestamp: new Date().toISOString(), 
     environment: process.env.NODE_ENV || 'development',
@@ -370,12 +370,11 @@ app.get('/profiles/search', async (c) => {
   return c.json(await enrichProfiles(validatedProfiles, userId));
 });
 
-app.post('/friend-requests/:id/respond', zValidator('json', z.object({ status: z.enum(['accepted', 'rejected']) })), async (c) => {
+app.post('/friend-requests/:id/respond', zValidator('json', z.object({ status: z.enum(['accepted', 'rejected']), userId: z.string() })), async (c) => {
   const requestId = c.req.param('id');
-  const { status } = c.req.valid('json');
-  const user = c.get('user');
+  const { status, userId } = c.req.valid('json');
 
-  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+  if (!userId) return c.json({ error: 'User ID required' }, 400);
 
   // 1. Get the request
   const { data: request, error: fetchError } = await supabase
@@ -387,7 +386,7 @@ app.post('/friend-requests/:id/respond', zValidator('json', z.object({ status: z
   if (fetchError || !request) return c.json({ error: 'Request not found' }, 404);
 
   // 2. Ensure the current user is the receiver
-  if (request.receiver_id !== user.id) {
+  if (request.receiver_id !== userId) {
     return c.json({ error: 'Not authorized to respond to this request' }, 403);
   }
 
@@ -404,7 +403,7 @@ app.post('/friend-requests/:id/respond', zValidator('json', z.object({ status: z
     await ensureFriendship(request.sender_id, request.receiver_id);
     
     // Notify sender
-    const { data: receiverProfile } = await supabase.from('profiles').select('full_name, username').eq('id', user.id).single();
+    const { data: receiverProfile } = await supabase.from('profiles').select('full_name, username').eq('id', userId).single();
     if (receiverProfile) {
       await sendPushToUser(request.sender_id, 'Connection Accepted!', `${receiverProfile.full_name || `@${receiverProfile.username}`} accepted your connection request.`, { type: 'friend_accepted' });
     }
